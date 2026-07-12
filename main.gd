@@ -21,6 +21,9 @@ extends Node3D
 @export var player_scale := 1.0
 ## Correction if the model's "front" isn't already +Z (home faces -Z, away +Z).
 @export var player_facing_offset := 0.0
+## A pass travelling this many cells or fewer uses the short 'pass' kick; longer
+## ones use the powerful 'strike'. "broj polja" — cells the ball crosses.
+@export var short_pass_max_cells := 2
 
 # --- Ball --------------------------------------------------------------------
 @export var spawn_ball := true
@@ -544,21 +547,57 @@ func _combo_tap(screen_pos: Vector2) -> void:
 			_do_combo(shoot_cell) # direct tap-to-shoot still works, no ambiguity
 
 
+# A combo plays out as a real passing move: the ball rolls to the first figure,
+# then each chain figure KICKS it on — the ball leaves the boot at the animation's
+# foot-contact frame (PlayerRig.kick awaits that), so it's never launched off a
+# dead foot. Short hops use the 'pass' kick, long balls the powerful 'strike'.
 func _do_combo(shoot_cell: Vector2i) -> void:
 	var res := _state.execute_combo(shoot_cell)
 	if not res["ok"]:
 		return
 	_busy = true
 	_fx.clear()
-	var tween := create_tween()
-	var prev := _ball.position
-	for c in res["path"]:
-		var to := _ball_world(c)
-		var dur: float = clampf(prev.distance_to(to) * 0.05, 0.08, 0.45)
-		tween.tween_property(_ball, "position", to, dur).set_trans(Tween.TRANS_SINE)
-		prev = to
-	tween.tween_callback(_after_combo.bind(res))
 	print("COMBO -> shoot %s (goal=%s)" % [shoot_cell, res["goal"]])
+	# path = [ball_cell, chain_fig_0, ... chain_fig_n (shooter), shoot_cell]
+	var path: Array = res["path"]
+	# Ball rolls from its resting cell to the first figure (a receive, no kick).
+	await _roll_ball(path[1])
+	# Every chain figure kicks the ball on to the next cell.
+	for i in range(1, path.size() - 1):
+		var from_cell: Vector2i = path[i]
+		var to_cell: Vector2i = path[i + 1]
+		var kicker: Node3D = _node_at.get(from_cell)
+		if kicker is PlayerRig:
+			_face_toward(kicker, from_cell, to_cell)
+			await (kicker as PlayerRig).kick(_kick_kind(from_cell, to_cell))
+		await _roll_ball(to_cell)
+	_after_combo(res)
+
+
+# Rolls the ball to a cell centre and returns when it arrives. Speed scales with
+# distance (a long ball travels quicker per cell), clamped so it always reads.
+func _roll_ball(to_cell: Vector2i) -> void:
+	var to := _ball_world(to_cell)
+	var dur: float = clampf(_ball.position.distance_to(to) * 0.05, 0.08, 0.45)
+	var tween := create_tween()
+	tween.tween_property(_ball, "position", to, dur).set_trans(Tween.TRANS_SINE)
+	await tween.finished
+
+
+# Short vs long ball by the number of cells crossed (straight line -> Chebyshev).
+func _kick_kind(a: Vector2i, b: Vector2i) -> String:
+	var cells: int = maxi(absi(b.x - a.x), absi(b.y - a.y))
+	return "pass" if cells <= short_pass_max_cells else "strike"
+
+
+# Turns a figure to face a target cell, so the kick swings toward the ball's
+# destination instead of straight down the pitch. Same yaw convention as the
+# team's base facing, so player_facing_offset corrects both together.
+func _face_toward(fig: Node3D, from_cell: Vector2i, to_cell: Vector2i) -> void:
+	var d := _cell_world(to_cell.x, to_cell.y) - _cell_world(from_cell.x, from_cell.y)
+	if Vector2(d.x, d.z).length() < 0.001:
+		return
+	fig.rotation_degrees.y = rad_to_deg(atan2(d.x, d.z)) + player_facing_offset
 
 
 func _after_combo(res: Dictionary) -> void:
@@ -628,10 +667,16 @@ func _apply_move(from: Vector2i, to: Vector2i) -> void:
 	var fig: Node3D = _node_at[from]
 	_node_at.erase(from)
 	_node_at[to] = fig
-	var tween := create_tween()
-	tween.tween_property(fig, "position", _cell_world(to.x, to.y), 0.2).set_trans(Tween.TRANS_SINE)
 	print("MOVE: %s -> %s" % [from, to])
 	_move_from = NO_CELL
+	# Turn and jog to the new cell, then settle back into idle on arrival.
+	_face_toward(fig, from, to)
+	if fig is PlayerRig:
+		(fig as PlayerRig).jog()
+	var tween := create_tween()
+	tween.tween_property(fig, "position", _cell_world(to.x, to.y), 0.28).set_trans(Tween.TRANS_SINE)
+	if fig is PlayerRig:
+		tween.tween_callback((fig as PlayerRig).idle.bind(false))
 	_refresh_turn_view()
 
 
