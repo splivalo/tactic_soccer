@@ -1,0 +1,103 @@
+class_name PlayerRig
+extends Node3D
+
+## Drives ONE player's Mixamo animation set. Attached to player_rigged.tscn.
+## main.gd owns the game flow and grid position; this owns only what the body
+## is doing (idle / jog / kick / GK) and — crucially — signals the exact frame
+## the boot meets the ball so the ball launches in sync, never off a dead foot.
+
+## Fires at the foot-ball contact moment inside a kick (see kick()).
+signal kick_contact
+
+## The two standing idles. Outfield players randomly get one of these AND a
+## random phase + speed, so a whole team never breathes in lockstep.
+const IDLE_CLIPS := ["idle", "idle_breath"]
+
+## Seconds into each kick clip when the boot actually meets the ball. Measured
+## from the clips (pass reach-peak ~40%, strike ~46%); exported so you can nudge
+## them by eye until the launch looks glued to the foot.
+@export var pass_contact_time := 0.55
+@export var strike_contact_time := 0.56
+## ±fraction of idle playback speed, so idles drift out of phase over time.
+@export_range(0.0, 0.3, 0.01) var idle_speed_jitter := 0.08
+## Crossfade times (s) between states — short so turns stay snappy.
+@export var idle_blend := 0.3
+@export var action_blend := 0.12
+
+var _ap: AnimationPlayer
+var _is_gk := false
+
+
+func _ready() -> void:
+	_ap = _find_ap(self)
+	if _ap == null:
+		push_warning("PlayerRig on '%s' found no AnimationPlayer." % name)
+		return
+	_ap.animation_finished.connect(_on_finished)
+
+
+## Called once after spawn. Picks the right resting animation and desyncs it.
+func setup(is_goalkeeper: bool) -> void:
+	_is_gk = is_goalkeeper
+	idle(true)
+
+
+## Return to (or start) the resting pose. `desync` randomises phase + speed so
+## neighbouring players never share the exact same breath.
+func idle(desync: bool = false) -> void:
+	if _ap == null:
+		return
+	var clip: String = "gk_idle" if _is_gk else IDLE_CLIPS[randi() % IDLE_CLIPS.size()]
+	var jitter := 0.0
+	if desync:
+		jitter = randf_range(-idle_speed_jitter, idle_speed_jitter)
+	_ap.speed_scale = 1.0 + jitter
+	_ap.play(clip, idle_blend)
+	if desync:
+		_ap.seek(randf() * _ap.get_animation(clip).length, true)
+
+
+## Loop the run cycle while the figure tweens between cells.
+func jog() -> void:
+	if _ap == null or _is_gk:
+		return
+	_ap.speed_scale = 1.0
+	_ap.play("jog", action_blend)
+
+
+## Play a kick and await the boot-meets-ball instant. The caller does:
+##     await rig.kick("pass"); launch_the_ball()
+## so the ball leaves exactly on contact. The clip keeps playing its
+## follow-through; it auto-returns to idle when finished.
+func kick(kind: String) -> void:  # "pass" | "strike"
+	if _ap == null:
+		return
+	_ap.speed_scale = 1.0
+	_ap.play(kind, action_blend)
+	var contact: float = pass_contact_time if kind == "pass" else strike_contact_time
+	await get_tree().create_timer(contact).timeout
+	kick_contact.emit()
+
+
+## Goalkeeper reaction when a shot beats him.
+func gk_miss() -> void:
+	if _ap == null:
+		return
+	_ap.speed_scale = 1.0
+	_ap.play("gk_miss", action_blend)
+
+
+func _on_finished(anim: StringName) -> void:
+	# One-shots (kicks / GK dive) settle back into the resting pose.
+	if anim == "pass" or anim == "strike" or anim == "gk_miss":
+		idle()
+
+
+func _find_ap(n: Node) -> AnimationPlayer:
+	if n is AnimationPlayer:
+		return n
+	for c in n.get_children():
+		var r := _find_ap(c)
+		if r != null:
+			return r
+	return null

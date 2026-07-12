@@ -12,7 +12,10 @@ extends Node3D
 
 # --- Teams -------------------------------------------------------------------
 @export var spawn_teams := true
-@export var player_scene: PackedScene = load("res://assets/models/player.glb")
+## Rigged Mixamo character (built by scripts/tools/build_player.gd). Carries the
+## full animation set + PlayerRig controller. Revert to the old static
+## player.glb here if you ever need the pre-animation look.
+@export var player_scene: PackedScene = load("res://scenes/player_rigged.tscn")
 @export var home_country := "Croatia"
 @export var away_country := "Brazil"
 @export var player_scale := 1.0
@@ -178,7 +181,7 @@ func _ready() -> void:
 		_build_reach_debug()
 	if show_grid_debug:
 		_build_grid_debug()
-	_autoplay_animations(self)
+	# Players now drive their own animation (PlayerRig); no blanket autoplay.
 
 
 # --- Field / grid ------------------------------------------------------------
@@ -303,8 +306,13 @@ func _build_team(team_name: String, pieces: Array[Dictionary], kit: Dictionary, 
 		fig.scale = Vector3.ONE * player_scale
 		fig.name = "%s_%d" % [piece["role"], piece["number"]]
 		# Goalkeepers wear a distinct kit — never the outfield country colours.
-		var piece_kit := PlayerAppearance.gk_kit(gk_side) if piece.get("role", "field") == "gk" else kit
+		var is_gk: bool = piece.get("role", "field") == "gk"
+		var piece_kit := PlayerAppearance.gk_kit(gk_side) if is_gk else kit
 		PlayerAppearance.apply(fig, piece_kit, PlayerAppearance.hair_for(index), piece["number"])
+		# Kick off this figure's animation (idle desynced from its team-mates, or
+		# the keeper's own idle) — see PlayerRig.
+		if fig is PlayerRig:
+			(fig as PlayerRig).setup(is_gk)
 		_node_at[cell] = fig
 		index += 1
 
