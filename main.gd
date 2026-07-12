@@ -59,6 +59,20 @@ extends Node3D
 @export var banner_bg := Color("f4c20d") # jersey/ad yellow
 @export var banner_text := Color("101010") # near-black text
 
+# --- Goal cinematic ----------------------------------------------------------
+## On a goal, cut to a low side camera by the goal (background blurred) for the
+## final strike + the keeper's dive, like a replay angle, then restore & kick off.
+## The "make the last shot gorgeous" polish comes later; this is the scaffolding.
+@export_group("Goal Cinematic")
+@export var enable_goal_cam := true
+@export var goal_cam_hold := 1.6           # seconds to hold on the goal
+@export var goal_cam_side := 6.5           # offset to the side of the goal (X)
+@export var goal_cam_height := 2.0         # camera height
+@export var goal_cam_back := 2.0           # offset behind the goal line
+@export var goal_cam_fov := 42.0
+@export_range(0.0, 0.5, 0.01) var goal_cam_blur := 0.12  # background DoF (0 = off)
+@export_group("")
+
 # --- Camera auto-fit ---------------------------------------------------------
 ## Keeps the field fully visible (and not too small) on every screen aspect.
 ## YOU tune the camera's angle/composition in the editor; this only slides the
@@ -131,6 +145,8 @@ const FIGURE_HEIGHT := 1.6 # a bit over the model's real height (~1.45 @ scale 1
 # The camera transform you tuned in the editor — used as the fit reference.
 var _cam_ref := Transform3D.IDENTITY
 var _cam_ref_set := false
+# Separate cinematic camera used only during goal celebrations.
+var _goal_cam: Camera3D = null
 
 
 func _ready() -> void:
@@ -173,6 +189,8 @@ func _ready() -> void:
 	if enable_camera_fit:
 		get_viewport().size_changed.connect(_fit_camera)
 		_fit_camera_deferred()
+	if enable_goal_cam:
+		_setup_goal_cam()
 	if spawn_teams:
 		_spawn_teams()
 	if spawn_ball:
@@ -566,12 +584,17 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 	for i in range(1, path.size() - 1):
 		var from_cell: Vector2i = path[i]
 		var to_cell: Vector2i = path[i + 1]
+		var is_final: bool = i == path.size() - 2
+		# On the goal-scoring strike, cut to the cinematic side angle so the
+		# whole shot plays out from there.
+		if is_final and res["goal"] and enable_goal_cam:
+			_activate_goal_cam(to_cell)
 		var kicker: Node3D = _node_at.get(from_cell)
 		if kicker is PlayerRig:
 			_face_toward(kicker, from_cell, to_cell)
 			await (kicker as PlayerRig).kick(_kick_kind(from_cell, to_cell))
 		await _roll_ball(to_cell)
-	_after_combo(res)
+	await _after_combo(res)
 
 
 # Rolls the ball to a cell centre and returns when it arrives. Speed scales with
@@ -614,9 +637,72 @@ func _after_combo(res: Dictionary) -> void:
 			% [res["scorer"], _state.score["HomeTeam"], _state.score["AwayTeam"]])
 		if res["win"]:
 			print("=== %s WINS THE MATCH ===" % res["scorer"])
+		if enable_goal_cam and _goal_cam != null:
+			await _celebrate_goal(res)
 		_build_match(res["kickoff"])
 	else:
 		_refresh_turn_view()
+
+
+# --- Goal cinematic ----------------------------------------------------------
+# A separate camera we cut to on a goal; the main Camera3D stays as authored.
+func _setup_goal_cam() -> void:
+	_goal_cam = Camera3D.new()
+	_goal_cam.name = "GoalCam"
+	_goal_cam.fov = goal_cam_fov
+	_goal_cam.current = false
+	if goal_cam_blur > 0.0:
+		var attr := CameraAttributesPractical.new()
+		attr.dof_blur_far_enabled = true
+		attr.dof_blur_amount = goal_cam_blur
+		_goal_cam.attributes = attr
+	add_child(_goal_cam)
+
+
+# Places the cinematic camera low and to the side of the scored-on goal, aimed
+# at the goal mouth, with the crowd/background thrown out of focus.
+func _activate_goal_cam(goal_cell: Vector2i) -> void:
+	if _goal_cam == null:
+		return
+	var target := _cell_world(goal_cell.x, goal_cell.y) + Vector3(0, 0.6, 0)
+	# Push the camera outward past the goal line (which end depends on the goal).
+	var out_dir := -1.0 if goal_cell.y * 2 < Board.ROWS else 1.0
+	var pos := target + Vector3(goal_cam_side, goal_cam_height, out_dir * goal_cam_back)
+	_goal_cam.global_position = pos
+	_goal_cam.look_at(target, Vector3.UP)
+	if _goal_cam.attributes is CameraAttributesPractical:
+		var attr := _goal_cam.attributes as CameraAttributesPractical
+		attr.dof_blur_far_distance = pos.distance_to(target) + 1.5
+		attr.dof_blur_far_transition = 1.5
+	_goal_cam.current = true
+
+
+# Beaten keeper dives, hold on the moment, then hand the view back.
+func _celebrate_goal(res: Dictionary) -> void:
+	var defender: String = "AwayTeam" if res["scorer"] == "HomeTeam" else "HomeTeam"
+	var gk := _find_gk(defender)
+	if gk is PlayerRig:
+		(gk as PlayerRig).gk_miss()
+	await get_tree().create_timer(goal_cam_hold).timeout
+	_restore_camera()
+
+
+func _restore_camera() -> void:
+	if _goal_cam != null:
+		_goal_cam.current = false
+	var cam := get_node_or_null("Camera3D") as Camera3D
+	if cam != null:
+		cam.current = true
+
+
+func _find_gk(team_name: String) -> Node3D:
+	var root := get_node_or_null(team_name)
+	if root == null:
+		return null
+	for c in root.get_children():
+		if String(c.name).begins_with("gk"):
+			return c as Node3D
+	return null
 
 
 # Draws the "offside line" (dashed, full pitch width) at the defensive line's
