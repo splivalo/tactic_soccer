@@ -1,0 +1,72 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/info_stub.gd" id="1_info_stub"]
+[ext_resource type="Theme" uid="uid://3sfso1by5eio" path="res://my_theme.tres" id="2_theme"]
+
+[node name="InstructionsScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_info_stub")
+title_text = "Instructions"
+body_text = "A turn = 2 actions. If you have the ball: first you pass/shoot it in a straight line (horizontal, vertical, or diagonal) through your players, and the last player in the chain MUST shoot into an empty cell. Then you move one of your pieces 1 cell.
+
+A goal only counts from the opponent's half. Offside: if every opposing outfield player is strictly behind you when you shoot, the goal doesn't count.
+
+You can hold the ball among your players as long as you like. But: if a new shot lands too close to where your last clean shot landed, you get a yellow card; a second time, red; a third time, you must remove one of your players from the pitch."
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.06, 0.09, 0.06, 1)
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 80
+theme_override_constants/margin_right = 80
+
+[node name="Center" type="CenterContainer" parent="SafeArea"]
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="SafeArea/Center"]
+layout_mode = 2
+theme_override_constants/separation = 26
+alignment = 1
+
+[node name="Title" type="Label" parent="SafeArea/Center/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 84
+text = "Instructions"
+
+[node name="Body" type="Label" parent="SafeArea/Center/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 2
+theme_override_font_sizes/font_size = 36
+custom_minimum_size = Vector2(880, 0)
+text = "A turn = 2 actions. If you have the ball: first you pass/shoot it in a straight line (horizontal, vertical, or diagonal) through your players, and the last player in the chain MUST shoot into an empty cell. Then you move one of your pieces 1 cell.
+
+A goal only counts from the opponent's half. Offside: if every opposing outfield player is strictly behind you when you shoot, the goal doesn't count.
+
+You can hold the ball among your players as long as you like. But: if a new shot lands too close to where your last clean shot landed, you get a yellow card; a second time, red; a third time, you must remove one of your players from the pitch."
+
+[node name="BackButton" type="Button" parent="SafeArea/Center/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(340, 130)
+layout_mode = 2
+text = "Back"

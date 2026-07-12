@@ -1,0 +1,54 @@
+[gd_scene format=3 uid="uid://xjd0kdt8dqgv"]
+
+[ext_resource type="Script" path="res://scripts/visuals/selection_indicator.gd" id="1_selection_indicator"]
+
+[node name="SelectionIndicator" type="Node3D" unique_id=739979227]
+transform = Transform3D(0.98327637, 0, 0, 0, 0.98327637, 0, 0, 0, 0.98327637, 0, 0, 0)
+script = ExtResource("1_selection_indicator")
+segment_count = 128
+corner_rounding = 0.1
+corner_segments = 3
+ring_color = Color(0.24788496, 0.99999994, 0.22440457, 1)
+glow_color = Color(0.24705882, 1, 0.22352941, 1)
+legal_arrow_color = Color(0.24705882, 1, 0.22352941, 1)
+illegal_arrow_color = Color(0.92, 1, 0.76, 0.08)
+decoration_color = Color(1, 1, 1, 0.24)
+ring_count = 3
+ring_radius = 1.0
+ring_thickness = 0.098
+ring_spacing = -0.28500000000000003
+ring_dash_count = 8
+ring_dash_fill = 0.45
+ring_opacity_falloff = 0.35
+arrow_style = 2
+arrow_length = 0.13
+arrow_width = 0.18
+arrow_spacing = 0.07000000000000006
+arrow_notch_depth = 0.3
+arrow_rotation_offset = 38.5
+glow_visible = true
+glow_intensity = 0.19
+glow_size = 1.3900000000000001
+glow_center_opacity = 0.35
+decoration_radius = 0.72
+decoration_length = 0.26
+decoration_width = 0.2
+pulse_speed = 0.58
+pulse_amount = 0.025
+rotation_speed = -13.779999999999973
+animation_duration = 0.18
+select_start_scale = 0.88
+rotate_glow = false
+rotate_decorations = false
+
+[node name="Glow" type="MeshInstance3D" parent="." unique_id=714937318]
+transform = Transform3D(-0.18806964, 0, 0.9810779, 0, 1, 0, -0.9810779, 0, -0.18806964, 0, 0, 0)
+
+[node name="Ring" type="MeshInstance3D" parent="." unique_id=1260066037]
+transform = Transform3D(-0.10868093, 0, -1.002827, 0, 1, 0, 1.002827, 0, -0.10868093, 0, 0, 0)
+
+[node name="DirectionArrows" type="Node3D" parent="." unique_id=1404849147]
+transform = Transform3D(-0.99366254, 0, -0.11229796, 0, 1, 0, 0.11229796, 0, -0.99366254, 0, 0, 0)
+
+[node name="Decorations" type="Node3D" parent="." unique_id=734647793]
+transform = Transform3D(-0.55565804, 0, 0.83014065, 0, 1, 0, -0.83014065, 0, -0.55565804, 0, 0, 0)

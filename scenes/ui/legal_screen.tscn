@@ -1,0 +1,64 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/info_stub.gd" id="1_info_stub"]
+[ext_resource type="Theme" uid="uid://3sfso1by5eio" path="res://my_theme.tres" id="2_theme"]
+
+[node name="LegalScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_info_stub")
+title_text = "Credits & Legal"
+body_text = "TODO (edit this text in legal_screen.tscn -> LegalScreen -> body_text): author/studio, year, contact, third-party licenses (fonts, audio), a note that this is an original implementation of rules inspired by Football Mania (DiviCo, 2006) — graphics/code are original."
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.06, 0.09, 0.06, 1)
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 80
+theme_override_constants/margin_right = 80
+
+[node name="Center" type="CenterContainer" parent="SafeArea"]
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="SafeArea/Center"]
+layout_mode = 2
+theme_override_constants/separation = 26
+alignment = 1
+
+[node name="Title" type="Label" parent="SafeArea/Center/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 84
+text = "Credits & Legal"
+
+[node name="Body" type="Label" parent="SafeArea/Center/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 2
+theme_override_font_sizes/font_size = 36
+custom_minimum_size = Vector2(880, 0)
+text = "TODO (edit this text in legal_screen.tscn -> LegalScreen -> body_text): author/studio, year, contact, third-party licenses (fonts, audio), a note that this is an original implementation of rules inspired by Football Mania (DiviCo, 2006) — graphics/code are original."
+
+[node name="BackButton" type="Button" parent="SafeArea/Center/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(340, 130)
+layout_mode = 2
+text = "Back"

@@ -1,0 +1,110 @@
+[gd_scene format=3 uid="uid://cl23e7lofqw17"]
+
+[ext_resource type="Script" uid="uid://bq7l6wowpn01e" path="res://scripts/ui/main_menu.gd" id="1_main_menu"]
+[ext_resource type="Theme" uid="uid://3sfso1by5eio" path="res://my_theme.tres" id="2_theme"]
+[ext_resource type="Texture2D" uid="uid://bq7i4e65ddeq5" path="res://assets/textures/ui/menu_background.png" id="3_1g8jr"]
+[ext_resource type="Texture2D" uid="uid://4nfu4d70l1mp" path="res://assets/textures/ui/logo_yellow.png" id="4_m1kxf"]
+
+[node name="MainMenu" type="Control" unique_id=362262017]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_main_menu")
+
+[node name="Background" type="TextureRect" parent="." unique_id=1702232168]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_1g8jr")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Overlay" type="ColorRect" parent="." unique_id=1556377003]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.025840001, 0.17184411, 0.11774104, 0.84700006)
+
+[node name="SafeArea" type="MarginContainer" parent="." unique_id=665132812]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 120
+theme_override_constants/margin_right = 120
+
+[node name="VBox" type="VBoxContainer" parent="SafeArea" unique_id=56452721]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/separation = 45
+alignment = 1
+
+[node name="top_spacer" type="Control" parent="SafeArea/VBox" unique_id=1855573361]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="logo" type="TextureRect" parent="SafeArea/VBox" unique_id=2125559514]
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 5.0
+texture = ExtResource("4_m1kxf")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="OnePlayerButton" type="Button" parent="SafeArea/VBox" unique_id=1478242689]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(820, 150)
+layout_mode = 2
+text = "1 Player game"
+
+[node name="TwoPlayerButton" type="Button" parent="SafeArea/VBox" unique_id=1316032237]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(820, 150)
+layout_mode = 2
+text = "2 Player game"
+
+[node name="OptionsButton" type="Button" parent="SafeArea/VBox" unique_id=1655554511]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(820, 150)
+layout_mode = 2
+text = "Options"
+
+[node name="InstructionsButton" type="Button" parent="SafeArea/VBox" unique_id=1009738405]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(820, 150)
+layout_mode = 2
+text = "Instructions"
+
+[node name="QuitButton" type="Button" parent="SafeArea/VBox" unique_id=1537987379]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(820, 150)
+layout_mode = 2
+text = "Quit"
+
+[node name="CreditsButton" type="Button" parent="SafeArea/VBox" unique_id=1564373975]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 90)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 55
+text = "Credits"
+flat = true
+
+[node name="bottoom_spacer" type="Control" parent="SafeArea/VBox" unique_id=842254057]
+layout_mode = 2
+size_flags_vertical = 3

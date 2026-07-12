@@ -1,0 +1,518 @@
+[gd_scene format=3 uid="uid://dgvqqcmk21jln"]
+
+[ext_resource type="Script" uid="uid://c2tyoyrbxx4bk" path="res://scripts/ui/team_select.gd" id="1_team_select"]
+[ext_resource type="Theme" uid="uid://3sfso1by5eio" path="res://my_theme.tres" id="2_theme"]
+[ext_resource type="Texture2D" uid="uid://n6yamn4iu4fv" path="res://assets/textures/ui/choose_team_bkg.png" id="3_4cjor"]
+[ext_resource type="Texture2D" uid="uid://dvtdxcii7faub" path="res://assets/textures/ui/countries/ar.png" id="3_ar"]
+[ext_resource type="Texture2D" uid="uid://ce6dwsgidy6j" path="res://assets/textures/ui/countries/be.png" id="4_be"]
+[ext_resource type="Texture2D" uid="uid://bndv6jp1g5udb" path="res://assets/textures/ui/countries/br.png" id="5_br"]
+[ext_resource type="Texture2D" uid="uid://vtou8jaso7kd" path="res://assets/textures/ui/countries/hr.png" id="6_hr"]
+[ext_resource type="Texture2D" uid="uid://d43ny0brrtue" path="res://assets/textures/ui/countries/dk.png" id="7_dk"]
+[ext_resource type="Texture2D" uid="uid://cnx2sfpx77564" path="res://assets/textures/ui/countries/gb-eng.png" id="8_gbeng"]
+[ext_resource type="Texture2D" uid="uid://dnjjkfm7ff5dx" path="res://assets/textures/ui/countries/fr.png" id="9_fr"]
+[ext_resource type="Texture2D" uid="uid://cpjk7h6j1j8f1" path="res://assets/textures/ui/countries/de.png" id="10_de"]
+[ext_resource type="Texture2D" uid="uid://c13cu8ddpaw2r" path="res://assets/textures/ui/countries/it.png" id="11_it"]
+[ext_resource type="Texture2D" uid="uid://b071o7dsbrhng" path="res://assets/textures/ui/countries/jp.png" id="12_jp"]
+[ext_resource type="Texture2D" uid="uid://di6llqm8jekpi" path="res://assets/textures/ui/countries/mx.png" id="13_mx"]
+[ext_resource type="Texture2D" uid="uid://ca1elo3nq4nbt" path="res://assets/textures/ui/countries/nl.png" id="14_nl"]
+[ext_resource type="Texture2D" uid="uid://jiyjwlvkp6cp" path="res://assets/textures/ui/countries/pt.png" id="15_pt"]
+[ext_resource type="Texture2D" uid="uid://dvyj5yf6ss7gn" path="res://assets/textures/ui/countries/es.png" id="16_es"]
+[ext_resource type="Texture2D" uid="uid://cfh7skciobowd" path="res://assets/textures/ui/countries/se.png" id="17_se"]
+[ext_resource type="Texture2D" uid="uid://dasd2i8prd4r3" path="res://assets/textures/ui/countries/us.png" id="18_us"]
+[ext_resource type="Shader" uid="uid://dsa3hu7jjfpfa" path="res://assets/shaders/rounded_texture.gdshader" id="19_rounded"]
+[ext_resource type="Texture2D" uid="uid://ibrd6ioj0xka" path="res://assets/textures/ui/choose_side.png" id="20_side"]
+[ext_resource type="Shader" uid="uid://doaeeaxs4s1hu" path="res://assets/shaders/luminance_dim.gdshader" id="21_dim"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_side_home"]
+shader = ExtResource("21_dim")
+shader_parameter/dim_amount = 0.7
+shader_parameter/flip_h = false
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_side"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_side_away"]
+shader = ExtResource("21_dim")
+shader_parameter/dim_amount = 0.7
+shader_parameter/flip_h = true
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_rounded"]
+shader = ExtResource("19_rounded")
+shader_parameter/radius = 0.12
+shader_parameter/edge_softness = 0.004
+shader_parameter/border_width = 0.0
+shader_parameter/border_color = Color(0.97, 0.76, 0.15, 1)
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_country"]
+
+[node name="TeamSelect" type="Control" unique_id=265695144]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_team_select")
+
+[node name="Background" type="TextureRect" parent="." unique_id=346545575]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_4cjor")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Overlay" type="ColorRect" parent="." unique_id=637937157]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.025840001, 0.17184411, 0.11774104, 0.84700006)
+
+[node name="SafeArea" type="MarginContainer" parent="." unique_id=502512959]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 120
+theme_override_constants/margin_top = 120
+theme_override_constants/margin_right = 120
+theme_override_constants/margin_bottom = 120
+
+[node name="VBox" type="VBoxContainer" parent="SafeArea" unique_id=1367205995]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="Title" type="Label" parent="SafeArea/VBox" unique_id=234025736]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 72
+text = "PLAYER 1"
+horizontal_alignment = 1
+
+[node name="SideLabel" type="Label" parent="SafeArea/VBox" unique_id=915519465]
+layout_mode = 2
+text = "CHOOSE SIDE:"
+horizontal_alignment = 1
+
+[node name="SideRow" type="HBoxContainer" parent="SafeArea/VBox" unique_id=1233968685]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="HomeSide" type="Control" parent="SafeArea/VBox/SideRow" unique_id=232424479]
+custom_minimum_size = Vector2(0, 588)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SideHomeButton" type="TextureButton" parent="SafeArea/VBox/SideRow/HomeSide" unique_id=232424480]
+unique_name_in_owner = true
+texture_filter = 4
+material = SubResource("ShaderMaterial_side_home")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_side")
+texture_normal = ExtResource("20_side")
+ignore_texture_size = true
+stretch_mode = 0
+
+[node name="AwaySide" type="Control" parent="SafeArea/VBox/SideRow" unique_id=1317272316]
+custom_minimum_size = Vector2(0, 588)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SideAwayButton" type="TextureButton" parent="SafeArea/VBox/SideRow/AwaySide" unique_id=1317272317]
+unique_name_in_owner = true
+texture_filter = 4
+material = SubResource("ShaderMaterial_side_away")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_side")
+texture_normal = ExtResource("20_side")
+ignore_texture_size = true
+stretch_mode = 0
+
+[node name="Divider" type="Control" parent="SafeArea/VBox" unique_id=2049325063]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+
+[node name="CountryLabel" type="Label" parent="SafeArea/VBox" unique_id=2049325062]
+layout_mode = 2
+text = "CHOOSE COUNTRY:"
+horizontal_alignment = 1
+
+[node name="Scroll" type="ScrollContainer" parent="SafeArea/VBox" unique_id=-400749595]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Center" type="CenterContainer" parent="SafeArea/VBox/Scroll" unique_id=-400749594]
+layout_mode = 2
+
+[node name="CountryGrid" type="GridContainer" parent="SafeArea/VBox/Scroll/Center" unique_id=1565959532]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 93
+theme_override_constants/v_separation = 93
+columns = 4
+
+[node name="Argentina" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=1520101023]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/Argentina" unique_id=1520101024]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "Argentina"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("3_ar")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="Belgium" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=220369398]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/Belgium" unique_id=220369399]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "Belgium"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("4_be")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="Brazil" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=683072484]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/Brazil" unique_id=683072485]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "Brazil"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("5_br")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="Croatia" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=991028432]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/Croatia" unique_id=991028433]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "Croatia"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("6_hr")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="Denmark" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=459260669]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/Denmark" unique_id=459260670]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "Denmark"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("7_dk")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="England" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=378915168]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/England" unique_id=378915169]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "England"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("8_gbeng")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="France" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=647302933]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/France" unique_id=647302934]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "France"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("9_fr")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="Germany" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=1242122469]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/Germany" unique_id=1242122470]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "Germany"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("10_de")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="Italy" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=53234574]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/Italy" unique_id=53234575]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "Italy"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("11_it")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="Japan" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=1351768884]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/Japan" unique_id=1351768885]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "Japan"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("12_jp")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="Mexico" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=443672920]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/Mexico" unique_id=443672921]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "Mexico"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("13_mx")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="Netherlands" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=571590005]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/Netherlands" unique_id=571590006]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "Netherlands"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("14_nl")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="Portugal" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=1380589219]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/Portugal" unique_id=1380589220]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "Portugal"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("15_pt")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="Spain" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=689484539]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/Spain" unique_id=689484540]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "Spain"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("16_es")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="Sweden" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=1817139251]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/Sweden" unique_id=1817139252]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "Sweden"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("17_se")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="USA" type="Control" parent="SafeArea/VBox/Scroll/Center/CountryGrid" unique_id=1014646156]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+
+[node name="Flag" type="TextureButton" parent="SafeArea/VBox/Scroll/Center/CountryGrid/USA" unique_id=1014646157]
+texture_filter = 4
+material = SubResource("ShaderMaterial_rounded")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+tooltip_text = "USA"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_country")
+texture_normal = ExtResource("18_us")
+ignore_texture_size = true
+stretch_mode = 4
+
+[node name="Divider2" type="Control" parent="SafeArea/VBox" unique_id=880966083]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+
+[node name="ButtonRow" type="HBoxContainer" parent="SafeArea/VBox" unique_id=157696175]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="BackButton" type="Button" parent="SafeArea/VBox/ButtonRow" unique_id=242091862]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(340, 130)
+layout_mode = 2
+size_flags_horizontal = 3
+theme = ExtResource("2_theme")
+text = "Back"
+
+[node name="NextButton" type="Button" parent="SafeArea/VBox/ButtonRow" unique_id=647735441]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(340, 130)
+layout_mode = 2
+size_flags_horizontal = 3
+theme = ExtResource("2_theme")
+text = "Next"

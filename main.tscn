@@ -1,0 +1,72 @@
+[gd_scene format=3 uid="uid://dggx7opq7no0k"]
+
+[ext_resource type="Script" uid="uid://c84wer1e2451" path="res://main.gd" id="1_main"]
+[ext_resource type="PackedScene" uid="uid://4kfa0myyy5po" path="res://assets/models/stadium.glb" id="2_0xm2m"]
+[ext_resource type="Texture2D" uid="uid://nt1hcd6yrvy2" path="res://assets/textures/DaySkyHDRI010B_2K_HDR.exr" id="2_h2yge"]
+[ext_resource type="PackedScene" uid="uid://c4h7ncd0i3fb6" path="res://scenes/ui/hud.tscn" id="3_hud"]
+
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_0xm2m"]
+panorama = ExtResource("2_h2yge")
+
+[sub_resource type="Sky" id="Sky_2"]
+sky_material = SubResource("PanoramaSkyMaterial_0xm2m")
+
+[sub_resource type="Environment" id="Env_1"]
+background_mode = 2
+sky = SubResource("Sky_2")
+ambient_light_source = 3
+ambient_light_color = Color(0.6, 0.65, 0.6, 1)
+ambient_light_energy = 0.6
+tonemap_mode = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_lquwl"]
+albedo_color = Color(0.1150723, 0.24509025, 0.10840564, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_h2yge"]
+cull_mode = 2
+emission = Color(1, 1, 1, 1)
+emission_energy_multiplier = 10.43
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1bvp3"]
+cull_mode = 2
+emission = Color(1, 1, 1, 1)
+emission_energy_multiplier = 10.43
+
+[node name="Main" type="Node3D" unique_id=1257774303]
+script = ExtResource("1_main")
+fx_trail_width = 0.2
+fx_trail_fill = 0.2
+fx_trail_pattern = 1
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1201192460]
+environment = SubResource("Env_1")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1031677832]
+transform = Transform3D(0.7071068, -0.61237246, 0.35355338, 0, 0.49999997, 0.86602545, -0.7071068, -0.61237246, 0.35355338, 0, 12, 0)
+light_color = Color(1, 1, 0.9019608, 1)
+light_specular = 0.75
+shadow_enabled = true
+shadow_opacity = 0.5
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=101495328]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 11.4, -0.765)
+fov = 66.0
+
+[node name="CharacterSpawn" type="Marker3D" parent="." unique_id=156859860]
+
+[node name="stadium" parent="." unique_id=658270329 instance=ExtResource("2_0xm2m")]
+
+[node name="arena" parent="stadium" index="1" unique_id=831205437]
+surface_material_override/0 = SubResource("StandardMaterial3D_lquwl")
+
+[node name="goal2_net" parent="stadium" index="9" unique_id=38387077]
+surface_material_override/0 = SubResource("StandardMaterial3D_h2yge")
+
+[node name="goal1_net" parent="stadium" index="10" unique_id=2145557116]
+surface_material_override/0 = SubResource("StandardMaterial3D_1bvp3")
+
+[node name="HUD" type="CanvasLayer" parent="." unique_id=94580436]
+
+[node name="Hud" parent="HUD" unique_id=854996807 instance=ExtResource("3_hud")]
+
+[editable path="stadium"]

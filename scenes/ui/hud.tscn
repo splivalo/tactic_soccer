@@ -1,0 +1,332 @@
+[gd_scene format=3 uid="uid://c4h7ncd0i3fb6"]
+
+[ext_resource type="Script" uid="uid://dw1vi4ax6ks07" path="res://scripts/ui/hud.gd" id="1_hud"]
+[ext_resource type="FontFile" uid="uid://clvktfy0yagfm" path="res://assets/fonts/BebasNeue-Regular.ttf" id="2_font"]
+[ext_resource type="Texture2D" uid="uid://ddtspyk823at" path="res://assets/textures/ui/hud_background.png" id="3_bg"]
+[ext_resource type="Texture2D" uid="uid://bjo21ruu8osuk" path="res://assets/textures/ui/hud_shield_primary_color.png" id="4_primary"]
+[ext_resource type="Texture2D" uid="uid://b3tlj5kmeribl" path="res://assets/textures/ui/hud_shield_secondary_color.png" id="5_secondary"]
+[ext_resource type="Texture2D" uid="uid://cw5serhkjf8te" path="res://assets/textures/ui/hud_shield_frame.png" id="6_frame"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_shadow"]
+bg_color = Color(0, 0, 0, 0)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+shadow_size = 30
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pill"]
+content_margin_left = 12.0
+content_margin_top = 5.0
+content_margin_right = 12.0
+content_margin_bottom = 5.0
+bg_color = Color(0, 0, 0, 0.45)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_red"]
+bg_color = Color(0.82, 0.1, 0.12, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yellow"]
+bg_color = Color(0.95, 0.79, 0.1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="Hud" type="Control" unique_id=1350924689]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_hud")
+
+[node name="Fade" type="ColorRect" parent="." unique_id=1588371809]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 241.0
+grow_horizontal = 2
+mouse_filter = 2
+color = Color(0.094027676, 0.099518634, 0.110500224, 1)
+
+[node name="Shadow" type="Panel" parent="." unique_id=-1177484695]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -500.0
+offset_top = 40.0
+offset_right = 500.0
+offset_bottom = 194.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_shadow")
+
+[node name="Bar" type="Control" parent="." unique_id=2022370975]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -500.0
+offset_top = 40.0
+offset_right = 500.0
+offset_bottom = 194.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="Background" type="TextureRect" parent="Bar" unique_id=233301146]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("3_bg")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Row" type="HBoxContainer" parent="Bar" unique_id=1721845211]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="HomeSide" type="HBoxContainer" parent="Bar/Row" unique_id=1365140388]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+size_flags_stretch_ratio = 36.0
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="Shield" type="Control" parent="Bar/Row/HomeSide" unique_id=1318304221]
+custom_minimum_size = Vector2(96, 112)
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="HomePrimary" type="TextureRect" parent="Bar/Row/HomeSide/Shield" unique_id=255817460]
+unique_name_in_owner = true
+modulate = Color(0.88, 0.07, 0.1, 1)
+texture_filter = 4
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("4_primary")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HomeSecondary" type="TextureRect" parent="Bar/Row/HomeSide/Shield" unique_id=1631628555]
+unique_name_in_owner = true
+texture_filter = 4
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("5_secondary")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Frame" type="TextureRect" parent="Bar/Row/HomeSide/Shield" unique_id=923465049]
+texture_filter = 4
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("6_frame")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="VBox" type="VBoxContainer" parent="Bar/Row/HomeSide" unique_id=1579460082]
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = 6
+
+[node name="HomeName" type="Label" parent="Bar/Row/HomeSide/VBox" unique_id=1918340008]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 46
+text = "CRO"
+
+[node name="CardsPill" type="PanelContainer" parent="Bar/Row/HomeSide/VBox" unique_id=1705249495]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_pill")
+
+[node name="HBox" type="HBoxContainer" parent="Bar/Row/HomeSide/VBox/CardsPill" unique_id=521676205]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RedIcon" type="Panel" parent="Bar/Row/HomeSide/VBox/CardsPill/HBox" unique_id=1385664266]
+custom_minimum_size = Vector2(18, 20)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_red")
+
+[node name="HomeRedCount" type="Label" parent="Bar/Row/HomeSide/VBox/CardsPill/HBox" unique_id=43691427]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "0"
+
+[node name="Sep" type="ColorRect" parent="Bar/Row/HomeSide/VBox/CardsPill/HBox" unique_id=1238711190]
+custom_minimum_size = Vector2(2, 18)
+layout_mode = 2
+size_flags_vertical = 4
+color = Color(1, 1, 1, 0.25)
+
+[node name="YellowIcon" type="Panel" parent="Bar/Row/HomeSide/VBox/CardsPill/HBox" unique_id=1288568312]
+custom_minimum_size = Vector2(18, 20)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_yellow")
+
+[node name="HomeYellowCount" type="Label" parent="Bar/Row/HomeSide/VBox/CardsPill/HBox" unique_id=1676738287]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "0"
+
+[node name="ScoreCenter" type="CenterContainer" parent="Bar/Row" unique_id=197285280]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+size_flags_stretch_ratio = 28.0
+
+[node name="ScoreLabel" type="Label" parent="Bar/Row/ScoreCenter" unique_id=1188415073]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 80
+text = "2 : 1"
+
+[node name="AwaySide" type="HBoxContainer" parent="Bar/Row" unique_id=671830960]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+size_flags_stretch_ratio = 36.0
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="VBox" type="VBoxContainer" parent="Bar/Row/AwaySide" unique_id=717596053]
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = 6
+
+[node name="AwayName" type="Label" parent="Bar/Row/AwaySide/VBox" unique_id=1069380153]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 46
+text = "BRA"
+horizontal_alignment = 2
+
+[node name="CardsPill" type="PanelContainer" parent="Bar/Row/AwaySide/VBox" unique_id=959407844]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_pill")
+
+[node name="HBox" type="HBoxContainer" parent="Bar/Row/AwaySide/VBox/CardsPill" unique_id=873935403]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RedIcon" type="Panel" parent="Bar/Row/AwaySide/VBox/CardsPill/HBox" unique_id=1852381052]
+custom_minimum_size = Vector2(18, 20)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_red")
+
+[node name="AwayRedCount" type="Label" parent="Bar/Row/AwaySide/VBox/CardsPill/HBox" unique_id=396273983]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "0"
+
+[node name="Sep" type="ColorRect" parent="Bar/Row/AwaySide/VBox/CardsPill/HBox" unique_id=2076808098]
+custom_minimum_size = Vector2(2, 18)
+layout_mode = 2
+size_flags_vertical = 4
+color = Color(1, 1, 1, 0.25)
+
+[node name="YellowIcon" type="Panel" parent="Bar/Row/AwaySide/VBox/CardsPill/HBox" unique_id=110697524]
+custom_minimum_size = Vector2(18, 20)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_yellow")
+
+[node name="AwayYellowCount" type="Label" parent="Bar/Row/AwaySide/VBox/CardsPill/HBox" unique_id=312581821]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "0"
+
+[node name="Shield" type="Control" parent="Bar/Row/AwaySide" unique_id=1918315039]
+custom_minimum_size = Vector2(96, 112)
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="AwayPrimary" type="TextureRect" parent="Bar/Row/AwaySide/Shield" unique_id=159021870]
+unique_name_in_owner = true
+modulate = Color(1, 0.87, 0, 1)
+texture_filter = 4
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("4_primary")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="AwaySecondary" type="TextureRect" parent="Bar/Row/AwaySide/Shield" unique_id=152718712]
+unique_name_in_owner = true
+modulate = Color(0, 0.61, 0.23, 1)
+texture_filter = 4
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("5_secondary")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Frame" type="TextureRect" parent="Bar/Row/AwaySide/Shield" unique_id=1000292727]
+texture_filter = 4
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("6_frame")
+expand_mode = 1
+stretch_mode = 5

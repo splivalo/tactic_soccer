@@ -1,0 +1,112 @@
+[gd_scene format=3 uid="uid://df60rv6yok0cl"]
+
+[ext_resource type="Script" uid="uid://drqe203sdqb6h" path="res://scripts/ui/splash_screen.gd" id="1_splash"]
+[ext_resource type="Texture2D" uid="uid://d1idq03b7v1dl" path="res://assets/textures/ui/splash_background.png" id="2_wh6tg"]
+[ext_resource type="FontFile" uid="uid://clvktfy0yagfm" path="res://assets/fonts/BebasNeue-Regular.ttf" id="3_eina6"]
+[ext_resource type="Texture2D" uid="uid://c2423qsn78kr5" path="res://assets/textures/ui/game_logo.png" id="3_wh6tg"]
+[ext_resource type="Theme" uid="uid://3sfso1by5eio" path="res://my_theme.tres" id="4_usb1j"]
+
+[sub_resource type="Environment" id="Environment_lhnum"]
+background_mode = 3
+glow_enabled = true
+glow_normalized = true
+glow_blend_mode = 0
+
+[sub_resource type="LabelSettings" id="LabelSettings_it15u"]
+font = ExtResource("3_eina6")
+font_size = 100
+outline_size = 1
+outline_color = Color(0, 5.0982127, 4.052945, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_clcbi"]
+font = ExtResource("3_eina6")
+font_size = 100
+outline_size = 1
+outline_color = Color(0, 5.0982127, 4.052945, 1)
+
+[node name="SplashScreen" type="Control" unique_id=1229859338]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_splash")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1323762266]
+environment = SubResource("Environment_lhnum")
+
+[node name="Background" type="TextureRect" parent="." unique_id=27906394]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_wh6tg")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Overlay" type="ColorRect" parent="." unique_id=483266700]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.44313726)
+
+[node name="Center" type="MarginContainer" parent="." unique_id=790041263]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 80
+theme_override_constants/margin_right = 80
+
+[node name="VBox" type="VBoxContainer" parent="Center" unique_id=643146142]
+layout_mode = 2
+alignment = 1
+
+[node name="top_spacer" type="Control" parent="Center/VBox" unique_id=1786767587]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="logo" type="TextureRect" parent="Center/VBox" unique_id=1055497649]
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 5.0
+texture = ExtResource("3_wh6tg")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Center/VBox" unique_id=115787767]
+layout_mode = 2
+theme_override_constants/separation = 30
+alignment = 1
+
+[node name="Label2" type="Label" parent="Center/VBox/HBoxContainer" unique_id=584062581]
+layout_mode = 2
+theme = ExtResource("4_usb1j")
+theme_override_font_sizes/font_size = 100
+text = "—"
+label_settings = SubResource("LabelSettings_it15u")
+
+[node name="Prompt" type="Label" parent="Center/VBox/HBoxContainer" unique_id=973379046]
+layout_mode = 2
+text = "Tap to start"
+label_settings = SubResource("LabelSettings_clcbi")
+
+[node name="Label" type="Label" parent="Center/VBox/HBoxContainer" unique_id=1487631768]
+layout_mode = 2
+theme = ExtResource("4_usb1j")
+theme_override_font_sizes/font_size = 100
+text = "—"
+label_settings = SubResource("LabelSettings_it15u")
+
+[node name="bottoom_spacer" type="Control" parent="Center/VBox" unique_id=1127195348]
+layout_mode = 2
+size_flags_vertical = 3
