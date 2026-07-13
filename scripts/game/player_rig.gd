@@ -18,6 +18,13 @@ const IDLE_CLIPS := ["idle", "idle_breath"]
 ## them by eye until the launch looks glued to the foot.
 @export var pass_contact_time := 0.55
 @export var strike_contact_time := 0.56
+## Playback speed of the kicks. Passes below 1.0 read as a gentle push-pass
+## instead of an aggressive strike; the shot stays punchy at ~1.0.
+@export_range(0.4, 1.5, 0.01) var pass_speed := 0.72
+@export_range(0.4, 1.5, 0.01) var strike_speed := 1.0
+## Per-kick random speed spread, so a team never plays the exact same pass twice
+## (the one clip, but never identically timed).
+@export_range(0.0, 0.4, 0.01) var kick_speed_jitter := 0.16
 ## ±fraction of idle playback speed, so idles drift out of phase over time.
 @export_range(0.0, 0.3, 0.01) var idle_speed_jitter := 0.08
 ## Crossfade times (s) between states — short so turns stay snappy.
@@ -90,10 +97,14 @@ func kick(kind: String) -> void:  # "pass" | "strike"
 	if _ap == null:
 		return
 	_set_root_motion(true)  # kicks may lunge forward; keep the figure on its cell
+	# Softer, slightly-random speed so the pass isn't a violent identical strike.
+	var base_speed: float = pass_speed if kind == "pass" else strike_speed
+	var speed: float = base_speed * randf_range(1.0 - kick_speed_jitter, 1.0 + kick_speed_jitter)
 	_ap.speed_scale = 1.0
-	_ap.play(kind, action_blend)
+	_ap.play(kind, action_blend, speed)
+	# Contact time is authored at 1x, so scale the wait by the actual speed.
 	var contact: float = pass_contact_time if kind == "pass" else strike_contact_time
-	await get_tree().create_timer(contact).timeout
+	await get_tree().create_timer(contact / speed).timeout
 	kick_contact.emit()
 
 

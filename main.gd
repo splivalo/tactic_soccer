@@ -25,6 +25,10 @@ extends Node3D
 ## shot: a shot longer than this many cells (or any goal) uses the powerful
 ## 'strike'; a shorter tap-in stays a light pass. "broj polja" — cells crossed.
 @export var short_pass_max_cells := 2
+## How briskly the ball travels. >1 = slower/gentler (passes), <1 = snappier
+## (shots). Part of what makes a pass feel soft vs a shot feel powerful.
+@export var pass_ball_pace := 1.5
+@export var shot_ball_pace := 0.8
 
 # --- Ball --------------------------------------------------------------------
 @export var spawn_ball := true
@@ -579,13 +583,14 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 	print("COMBO -> shoot %s (goal=%s)" % [shoot_cell, res["goal"]])
 	# path = [ball_cell, chain_fig_0, ... chain_fig_n (shooter), shoot_cell]
 	var path: Array = res["path"]
-	# Ball rolls from its resting cell to the first figure (a receive, no kick).
-	await _roll_ball(path[1])
+	# Ball rolls gently from its resting cell to the first figure (a receive).
+	await _roll_ball(path[1], pass_ball_pace)
 	# Every chain figure kicks the ball on to the next cell.
 	for i in range(1, path.size() - 1):
 		var from_cell: Vector2i = path[i]
 		var to_cell: Vector2i = path[i + 1]
 		var is_final: bool = i == path.size() - 2
+		var kind := _kick_kind(from_cell, to_cell, is_final, res["goal"])
 		# On the goal-scoring strike, cut to the cinematic side angle so the
 		# whole shot plays out from there.
 		if is_final and res["goal"] and enable_goal_cam:
@@ -593,16 +598,16 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 		var kicker: Node3D = _node_at.get(from_cell)
 		if kicker is PlayerRig:
 			_face_toward(kicker, from_cell, to_cell)
-			await (kicker as PlayerRig).kick(_kick_kind(from_cell, to_cell, is_final, res["goal"]))
-		await _roll_ball(to_cell)
+			await (kicker as PlayerRig).kick(kind)
+		await _roll_ball(to_cell, shot_ball_pace if kind == "strike" else pass_ball_pace)
 	await _after_combo(res)
 
 
 # Rolls the ball to a cell centre and returns when it arrives. Speed scales with
 # distance (a long ball travels quicker per cell), clamped so it always reads.
-func _roll_ball(to_cell: Vector2i) -> void:
+func _roll_ball(to_cell: Vector2i, pace: float = 1.0) -> void:
 	var to := _ball_world(to_cell)
-	var dur: float = clampf(_ball.position.distance_to(to) * 0.05, 0.08, 0.45)
+	var dur: float = clampf(_ball.position.distance_to(to) * 0.05 * pace, 0.08, 0.6)
 	var tween := create_tween()
 	tween.tween_property(_ball, "position", to, dur).set_trans(Tween.TRANS_SINE)
 	await tween.finished
