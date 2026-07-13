@@ -16,7 +16,7 @@ func _initialize() -> void:
 
 func _process(_delta: float) -> bool:
 	_frames += 1
-	if _frames < 45:
+	if _frames < 110:
 		return false
 	await RenderingServer.frame_post_draw
 	var img := get_root().get_texture().get_image()

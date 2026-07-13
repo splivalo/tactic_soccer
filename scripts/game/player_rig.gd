@@ -48,6 +48,7 @@ const HIPS_TRACK := "Skeleton3D:mixamorig_Hips"
 
 var _ap: AnimationPlayer
 var _is_gk := false
+var _acting := false  # mid kick/jog — see is_busy()
 ## Which clips actually exist in the library (the left-foot mirrors may be absent
 ## if the mirror self-check failed at build time — we fall back to right foot).
 var _available := {}
@@ -55,6 +56,12 @@ var _available := {}
 
 func is_goalkeeper() -> bool:
 	return _is_gk
+
+
+## True while playing a kick/jog — main.gd's ball-tracking leaves these alone so
+## the action's own facing (toward the target) isn't fought.
+func is_busy() -> bool:
+	return _acting
 
 
 func _set_root_motion(on: bool) -> void:
@@ -83,6 +90,7 @@ func setup(goalkeeper: bool) -> void:
 func idle(desync: bool = false) -> void:
 	if _ap == null:
 		return
+	_acting = false
 	_set_root_motion(false)  # idles keep their hip sway so feet stay planted
 	var clip: String = "gk_idle" if _is_gk else IDLE_CLIPS[randi() % IDLE_CLIPS.size()]
 	var jitter := 0.0
@@ -98,6 +106,7 @@ func idle(desync: bool = false) -> void:
 func jog() -> void:
 	if _ap == null or _is_gk:
 		return
+	_acting = true
 	_set_root_motion(true)  # strip forward travel; the tween owns the cell move
 	_ap.speed_scale = 1.0
 	_ap.play("jog", action_blend)
@@ -112,6 +121,7 @@ func jog() -> void:
 func kick(kind: String, power: float = 1.0, left: bool = false) -> void:  # kind: "pass" | "strike"
 	if _ap == null:
 		return
+	_acting = true
 	_set_root_motion(true)  # kicks may lunge forward; keep the figure on its cell
 	var is_strike := kind == "strike"
 	var clip := _pick_clip(kind, power, left)

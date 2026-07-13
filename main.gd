@@ -36,6 +36,12 @@ extends Node3D
 ## Minimum time (s) for the opening roll to the first figure, so it has room for
 ## the (now short) wind-up and strikes the ball on arrival rather than waiting.
 @export var first_touch_windup := 0.3
+## Outfield players turn to face the ball at this rate (deg/s) so the team tracks
+## the play instead of each freezing in its last action's direction. GK stays put.
+@export var face_turn_speed := 360.0
+## How high a full-power ball lofts at mid-flight (world units). Scales with the
+## hop's power, so short balls stay on the ground and long balls arc over.
+@export var max_ball_arc := 0.7
 
 # --- Ball --------------------------------------------------------------------
 @export var spawn_ball := true
@@ -83,6 +89,9 @@ extends Node3D
 @export var goal_cam_back := 2.0           # offset behind the goal line
 @export var goal_cam_fov := 42.0
 @export_range(0.0, 0.5, 0.01) var goal_cam_blur := 0.12  # background DoF (0 = off)
+## Time scale during the goal strike + celebration (1 = no slow-mo). The whole
+## winning shot and keeper dive play in slow motion, then snap back to normal.
+@export_range(0.15, 1.0, 0.05) var goal_slowmo := 0.4
 @export_group("")
 
 # --- Camera auto-fit ---------------------------------------------------------
@@ -107,6 +116,7 @@ var _fit_meshes: Array[MeshInstance3D] = []
 var _state: MatchState = null
 var _node_at: Dictionary = {} # Vector2i(cell) -> Node3D (figure standing there)
 var _ball: Node3D = null
+var _ball_last_pos := Vector3.ZERO  # for rolling-spin (see _spin_ball)
 var _move_from := Vector2i(-1, -1) # figure selected to move (view only)
 var _busy := false # true while the ball animates (ignore input)
 var _fx: BoardFx = null
@@ -305,6 +315,7 @@ func _spawn_ball() -> void:
 
 # (Re)build both teams + the ball, then init or reset the logic (score kept).
 func _build_match(kickoff_team: String) -> void:
+	Engine.time_scale = 1.0  # always restore normal speed on a (re)build
 	for node_name in ["HomeTeam", "AwayTeam", "Ball"]:
 		var old := get_node_or_null(node_name)
 		if old != null:
@@ -366,6 +377,7 @@ func _place_ball(cell: Vector2i) -> void:
 	_ball.name = "Ball"
 	_ball.scale = Vector3.ONE * ball_scale
 	_ball.position = _ball_world(cell)
+	_ball_last_pos = _ball.position
 
 
 func _ball_world(cell: Vector2i) -> Vector3:
@@ -623,23 +635,35 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 			contact = (kicker as PlayerRig).contact_delay(kind, power)
 		var start: float = maxf(arrive[i] - contact, 0.0)
 		_schedule_kick(start, from_cell, path[i - 1], to_cell, kind, power)
-		# Cut to the cinematic angle as the scorer begins the winning strike.
+		# Cut to the cinematic angle + slow-mo as the scorer begins the strike.
 		if is_final and res["goal"] and enable_goal_cam:
-			_schedule(start, _activate_goal_cam.bind(to_cell))
+			_schedule(start, _begin_goal_drama.bind(to_cell))
 
-	# 4) One uninterrupted ball tween through the whole path (constant speed per
-	#    segment; only the final approach eases out as it settles).
+	# 4) One uninterrupted ball tween through the whole path. Each segment lofts
+	#    into an arc scaled by its power (short = grounded roll, long = high ball);
+	#    only the final approach eases out as it settles.
 	var tween := create_tween()
 	_ball.position = _ball_world(path[0])
+	_ball_last_pos = _ball.position
 	for k in range(n - 1):
-		var target := _ball_world(path[k + 1])
-		var tw := tween.tween_property(_ball, "position", target, durs[k])
+		var a := _ball_world(path[k])
+		var b := _ball_world(path[k + 1])
+		var h := max_ball_arc * _power(_cells(path[k], path[k + 1]))
+		var tw := tween.tween_method(_set_ball_arc.bind(a, b, h), 0.0, 1.0, durs[k])
 		if k == n - 2:
 			tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 		else:
 			tw.set_trans(Tween.TRANS_LINEAR)
 	await tween.finished
 	await _after_combo(res)
+
+
+# Places the ball along segment a->b at progress t, lofted into an arc of peak
+# height h (0 = flat roll). Driven by the combo tween.
+func _set_ball_arc(t: float, a: Vector3, b: Vector3, h: float) -> void:
+	if _ball == null:
+		return
+	_ball.position = a.lerp(b, t) + Vector3.UP * (h * sin(PI * t))
 
 
 # Continuous-ball helpers -----------------------------------------------------
@@ -699,9 +723,49 @@ func _incoming_on_left(at: Vector2i, from: Vector2i, target: Vector2i) -> bool:
 	return on_left != invert_kick_foot
 
 
-# Turns a figure to face a target cell, so the kick swings toward the ball's
-# destination instead of straight down the pitch. Same yaw convention as the
-# team's base facing, so player_facing_offset corrects both together.
+func _process(delta: float) -> void:
+	_track_facing(delta)
+	_spin_ball()
+
+
+# Idle outfield players smoothly turn to face the ball (they track the play), so
+# the team never freezes looking every which way. Keepers and mid-action figures
+# are left alone.
+func _track_facing(delta: float) -> void:
+	if _ball == null:
+		return
+	var ball_pos := _ball.position
+	var step := deg_to_rad(face_turn_speed) * delta
+	for fig in _node_at.values():
+		if not (fig is PlayerRig):
+			continue
+		var rig := fig as PlayerRig
+		if rig.is_goalkeeper() or rig.is_busy():
+			continue
+		var dir := ball_pos - rig.position
+		dir.y = 0.0
+		if dir.length_squared() < 0.0001:
+			continue
+		var want := atan2(dir.x, dir.z) + deg_to_rad(player_facing_offset)
+		rig.rotation.y += clampf(angle_difference(rig.rotation.y, want), -step, step)
+
+
+# Rolls the ball visually: spins it about the axis across its travel, by the
+# distance covered over its radius. Only horizontal motion drives the spin.
+func _spin_ball() -> void:
+	if _ball == null:
+		return
+	var d := _ball.position - _ball_last_pos
+	d.y = 0.0
+	var dist := d.length()
+	if dist > 0.00001:
+		var axis := Vector3.UP.cross(d / dist)
+		_ball.transform.basis = Basis(axis, dist / (BALL_RADIUS * ball_scale)) * _ball.transform.basis
+	_ball_last_pos = _ball.position
+
+
+# Snaps a figure to face a target cell, so a kick swings toward the ball's
+# destination. Same yaw convention as the team's base facing / ball tracking.
 func _face_toward(fig: Node3D, from_cell: Vector2i, to_cell: Vector2i) -> void:
 	# Goalkeepers always stay facing forward (their spawn facing) — they shuffle
 	# along the line and punt the ball out without ever turning their back.
@@ -714,7 +778,6 @@ func _face_toward(fig: Node3D, from_cell: Vector2i, to_cell: Vector2i) -> void:
 
 
 func _after_combo(res: Dictionary) -> void:
-	_busy = false
 	if res["offside"]:
 		print("OFFSIDE — goal not given")
 		_show_offside(res["offside_shooter"], res["offside_line_row"])
@@ -727,10 +790,13 @@ func _after_combo(res: Dictionary) -> void:
 			% [res["scorer"], _state.score["HomeTeam"], _state.score["AwayTeam"]])
 		if res["win"]:
 			print("=== %s WINS THE MATCH ===" % res["scorer"])
+		# Stay busy through the celebration so the torn-down board can't take input.
 		if enable_goal_cam and _goal_cam != null:
 			await _celebrate_goal(res)
 		_build_match(res["kickoff"])
+		_busy = false
 	else:
+		_busy = false
 		_refresh_turn_view()
 
 
@@ -767,13 +833,24 @@ func _activate_goal_cam(goal_cell: Vector2i) -> void:
 	_goal_cam.current = true
 
 
-# Beaten keeper dives, hold on the moment, then hand the view back.
+# Cut to the cinematic angle AND drop into slow motion as the winning strike
+# begins, so the whole shot + keeper dive play out like a replay.
+func _begin_goal_drama(goal_cell: Vector2i) -> void:
+	_activate_goal_cam(goal_cell)
+	if goal_slowmo < 1.0:
+		Engine.time_scale = goal_slowmo
+
+
+# Beaten keeper dives; hold on the slow-mo moment (real time), then snap back to
+# normal speed and hand the view back.
 func _celebrate_goal(res: Dictionary) -> void:
 	var defender: String = "AwayTeam" if res["scorer"] == "HomeTeam" else "HomeTeam"
 	var gk := _find_gk(defender)
 	if gk is PlayerRig:
 		(gk as PlayerRig).gk_miss()
-	await get_tree().create_timer(goal_cam_hold).timeout
+	# ignore_time_scale so the hold is real seconds even during slow-mo.
+	await get_tree().create_timer(goal_cam_hold, true, false, true).timeout
+	Engine.time_scale = 1.0
 	_restore_camera()
 
 
