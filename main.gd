@@ -33,9 +33,9 @@ extends Node3D
 @export var ball_pace_strong := 0.55
 ## Flip if the kicking foot ends up on the wrong side for the incoming ball.
 @export var invert_kick_foot := false
-## Minimum time (s) for the opening roll to the first figure, so it has room to
-## wind up and strike the ball on arrival rather than waiting for it.
-@export var first_touch_windup := 0.7
+## Minimum time (s) for the opening roll to the first figure, so it has room for
+## the (now short) wind-up and strikes the ball on arrival rather than waiting.
+@export var first_touch_windup := 0.3
 
 # --- Ball --------------------------------------------------------------------
 @export var spawn_ball := true

@@ -25,6 +25,12 @@ const IDLE_CLIPS := ["idle", "idle_breath"]
 ## Extra swing speed at full power (long ball) vs a 1-cell tap — a stronger kick
 ## whips through a touch faster. 0.15 = +15% at full power.
 @export_range(0.0, 0.6, 0.01) var kick_power_speedup := 0.15
+## Skip this many seconds of the clip's wind-up so the figure does a quick
+## receive-and-strike as the ball arrives, instead of cocking its leg long
+## before. Higher = snappier / less anticipation. Contact sits at ~0.55s, so
+## 0.42 leaves ~0.13s of leg coming through before the boot meets the ball.
+@export_range(0.0, 0.55, 0.01) var pass_windup_skip := 0.42
+@export_range(0.0, 0.55, 0.01) var strike_windup_skip := 0.3
 ## Per-kick random speed spread, so passes at the same distance still aren't
 ## identically timed. Kept small so the anticipation timing stays tight.
 @export_range(0.0, 0.4, 0.01) var kick_speed_jitter := 0.06
@@ -109,6 +115,7 @@ func kick(kind: String, power: float = 1.0, left: bool = false) -> void:  # kind
 	_set_root_motion(true)  # kicks may lunge forward; keep the figure on its cell
 	var is_strike := kind == "strike"
 	var clip := _pick_clip(kind, power, left)
+	var skip: float = strike_windup_skip if is_strike else pass_windup_skip
 	# Softer base for passes; stronger/longer kicks whip through a touch faster,
 	# plus a little random spread so equal-distance passes aren't identical.
 	var base_speed: float = strike_speed if is_strike else pass_speed
@@ -116,9 +123,10 @@ func kick(kind: String, power: float = 1.0, left: bool = false) -> void:  # kind
 	var speed: float = base_speed * randf_range(1.0 - kick_speed_jitter, 1.0 + kick_speed_jitter)
 	_ap.speed_scale = 1.0
 	_ap.play(clip, action_blend, speed)
-	# Contact time is authored at 1x, so scale the wait by the actual speed.
+	_ap.seek(skip, true)  # start past the wind-up: a quick strike, not a long cock
+	# Contact time is authored at 1x, so scale the remaining wait by the speed.
 	var contact: float = strike_contact_time if is_strike else pass_contact_time
-	await get_tree().create_timer(contact / speed).timeout
+	await get_tree().create_timer(maxf(contact - skip, 0.02) / speed).timeout
 	kick_contact.emit()
 
 
@@ -146,7 +154,8 @@ func contact_delay(kind: String, power: float = 1.0) -> float:
 	var base: float = strike_speed if is_strike else pass_speed
 	base *= 1.0 + power * kick_power_speedup
 	var contact: float = strike_contact_time if is_strike else pass_contact_time
-	return contact / maxf(base, 0.05)
+	var skip: float = strike_windup_skip if is_strike else pass_windup_skip
+	return maxf(contact - skip, 0.02) / maxf(base, 0.05)
 
 
 ## Goalkeeper reaction when a shot beats him.
