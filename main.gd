@@ -36,9 +36,12 @@ extends Node3D
 ## Minimum time (s) for the opening roll to the first figure, so it has room for
 ## the (now short) wind-up and strikes the ball on arrival rather than waiting.
 @export var first_touch_windup := 0.3
-## Outfield players turn to face the ball at this rate (deg/s) so the team tracks
-## the play instead of each freezing in its last action's direction. GK stays put.
-@export var face_turn_speed := 360.0
+## After a move/combo settles, only players within this many cells of the ball
+## turn to face it; everyone else eases back to formation. Keeps a few players
+## watching the ball instead of all 20 spinning in place like sunflowers.
+@export var track_radius := 2
+## Max random delay (s) before each player settles, so they don't turn as one.
+@export var settle_stagger := 0.35
 ## How high a full-power ball lofts at mid-flight (world units). Scales with the
 ## hop's power, so short balls stay on the ground and long balls arc over.
 @export var max_ball_arc := 0.7
@@ -117,9 +120,6 @@ var _state: MatchState = null
 var _node_at: Dictionary = {} # Vector2i(cell) -> Node3D (figure standing there)
 var _ball: Node3D = null
 var _ball_last_pos := Vector3.ZERO  # for rolling-spin (see _spin_ball)
-# At kickoff the teams hold their formation facing; ball-tracking only kicks in
-# once the first move/combo of that possession is played.
-var _facing_active := false
 var _move_from := Vector2i(-1, -1) # figure selected to move (view only)
 var _busy := false # true while the ball animates (ignore input)
 var _fx: BoardFx = null
@@ -319,7 +319,6 @@ func _spawn_ball() -> void:
 # (Re)build both teams + the ball, then init or reset the logic (score kept).
 func _build_match(kickoff_team: String) -> void:
 	Engine.time_scale = 1.0  # always restore normal speed on a (re)build
-	_facing_active = false   # start the (re)kickoff in formation, not ball-facing
 	for node_name in ["HomeTeam", "AwayTeam", "Ball"]:
 		var old := get_node_or_null(node_name)
 		if old != null:
@@ -351,6 +350,7 @@ func _build_team(team_name: String, pieces: Array[Dictionary], kit: Dictionary, 
 		root.add_child(fig)
 		fig.position = _cell_world(cell.x, cell.y)
 		fig.rotation_degrees = Vector3(0.0, facing + player_facing_offset, 0.0)
+		fig.set_meta("base_yaw", deg_to_rad(facing + player_facing_offset))  # formation facing
 		fig.scale = Vector3.ONE * player_scale
 		fig.name = "%s_%d" % [piece["role"], piece["number"]]
 		# Goalkeepers wear a distinct kit — never the outfield country colours.
@@ -603,7 +603,6 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 	var res := _state.execute_combo(shoot_cell)
 	if not res["ok"]:
 		return
-	_facing_active = true  # play has begun — teams start tracking the ball
 	_busy = true
 	_fx.clear()
 	print("COMBO -> shoot %s (goal=%s)" % [shoot_cell, res["goal"]])
@@ -728,31 +727,33 @@ func _incoming_on_left(at: Vector2i, from: Vector2i, target: Vector2i) -> bool:
 	return on_left != invert_kick_foot
 
 
-func _process(delta: float) -> void:
-	_track_facing(delta)
+func _process(_delta: float) -> void:
 	_spin_ball()
 
 
-# Idle outfield players smoothly turn to face the ball (they track the play), so
-# the team never freezes looking every which way. Keepers and mid-action figures
-# are left alone.
-func _track_facing(delta: float) -> void:
-	if _ball == null or not _facing_active:
-		return  # hold the kickoff formation until play begins
-	var ball_pos := _ball.position
-	var step := deg_to_rad(face_turn_speed) * delta
-	for fig in _node_at.values():
+# Called once the ball has SETTLED after a move/combo: players within
+# track_radius of the ball calmly turn to watch it; everyone else eases back to
+# formation. Staggered so they don't move in unison; keepers stay forward. This
+# is the whole facing system — no continuous per-frame tracking (that read as a
+# creepy sunflower spin since the figures don't step).
+func _settle_facing() -> void:
+	if _ball == null or _state == null:
+		return
+	var ball_cell: Vector2i = _state.ball
+	for cell in _node_at:
+		var fig = _node_at[cell]
 		if not (fig is PlayerRig):
 			continue
 		var rig := fig as PlayerRig
-		if rig.is_goalkeeper() or rig.is_busy():
+		if rig.is_goalkeeper():
 			continue
-		var dir := ball_pos - rig.position
-		dir.y = 0.0
-		if dir.length_squared() < 0.0001:
-			continue
-		var want := atan2(dir.x, dir.z) + deg_to_rad(player_facing_offset)
-		rig.rotation.y += clampf(angle_difference(rig.rotation.y, want), -step, step)
+		var target_yaw: float = rig.get_meta("base_yaw", 0.0)  # formation by default
+		if _cells(cell, ball_cell) <= track_radius:
+			var dir := _ball.position - rig.position
+			dir.y = 0.0
+			if dir.length_squared() > 0.0001:
+				target_yaw = atan2(dir.x, dir.z) + deg_to_rad(player_facing_offset)
+		rig.turn_to(target_yaw, randf() * settle_stagger)
 
 
 # Rolls the ball visually: spins it about the axis across its travel, by the
@@ -803,6 +804,7 @@ func _after_combo(res: Dictionary) -> void:
 	else:
 		_busy = false
 		_refresh_turn_view()
+		_settle_facing()  # players near the ball's new resting cell turn to watch it
 
 
 # --- Goal cinematic ----------------------------------------------------------
@@ -922,7 +924,6 @@ func _move_click(screen_pos: Vector2) -> void:
 func _apply_move(from: Vector2i, to: Vector2i) -> void:
 	if not _state.do_move(from, to): # also advances the turn
 		return
-	_facing_active = true  # play has begun — teams start tracking the ball
 	var fig: Node3D = _node_at[from]
 	_node_at.erase(from)
 	_node_at[to] = fig
@@ -937,6 +938,7 @@ func _apply_move(from: Vector2i, to: Vector2i) -> void:
 	if fig is PlayerRig:
 		tween.tween_callback((fig as PlayerRig).idle.bind(false))
 	_refresh_turn_view()
+	_settle_facing()  # nearby players watch the new position, rest hold formation
 
 
 # --- View refresh (mirror MatchState) ---------------------------------------

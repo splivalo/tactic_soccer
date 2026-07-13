@@ -46,9 +46,16 @@ const IDLE_CLIPS := ["idle", "idle_breath"]
 ## clip, on for locomotion, off for idles.
 const HIPS_TRACK := "Skeleton3D:mixamorig_Hips"
 
+## Calm turn rate (deg/s) when settling toward a facing between turns.
+@export var turn_speed := 200.0
+
 var _ap: AnimationPlayer
 var _is_gk := false
 var _acting := false  # mid kick/jog — see is_busy()
+# A settle-turn requested by main (face the ball / return to formation).
+var _target_yaw := 0.0
+var _turning := false
+var _turn_delay := 0.0
 ## Which clips actually exist in the library (the left-foot mirrors may be absent
 ## if the mirror self-check failed at build time — we fall back to right foot).
 var _available := {}
@@ -58,10 +65,34 @@ func is_goalkeeper() -> bool:
 	return _is_gk
 
 
-## True while playing a kick/jog — main.gd's ball-tracking leaves these alone so
-## the action's own facing (toward the target) isn't fought.
+## True while playing a kick/jog — settle-turns wait for the action to finish so
+## its own aim isn't fought.
 func is_busy() -> bool:
 	return _acting
+
+
+## Request a calm turn toward `yaw` (radians), after an optional stagger `delay`
+## (s). main calls this on each settle so nearby players face the ball and the
+## rest ease back to formation — not a continuous in-place sunflower spin.
+func turn_to(yaw: float, delay: float = 0.0) -> void:
+	_target_yaw = yaw
+	_turn_delay = delay
+	_turning = true
+
+
+func _process(delta: float) -> void:
+	if not _turning or _acting:
+		return
+	if _turn_delay > 0.0:
+		_turn_delay -= delta
+		return
+	var diff := angle_difference(rotation.y, _target_yaw)
+	var step := deg_to_rad(turn_speed) * delta
+	if absf(diff) <= step:
+		rotation.y = _target_yaw
+		_turning = false
+	else:
+		rotation.y += clampf(diff, -step, step)
 
 
 func _set_root_motion(on: bool) -> void:
