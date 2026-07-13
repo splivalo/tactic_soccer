@@ -29,21 +29,25 @@ func _initialize() -> void:
 	var lib := load(LIB_PATH) as AnimationLibrary
 	var pass_anim := lib.get_animation("pass")
 
-	# Dampened variants (always safe).
-	lib.add_animation("pass_soft", _dampen(pass_anim, 0.72))
-	lib.add_animation("pass_soft2", _dampen(pass_anim, 0.55))
-	print("added dampened: pass_soft (0.72), pass_soft2 (0.55)")
+	# Right-foot swing-strength ladder: gentle tap (heavily damped) -> full swing.
+	var pass_soft := _dampen(pass_anim, 0.72)
+	var pass_soft2 := _dampen(pass_anim, 0.5)
+	lib.add_animation("pass_soft", pass_soft)     # medium
+	lib.add_animation("pass_soft2", pass_soft2)   # gentlest
+	print("added strength ladder: pass_soft2 (0.5), pass_soft (0.72), pass (1.0)")
 
-	# Mirror, gated on the idle-symmetry self-check.
+	# Left-foot (mirrored) counterparts of the whole ladder + the shot, gated on
+	# the idle-symmetry self-check.
 	var idle_err := _mirror_symmetry_error(lib.get_animation("idle"))
 	print("mirror self-check (mirror(idle) vs idle): mean=%.1f deg" % idle_err)
 	if idle_err < 14.0:
-		var mirrored := _mirror(pass_anim)
-		lib.add_animation("pass_mirror", mirrored)
-		lib.add_animation("pass_mirror_soft", _dampen(mirrored, 0.72))
-		print("added mirrored: pass_mirror, pass_mirror_soft")
+		lib.add_animation("pass_L", _mirror(pass_anim))
+		lib.add_animation("pass_soft_L", _mirror(pass_soft))
+		lib.add_animation("pass_soft2_L", _mirror(pass_soft2))
+		lib.add_animation("strike_L", _mirror(lib.get_animation("strike")))
+		print("added left-foot mirrors: pass_L, pass_soft_L, pass_soft2_L, strike_L")
 	else:
-		print("mirror REJECTED (self-check too high) — shipping dampened only")
+		print("mirror REJECTED (self-check too high) — right foot only")
 
 	ResourceSaver.save(lib, LIB_PATH)
 	_repack_scene(base, lib)

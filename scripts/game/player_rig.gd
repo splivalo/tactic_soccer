@@ -22,9 +22,12 @@ const IDLE_CLIPS := ["idle", "idle_breath"]
 ## instead of an aggressive strike; the shot stays punchy at ~1.0.
 @export_range(0.4, 1.5, 0.01) var pass_speed := 0.72
 @export_range(0.4, 1.5, 0.01) var strike_speed := 1.0
-## Per-kick random speed spread, so a team never plays the exact same pass twice
-## (the one clip, but never identically timed).
-@export_range(0.0, 0.4, 0.01) var kick_speed_jitter := 0.16
+## Extra swing speed at full power (long ball) vs a 1-cell tap — a stronger kick
+## whips through a touch faster. 0.15 = +15% at full power.
+@export_range(0.0, 0.6, 0.01) var kick_power_speedup := 0.15
+## Per-kick random speed spread, so passes at the same distance still aren't
+## identically timed.
+@export_range(0.0, 0.4, 0.01) var kick_speed_jitter := 0.12
 ## ±fraction of idle playback speed, so idles drift out of phase over time.
 @export_range(0.0, 0.3, 0.01) var idle_speed_jitter := 0.08
 ## Crossfade times (s) between states — short so turns stay snappy.
@@ -39,9 +42,9 @@ const HIPS_TRACK := "Skeleton3D:mixamorig_Hips"
 
 var _ap: AnimationPlayer
 var _is_gk := false
-## Every pass-family clip (pass, pass_soft, pass_mirror, ...). A pass picks one
-## at random so a team never shows the exact same swing/foot twice in a row.
-var _pass_pool: PackedStringArray = []
+## Which clips actually exist in the library (the left-foot mirrors may be absent
+## if the mirror self-check failed at build time — we fall back to right foot).
+var _available := {}
 
 
 func is_goalkeeper() -> bool:
@@ -60,8 +63,7 @@ func _ready() -> void:
 		return
 	_ap.animation_finished.connect(_on_finished)
 	for a in _ap.get_animation_list():
-		if a.begins_with("pass"):
-			_pass_pool.append(a)
+		_available[a] = true
 
 
 ## Called once after spawn. Picks the right resting animation and desyncs it.
@@ -96,26 +98,44 @@ func jog() -> void:
 
 
 ## Play a kick and await the boot-meets-ball instant. The caller does:
-##     await rig.kick("pass"); launch_the_ball()
-## so the ball leaves exactly on contact. The clip keeps playing its
-## follow-through; it auto-returns to idle when finished.
-func kick(kind: String) -> void:  # "pass" | "strike"
+##     await rig.kick("pass", power, left); launch_the_ball()
+## so the ball leaves exactly on contact. `power` (0..1) is how far the ball
+## travels — it picks the swing strength (gentle tap -> full swing) and nudges
+## the speed. `left` uses the left foot (ball arriving from the left). The clip
+## keeps playing its follow-through and auto-returns to idle when finished.
+func kick(kind: String, power: float = 1.0, left: bool = false) -> void:  # kind: "pass" | "strike"
 	if _ap == null:
 		return
 	_set_root_motion(true)  # kicks may lunge forward; keep the figure on its cell
-	# Pick a random pass pose (dampened / mirrored foot); shot stays the strike.
-	var clip := kind
-	if kind == "pass" and not _pass_pool.is_empty():
-		clip = _pass_pool[randi() % _pass_pool.size()]
-	# Softer, slightly-random speed so the pass isn't a violent identical strike.
-	var base_speed: float = pass_speed if kind == "pass" else strike_speed
+	var is_strike := kind == "strike"
+	var clip := _pick_clip(kind, power, left)
+	# Softer base for passes; stronger/longer kicks whip through a touch faster,
+	# plus a little random spread so equal-distance passes aren't identical.
+	var base_speed: float = strike_speed if is_strike else pass_speed
+	base_speed *= 1.0 + power * kick_power_speedup
 	var speed: float = base_speed * randf_range(1.0 - kick_speed_jitter, 1.0 + kick_speed_jitter)
 	_ap.speed_scale = 1.0
 	_ap.play(clip, action_blend, speed)
 	# Contact time is authored at 1x, so scale the wait by the actual speed.
-	var contact: float = pass_contact_time if kind == "pass" else strike_contact_time
+	var contact: float = strike_contact_time if is_strike else pass_contact_time
 	await get_tree().create_timer(contact / speed).timeout
 	kick_contact.emit()
+
+
+# Chooses the clip from the swing-strength ladder and the kicking foot, falling
+# back to the right foot if a mirror clip wasn't built.
+func _pick_clip(kind: String, power: float, left: bool) -> String:
+	var base := "strike"
+	if kind != "strike":
+		if power < 0.34:
+			base = "pass_soft2"   # 1-2 cells: gentle tap
+		elif power < 0.67:
+			base = "pass_soft"    # mid-range
+		else:
+			base = "pass"         # long ball: full swing
+	if left and _available.has(base + "_L"):
+		return base + "_L"
+	return base
 
 
 ## Goalkeeper reaction when a shot beats him.
@@ -129,7 +149,7 @@ func gk_miss() -> void:
 func _on_finished(anim: StringName) -> void:
 	# One-shots (any pass variant / strike / GK dive) settle back into idle.
 	var n := String(anim)
-	if n.begins_with("pass") or n == "strike" or n == "gk_miss":
+	if n.begins_with("pass") or n.begins_with("strike") or n == "gk_miss":
 		idle()
 
 

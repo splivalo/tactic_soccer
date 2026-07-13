@@ -21,14 +21,18 @@ extends Node3D
 @export var player_scale := 1.0
 ## Correction if the model's "front" isn't already +Z (home faces -Z, away +Z).
 @export var player_facing_offset := 0.0
-## In-chain passes always use the light Soccer Pass. This only governs the FINAL
-## shot: a shot longer than this many cells (or any goal) uses the powerful
-## 'strike'; a shorter tap-in stays a light pass. "broj polja" — cells crossed.
-@export var short_pass_max_cells := 2
-## How briskly the ball travels. >1 = slower/gentler (passes), <1 = snappier
-## (shots). Part of what makes a pass feel soft vs a shot feel powerful.
-@export var pass_ball_pace := 1.5
-@export var shot_ball_pace := 0.8
+## Kick strength scales with distance ("broj polja"). A 1-cell ball is a soft
+## tap (power 0); at this many cells or more it's a full-power kick (power 1).
+@export var full_power_cells := 7
+## The FINAL shot uses the powerful 'strike' if it travels at least this many
+## cells (or scores); shorter tap-in shots stay a normal pass swing.
+@export var shot_strike_cells := 4
+## Ball travel pace by power: gentle (short/soft) rolls slow, strong (long) balls
+## fly. Interpolated by the distance-driven power. >1 = slower, <1 = snappier.
+@export var ball_pace_gentle := 1.9
+@export var ball_pace_strong := 0.55
+## Flip if the kicking foot ends up on the wrong side for the incoming ball.
+@export var invert_kick_foot := false
 
 # --- Ball --------------------------------------------------------------------
 @export var spawn_ball := true
@@ -583,14 +587,21 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 	print("COMBO -> shoot %s (goal=%s)" % [shoot_cell, res["goal"]])
 	# path = [ball_cell, chain_fig_0, ... chain_fig_n (shooter), shoot_cell]
 	var path: Array = res["path"]
-	# Ball rolls gently from its resting cell to the first figure (a receive).
-	await _roll_ball(path[1], pass_ball_pace)
-	# Every chain figure kicks the ball on to the next cell.
+	# Ball rolls from its resting cell to the first figure (a receive, no kick).
+	await _roll_ball(path[1], _ball_pace(_cells(path[0], path[1])))
+	# Every chain figure kicks the ball on to the next cell. Strength (swing +
+	# ball speed) scales with how far it goes; the kicking foot matches the side
+	# the ball arrives from.
 	for i in range(1, path.size() - 1):
 		var from_cell: Vector2i = path[i]
 		var to_cell: Vector2i = path[i + 1]
 		var is_final: bool = i == path.size() - 2
-		var kind := _kick_kind(from_cell, to_cell, is_final, res["goal"])
+		var cells := _cells(from_cell, to_cell)
+		var power := _power(cells)
+		var kind := "pass"
+		if is_final and (res["goal"] or cells >= shot_strike_cells):
+			kind = "strike"
+			power = maxf(power, 0.6)  # a shot always reads as powerful, even up close
 		# On the goal-scoring strike, cut to the cinematic side angle so the
 		# whole shot plays out from there.
 		if is_final and res["goal"] and enable_goal_cam:
@@ -598,8 +609,9 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 		var kicker: Node3D = _node_at.get(from_cell)
 		if kicker is PlayerRig:
 			_face_toward(kicker, from_cell, to_cell)
-			await (kicker as PlayerRig).kick(kind)
-		await _roll_ball(to_cell, shot_ball_pace if kind == "strike" else pass_ball_pace)
+			var left := _incoming_on_left(from_cell, path[i - 1], to_cell)
+			await (kicker as PlayerRig).kick(kind, power, left)
+		await _roll_ball(to_cell, _ball_pace(cells))
 	await _after_combo(res)
 
 
@@ -613,14 +625,32 @@ func _roll_ball(to_cell: Vector2i, pace: float = 1.0) -> void:
 	await tween.finished
 
 
-# In-chain passes are always the light Soccer Pass. Only the FINAL shot gets the
-# powerful strike — and even then a tiny tap-in stays a pass so it doesn't look
-# like a rocket. `is_shot` = this is the last hop; `is_goal` = it beats the keeper.
-func _kick_kind(a: Vector2i, b: Vector2i, is_shot: bool, is_goal: bool) -> String:
-	if not is_shot:
-		return "pass"
-	var cells: int = maxi(absi(b.x - a.x), absi(b.y - a.y))
-	return "strike" if (is_goal or cells > short_pass_max_cells) else "pass"
+# Straight-line distance in cells ("broj polja").
+func _cells(a: Vector2i, b: Vector2i) -> int:
+	return maxi(absi(b.x - a.x), absi(b.y - a.y))
+
+
+# Distance -> kick power in 0..1 (1-cell tap = 0, full_power_cells+ = 1).
+func _power(cells: int) -> float:
+	return clampf(float(cells - 1) / float(maxi(full_power_cells - 1, 1)), 0.0, 1.0)
+
+
+# Ball travel pace for a hop of `cells`: gentle when short/soft, quick when long.
+func _ball_pace(cells: int) -> float:
+	return lerpf(ball_pace_gentle, ball_pace_strong, _power(cells))
+
+
+# Does the ball arrive on the kicker's LEFT (facing the target)? Picks the foot.
+func _incoming_on_left(at: Vector2i, from: Vector2i, target: Vector2i) -> bool:
+	var fwd := _cell_world(target.x, target.y) - _cell_world(at.x, at.y)
+	var inc := _cell_world(from.x, from.y) - _cell_world(at.x, at.y)
+	fwd.y = 0.0
+	inc.y = 0.0
+	if fwd.length() < 0.001:
+		return false
+	var right := Vector3(fwd.z, 0.0, -fwd.x)  # forward rotated -90° about Y
+	var on_left := inc.dot(right) < 0.0
+	return on_left != invert_kick_foot
 
 
 # Turns a figure to face a target cell, so the kick swings toward the ball's
