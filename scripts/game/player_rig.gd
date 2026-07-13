@@ -26,8 +26,8 @@ const IDLE_CLIPS := ["idle", "idle_breath"]
 ## whips through a touch faster. 0.15 = +15% at full power.
 @export_range(0.0, 0.6, 0.01) var kick_power_speedup := 0.15
 ## Per-kick random speed spread, so passes at the same distance still aren't
-## identically timed.
-@export_range(0.0, 0.4, 0.01) var kick_speed_jitter := 0.12
+## identically timed. Kept small so the anticipation timing stays tight.
+@export_range(0.0, 0.4, 0.01) var kick_speed_jitter := 0.06
 ## ±fraction of idle playback speed, so idles drift out of phase over time.
 @export_range(0.0, 0.3, 0.01) var idle_speed_jitter := 0.08
 ## Crossfade times (s) between states — short so turns stay snappy.
@@ -136,6 +136,17 @@ func _pick_clip(kind: String, power: float, left: bool) -> String:
 	if left and _available.has(base + "_L"):
 		return base + "_L"
 	return base
+
+
+## How long (s) from the START of a kick until the boot meets the ball, at this
+## kick's nominal speed. main.gd uses it to start the windup EARLY so the ball is
+## struck the instant it arrives — a one-touch pass with no dead stop.
+func contact_delay(kind: String, power: float = 1.0) -> float:
+	var is_strike := kind == "strike"
+	var base: float = strike_speed if is_strike else pass_speed
+	base *= 1.0 + power * kick_power_speedup
+	var contact: float = strike_contact_time if is_strike else pass_contact_time
+	return contact / maxf(base, 0.05)
 
 
 ## Goalkeeper reaction when a shot beats him.

@@ -33,6 +33,9 @@ extends Node3D
 @export var ball_pace_strong := 0.55
 ## Flip if the kicking foot ends up on the wrong side for the incoming ball.
 @export var invert_kick_foot := false
+## Minimum time (s) for the opening roll to the first figure, so it has room to
+## wind up and strike the ball on arrival rather than waiting for it.
+@export var first_touch_windup := 0.7
 
 # --- Ball --------------------------------------------------------------------
 @export var spawn_ball := true
@@ -574,10 +577,12 @@ func _combo_tap(screen_pos: Vector2) -> void:
 			_do_combo(shoot_cell) # direct tap-to-shoot still works, no ambiguity
 
 
-# A combo plays out as a real passing move: the ball rolls to the first figure,
-# then each chain figure KICKS it on — the ball leaves the boot at the animation's
-# foot-contact frame (PlayerRig.kick awaits that), so it's never launched off a
-# dead foot. Short hops use the 'pass' kick, long balls the powerful 'strike'.
+# A combo plays as ONE continuous ball motion through the whole chain — the ball
+# never stops. Each chain figure starts its windup EARLY (in anticipation) so its
+# boot meets the ball exactly as it arrives and strikes it on in one touch. This
+# kills the old "roll, stop, wind up, roll" stutter and stops the ball parking
+# under the receiver. Strength (swing + ball speed) scales with distance; the
+# kicking foot matches the side the ball comes from.
 func _do_combo(shoot_cell: Vector2i) -> void:
 	var res := _state.execute_combo(shoot_cell)
 	if not res["ok"]:
@@ -587,42 +592,83 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 	print("COMBO -> shoot %s (goal=%s)" % [shoot_cell, res["goal"]])
 	# path = [ball_cell, chain_fig_0, ... chain_fig_n (shooter), shoot_cell]
 	var path: Array = res["path"]
-	# Ball rolls from its resting cell to the first figure (a receive, no kick).
-	await _roll_ball(path[1], _ball_pace(_cells(path[0], path[1])))
-	# Every chain figure kicks the ball on to the next cell. Strength (swing +
-	# ball speed) scales with how far it goes; the kicking foot matches the side
-	# the ball arrives from.
-	for i in range(1, path.size() - 1):
+	var n := path.size()
+
+	# 1) Per-segment ball travel times; the opening roll gets room for a windup.
+	var durs: Array[float] = []
+	for k in range(n - 1):
+		durs.append(_roll_dur(path[k], path[k + 1]))
+	durs[0] = maxf(durs[0], first_touch_windup)
+
+	# 2) When the ball reaches each cell (cumulative).
+	var arrive: Array[float] = [0.0]
+	for k in range(n - 1):
+		arrive.append(arrive[k] + durs[k])
+
+	# 3) Schedule every chain figure's kick to CONTACT the ball on arrival —
+	#    starting the windup earlier, overlapping the incoming roll.
+	for i in range(1, n - 1):
 		var from_cell: Vector2i = path[i]
 		var to_cell: Vector2i = path[i + 1]
-		var is_final: bool = i == path.size() - 2
+		var is_final: bool = i == n - 2
 		var cells := _cells(from_cell, to_cell)
 		var power := _power(cells)
 		var kind := "pass"
 		if is_final and (res["goal"] or cells >= shot_strike_cells):
 			kind = "strike"
 			power = maxf(power, 0.6)  # a shot always reads as powerful, even up close
-		# On the goal-scoring strike, cut to the cinematic side angle so the
-		# whole shot plays out from there.
-		if is_final and res["goal"] and enable_goal_cam:
-			_activate_goal_cam(to_cell)
 		var kicker: Node3D = _node_at.get(from_cell)
+		var contact := 0.0
 		if kicker is PlayerRig:
-			_face_toward(kicker, from_cell, to_cell)
-			var left := _incoming_on_left(from_cell, path[i - 1], to_cell)
-			await (kicker as PlayerRig).kick(kind, power, left)
-		await _roll_ball(to_cell, _ball_pace(cells))
+			contact = (kicker as PlayerRig).contact_delay(kind, power)
+		var start: float = maxf(arrive[i] - contact, 0.0)
+		_schedule_kick(start, from_cell, path[i - 1], to_cell, kind, power)
+		# Cut to the cinematic angle as the scorer begins the winning strike.
+		if is_final and res["goal"] and enable_goal_cam:
+			_schedule(start, _activate_goal_cam.bind(to_cell))
+
+	# 4) One uninterrupted ball tween through the whole path (constant speed per
+	#    segment; only the final approach eases out as it settles).
+	var tween := create_tween()
+	_ball.position = _ball_world(path[0])
+	for k in range(n - 1):
+		var target := _ball_world(path[k + 1])
+		var tw := tween.tween_property(_ball, "position", target, durs[k])
+		if k == n - 2:
+			tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		else:
+			tw.set_trans(Tween.TRANS_LINEAR)
+	await tween.finished
 	await _after_combo(res)
 
 
-# Rolls the ball to a cell centre and returns when it arrives. Speed scales with
-# distance (a long ball travels quicker per cell), clamped so it always reads.
-func _roll_ball(to_cell: Vector2i, pace: float = 1.0) -> void:
-	var to := _ball_world(to_cell)
-	var dur: float = clampf(_ball.position.distance_to(to) * 0.05 * pace, 0.08, 0.6)
-	var tween := create_tween()
-	tween.tween_property(_ball, "position", to, dur).set_trans(Tween.TRANS_SINE)
-	await tween.finished
+# Continuous-ball helpers -----------------------------------------------------
+# Time for the ball to cross one segment (distance * pace, clamped so it reads).
+func _roll_dur(a: Vector2i, b: Vector2i) -> float:
+	var d := _ball_world(a).distance_to(_ball_world(b))
+	return clampf(d * 0.05 * _ball_pace(_cells(a, b)), 0.08, 0.7)
+
+
+# Runs `cb` after `delay` seconds (or now if it's already due).
+func _schedule(delay: float, cb: Callable) -> void:
+	if delay <= 0.001:
+		cb.call()
+	else:
+		get_tree().create_timer(delay).timeout.connect(cb)
+
+
+func _schedule_kick(delay: float, at_cell: Vector2i, from_cell: Vector2i, to_cell: Vector2i, kind: String, power: float) -> void:
+	_schedule(delay, _fire_kick.bind(at_cell, from_cell, to_cell, kind, power))
+
+
+# Fired at windup-start: the figure turns to the target and swings; its contact
+# frame is timed to land as the continuously-rolling ball reaches its cell.
+func _fire_kick(at_cell: Vector2i, from_cell: Vector2i, to_cell: Vector2i, kind: String, power: float) -> void:
+	var kicker: Node3D = _node_at.get(at_cell)
+	if kicker is PlayerRig:
+		_face_toward(kicker, from_cell, to_cell)
+		var left := _incoming_on_left(at_cell, from_cell, to_cell)
+		(kicker as PlayerRig).kick(kind, power, left)
 
 
 # Straight-line distance in cells ("broj polja").
