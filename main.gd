@@ -792,8 +792,9 @@ func _after_combo(res: Dictionary) -> void:
 	elif res["card"] == "red":
 		print("RED CARD: %s — choose a figure to remove" % _state.current)
 	if res["goal"]:
-		print("GOAL! %s  ->  Home %d : %d Away"
-			% [res["scorer"], _state.score["HomeTeam"], _state.score["AwayTeam"]])
+		print("%s %s  ->  Home %d : %d Away"
+			% ["AUTOGOL!" if res.get("own_goal", false) else "GOAL!", res["scorer"],
+				_state.score["HomeTeam"], _state.score["AwayTeam"]])
 		if res["win"]:
 			print("=== %s WINS THE MATCH ===" % res["scorer"])
 		# Stay busy through the celebration so the torn-down board can't take input.

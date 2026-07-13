@@ -201,7 +201,7 @@ func execute_combo(shoot_cell: Vector2i) -> Dictionary:
 	var res := {
 		"ok": false, "path": [] as Array[Vector2i], "goal": false, "scorer": "",
 		"win": false, "kickoff": "", "offside": false, "offside_shooter": Vector2i(-1, -1),
-		"offside_line_row": -1, "card": "", "must_remove": "",
+		"offside_line_row": -1, "card": "", "must_remove": "", "own_goal": false,
 	}
 	if phase != Phase.COMBO or chain.is_empty() or not (shoot_cell in combo_shoot_targets()):
 		return res
@@ -241,21 +241,28 @@ func execute_combo(shoot_cell: Vector2i) -> Dictionary:
 		stall_ref_id[current] = shooter_id
 		stall_ref_cell[current] = shooter
 
-	var goal := false
+	# A ball into a goal scores — same rule for either net. Into the opponent's
+	# goal (from their half, not offside) you score; into your OWN goal it's an
+	# AUTOGOL and the opponent scores. In this piece model the ball only reaches a
+	# net by being shot there, so no special keeper-corner geometry is needed.
+	var scorer := ""
 	if is_opponent_goal(shoot_cell, current) and in_opponent_half(shooter, current):
 		if is_offside(shooter, current):
 			res["offside"] = true
 			res["offside_shooter"] = shooter
 			res["offside_line_row"] = offside_line_row(current)
 		else:
-			goal = true
+			scorer = current
+	elif is_own_goal_cell(shoot_cell, current):
+		scorer = opponent(current)
+		res["own_goal"] = true
 
-	if goal:
-		score[current] += 1
+	if scorer != "":
+		score[scorer] += 1
 		res["goal"] = true
-		res["scorer"] = current
-		res["win"] = score[current] >= goals_to_win
-		res["kickoff"] = opponent(current)
+		res["scorer"] = scorer
+		res["win"] = score[scorer] >= goals_to_win
+		res["kickoff"] = opponent(scorer)  # the team scored against restarts
 	elif res["must_remove"] != "":
 		phase = Phase.REMOVE
 		pending_removal = current
