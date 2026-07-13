@@ -39,6 +39,9 @@ const HIPS_TRACK := "Skeleton3D:mixamorig_Hips"
 
 var _ap: AnimationPlayer
 var _is_gk := false
+## Every pass-family clip (pass, pass_soft, pass_mirror, ...). A pass picks one
+## at random so a team never shows the exact same swing/foot twice in a row.
+var _pass_pool: PackedStringArray = []
 
 
 func is_goalkeeper() -> bool:
@@ -56,6 +59,9 @@ func _ready() -> void:
 		push_warning("PlayerRig on '%s' found no AnimationPlayer." % name)
 		return
 	_ap.animation_finished.connect(_on_finished)
+	for a in _ap.get_animation_list():
+		if a.begins_with("pass"):
+			_pass_pool.append(a)
 
 
 ## Called once after spawn. Picks the right resting animation and desyncs it.
@@ -97,11 +103,15 @@ func kick(kind: String) -> void:  # "pass" | "strike"
 	if _ap == null:
 		return
 	_set_root_motion(true)  # kicks may lunge forward; keep the figure on its cell
+	# Pick a random pass pose (dampened / mirrored foot); shot stays the strike.
+	var clip := kind
+	if kind == "pass" and not _pass_pool.is_empty():
+		clip = _pass_pool[randi() % _pass_pool.size()]
 	# Softer, slightly-random speed so the pass isn't a violent identical strike.
 	var base_speed: float = pass_speed if kind == "pass" else strike_speed
 	var speed: float = base_speed * randf_range(1.0 - kick_speed_jitter, 1.0 + kick_speed_jitter)
 	_ap.speed_scale = 1.0
-	_ap.play(kind, action_blend, speed)
+	_ap.play(clip, action_blend, speed)
 	# Contact time is authored at 1x, so scale the wait by the actual speed.
 	var contact: float = pass_contact_time if kind == "pass" else strike_contact_time
 	await get_tree().create_timer(contact / speed).timeout
@@ -117,8 +127,9 @@ func gk_miss() -> void:
 
 
 func _on_finished(anim: StringName) -> void:
-	# One-shots (kicks / GK dive) settle back into the resting pose.
-	if anim == "pass" or anim == "strike" or anim == "gk_miss":
+	# One-shots (any pass variant / strike / GK dive) settle back into idle.
+	var n := String(anim)
+	if n.begins_with("pass") or n == "strike" or n == "gk_miss":
 		idle()
 
 
