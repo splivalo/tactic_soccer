@@ -24,8 +24,23 @@ const IDLE_CLIPS := ["idle", "idle_breath"]
 @export var idle_blend := 0.3
 @export var action_blend := 0.12
 
+## The hips carry forward travel in the jog/kick clips; treated as root motion
+## those animate IN PLACE (our tween owns the cell). But the idles need their
+## hip sway APPLIED or the planted feet skate — so root motion is toggled per
+## clip, on for locomotion, off for idles.
+const HIPS_TRACK := "Skeleton3D:mixamorig_Hips"
+
 var _ap: AnimationPlayer
 var _is_gk := false
+
+
+func is_goalkeeper() -> bool:
+	return _is_gk
+
+
+func _set_root_motion(on: bool) -> void:
+	if _ap != null:
+		_ap.root_motion_track = NodePath(HIPS_TRACK) if on else NodePath("")
 
 
 func _ready() -> void:
@@ -37,8 +52,8 @@ func _ready() -> void:
 
 
 ## Called once after spawn. Picks the right resting animation and desyncs it.
-func setup(is_goalkeeper: bool) -> void:
-	_is_gk = is_goalkeeper
+func setup(goalkeeper: bool) -> void:
+	_is_gk = goalkeeper
 	idle(true)
 
 
@@ -47,6 +62,7 @@ func setup(is_goalkeeper: bool) -> void:
 func idle(desync: bool = false) -> void:
 	if _ap == null:
 		return
+	_set_root_motion(false)  # idles keep their hip sway so feet stay planted
 	var clip: String = "gk_idle" if _is_gk else IDLE_CLIPS[randi() % IDLE_CLIPS.size()]
 	var jitter := 0.0
 	if desync:
@@ -61,6 +77,7 @@ func idle(desync: bool = false) -> void:
 func jog() -> void:
 	if _ap == null or _is_gk:
 		return
+	_set_root_motion(true)  # strip forward travel; the tween owns the cell move
 	_ap.speed_scale = 1.0
 	_ap.play("jog", action_blend)
 
@@ -72,6 +89,7 @@ func jog() -> void:
 func kick(kind: String) -> void:  # "pass" | "strike"
 	if _ap == null:
 		return
+	_set_root_motion(true)  # kicks may lunge forward; keep the figure on its cell
 	_ap.speed_scale = 1.0
 	_ap.play(kind, action_blend)
 	var contact: float = pass_contact_time if kind == "pass" else strike_contact_time

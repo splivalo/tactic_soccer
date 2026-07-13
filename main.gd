@@ -21,8 +21,9 @@ extends Node3D
 @export var player_scale := 1.0
 ## Correction if the model's "front" isn't already +Z (home faces -Z, away +Z).
 @export var player_facing_offset := 0.0
-## A pass travelling this many cells or fewer uses the short 'pass' kick; longer
-## ones use the powerful 'strike'. "broj polja" — cells the ball crosses.
+## In-chain passes always use the light Soccer Pass. This only governs the FINAL
+## shot: a shot longer than this many cells (or any goal) uses the powerful
+## 'strike'; a shorter tap-in stays a light pass. "broj polja" — cells crossed.
 @export var short_pass_max_cells := 2
 
 # --- Ball --------------------------------------------------------------------
@@ -592,7 +593,7 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 		var kicker: Node3D = _node_at.get(from_cell)
 		if kicker is PlayerRig:
 			_face_toward(kicker, from_cell, to_cell)
-			await (kicker as PlayerRig).kick(_kick_kind(from_cell, to_cell))
+			await (kicker as PlayerRig).kick(_kick_kind(from_cell, to_cell, is_final, res["goal"]))
 		await _roll_ball(to_cell)
 	await _after_combo(res)
 
@@ -607,16 +608,24 @@ func _roll_ball(to_cell: Vector2i) -> void:
 	await tween.finished
 
 
-# Short vs long ball by the number of cells crossed (straight line -> Chebyshev).
-func _kick_kind(a: Vector2i, b: Vector2i) -> String:
+# In-chain passes are always the light Soccer Pass. Only the FINAL shot gets the
+# powerful strike — and even then a tiny tap-in stays a pass so it doesn't look
+# like a rocket. `is_shot` = this is the last hop; `is_goal` = it beats the keeper.
+func _kick_kind(a: Vector2i, b: Vector2i, is_shot: bool, is_goal: bool) -> String:
+	if not is_shot:
+		return "pass"
 	var cells: int = maxi(absi(b.x - a.x), absi(b.y - a.y))
-	return "pass" if cells <= short_pass_max_cells else "strike"
+	return "strike" if (is_goal or cells > short_pass_max_cells) else "pass"
 
 
 # Turns a figure to face a target cell, so the kick swings toward the ball's
 # destination instead of straight down the pitch. Same yaw convention as the
 # team's base facing, so player_facing_offset corrects both together.
 func _face_toward(fig: Node3D, from_cell: Vector2i, to_cell: Vector2i) -> void:
+	# Goalkeepers always stay facing forward (their spawn facing) — they shuffle
+	# along the line and punt the ball out without ever turning their back.
+	if fig is PlayerRig and (fig as PlayerRig).is_goalkeeper():
+		return
 	var d := _cell_world(to_cell.x, to_cell.y) - _cell_world(from_cell.x, from_cell.y)
 	if Vector2(d.x, d.z).length() < 0.001:
 		return
