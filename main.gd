@@ -117,6 +117,9 @@ var _state: MatchState = null
 var _node_at: Dictionary = {} # Vector2i(cell) -> Node3D (figure standing there)
 var _ball: Node3D = null
 var _ball_last_pos := Vector3.ZERO  # for rolling-spin (see _spin_ball)
+# At kickoff the teams hold their formation facing; ball-tracking only kicks in
+# once the first move/combo of that possession is played.
+var _facing_active := false
 var _move_from := Vector2i(-1, -1) # figure selected to move (view only)
 var _busy := false # true while the ball animates (ignore input)
 var _fx: BoardFx = null
@@ -316,6 +319,7 @@ func _spawn_ball() -> void:
 # (Re)build both teams + the ball, then init or reset the logic (score kept).
 func _build_match(kickoff_team: String) -> void:
 	Engine.time_scale = 1.0  # always restore normal speed on a (re)build
+	_facing_active = false   # start the (re)kickoff in formation, not ball-facing
 	for node_name in ["HomeTeam", "AwayTeam", "Ball"]:
 		var old := get_node_or_null(node_name)
 		if old != null:
@@ -599,6 +603,7 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 	var res := _state.execute_combo(shoot_cell)
 	if not res["ok"]:
 		return
+	_facing_active = true  # play has begun — teams start tracking the ball
 	_busy = true
 	_fx.clear()
 	print("COMBO -> shoot %s (goal=%s)" % [shoot_cell, res["goal"]])
@@ -732,8 +737,8 @@ func _process(delta: float) -> void:
 # the team never freezes looking every which way. Keepers and mid-action figures
 # are left alone.
 func _track_facing(delta: float) -> void:
-	if _ball == null:
-		return
+	if _ball == null or not _facing_active:
+		return  # hold the kickoff formation until play begins
 	var ball_pos := _ball.position
 	var step := deg_to_rad(face_turn_speed) * delta
 	for fig in _node_at.values():
@@ -917,6 +922,7 @@ func _move_click(screen_pos: Vector2) -> void:
 func _apply_move(from: Vector2i, to: Vector2i) -> void:
 	if not _state.do_move(from, to): # also advances the turn
 		return
+	_facing_active = true  # play has begun — teams start tracking the ball
 	var fig: Node3D = _node_at[from]
 	_node_at.erase(from)
 	_node_at[to] = fig

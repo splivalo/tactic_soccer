@@ -50,20 +50,6 @@ shadow_color = Color(0.08, 0.03, 0.02, 0.4)
 shadow_size = 10
 shadow_offset = Vector2(0, 6)
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pressed"]
-content_margin_left = 30.0
-content_margin_top = 20.0
-content_margin_right = 30.0
-content_margin_bottom = 22.0
-bg_color = Color(0.88, 0.66, 0.12, 1)
-border_width_bottom = 16
-border_color = Color(0.8745098, 0.54901963, 0.3137255, 1)
-corner_radius_top_left = 20
-corner_radius_top_right = 20
-corner_radius_bottom_right = 20
-corner_radius_bottom_left = 20
-corner_detail = 1
-
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pvayc"]
 bg_color = Color(0.96862745, 0.7607843, 0.14901961, 1)
 
@@ -79,5 +65,5 @@ Button/font_sizes/outline_size = 8
 Button/styles/disabled = SubResource("StyleBoxFlat_disabled")
 Button/styles/hover = SubResource("StyleBoxFlat_hover")
 Button/styles/normal = SubResource("StyleBoxFlat_normal")
-Button/styles/pressed = SubResource("StyleBoxFlat_pressed")
+Button/styles/pressed = SubResource("StyleBoxFlat_hover")
 VScrollBar/styles/grabber = SubResource("StyleBoxFlat_pvayc")
