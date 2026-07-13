@@ -95,6 +95,14 @@ extends Node3D
 ## Time scale during the goal strike + celebration (1 = no slow-mo). The whole
 ## winning shot and keeper dive play in slow motion, then snap back to normal.
 @export_range(0.15, 1.0, 0.05) var goal_slowmo := 0.4
+## The goal camera tracks the ball and zooms from goal_cam_fov to this FOV as the
+## ball reaches the net — a tightening replay push-in.
+@export var goal_cam_zoom_fov := 22.0
+## The scoring shot flies THROUGH the goal line into the net: this deep, at this
+## height, with this arc — so you see the ball hit the netting, not stop on the line.
+@export var net_depth := 0.5
+@export var net_hit_height := 0.7
+@export var goal_shot_arc := 0.9
 @export_group("")
 
 # --- Camera auto-fit ---------------------------------------------------------
@@ -172,6 +180,10 @@ var _cam_ref := Transform3D.IDENTITY
 var _cam_ref_set := false
 # Separate cinematic camera used only during goal celebrations.
 var _goal_cam: Camera3D = null
+var _goal_cam_follow := false   # while true, the goal cam tracks the ball + zooms
+var _goal_center := Vector3.ZERO    # goal-mouth point the cam frames
+var _goal_net_point := Vector3.ZERO # where the scoring ball flies into the net
+var _goal_flight_d0 := 1.0           # ball->goal distance at strike start (for zoom)
 
 
 func _ready() -> void:
@@ -653,6 +665,10 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 		var a := _ball_world(path[k])
 		var b := _ball_world(path[k + 1])
 		var h := max_ball_arc * _power(_cells(path[k], path[k + 1]))
+		# The scoring shot flies THROUGH the line into the net, with a bigger arc.
+		if k == n - 2 and res["goal"]:
+			b = _net_point(path[k + 1])
+			h = goal_shot_arc
 		var tw := tween.tween_method(_set_ball_arc.bind(a, b, h), 0.0, 1.0, durs[k])
 		if k == n - 2:
 			tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
@@ -660,6 +676,13 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 			tw.set_trans(Tween.TRANS_LINEAR)
 	await tween.finished
 	await _after_combo(res)
+
+
+# The point INSIDE the net a scoring ball flies to: past the goal line (outward),
+# up at net height. Which way is "into the goal" depends on which end it is.
+func _net_point(goal_cell: Vector2i) -> Vector3:
+	var out_dir := -1.0 if goal_cell.y * 2 < Board.ROWS else 1.0
+	return _cell_world(goal_cell.x, goal_cell.y) + Vector3(0.0, net_hit_height, out_dir * net_depth)
 
 
 # Places the ball along segment a->b at progress t, lofted into an arc of peak
@@ -729,6 +752,7 @@ func _incoming_on_left(at: Vector2i, from: Vector2i, target: Vector2i) -> bool:
 
 func _process(_delta: float) -> void:
 	_spin_ball()
+	_update_goal_cam()
 
 
 # Called once the ball has SETTLED after a move/combo: players within
@@ -845,8 +869,24 @@ func _activate_goal_cam(goal_cell: Vector2i) -> void:
 # begins, so the whole shot + keeper dive play out like a replay.
 func _begin_goal_drama(goal_cell: Vector2i) -> void:
 	_activate_goal_cam(goal_cell)
+	_goal_center = _cell_world(goal_cell.x, goal_cell.y) + Vector3(0.0, net_hit_height, 0.0)
+	_goal_net_point = _net_point(goal_cell)
+	_goal_flight_d0 = maxf(_ball.position.distance_to(_goal_center), 0.5)
+	_goal_cam_follow = true
 	if goal_slowmo < 1.0:
 		Engine.time_scale = goal_slowmo
+
+
+# Each frame during the scoring flight: the goal cam tracks the ball (biased
+# toward the goal so it stays framed) and zooms in as the ball reaches the net.
+func _update_goal_cam() -> void:
+	if not _goal_cam_follow or _goal_cam == null or _ball == null:
+		return
+	# Bias the framing toward the goal so it stays composed as the ball flies in.
+	_goal_cam.look_at(_ball.position.lerp(_goal_center, 0.55), Vector3.UP)
+	var d := _ball.position.distance_to(_goal_center)
+	var t := clampf(1.0 - d / _goal_flight_d0, 0.0, 1.0)
+	_goal_cam.fov = lerpf(goal_cam_fov, goal_cam_zoom_fov, t)
 
 
 # Beaten keeper dives; hold on the slow-mo moment (real time), then snap back to
@@ -863,6 +903,7 @@ func _celebrate_goal(res: Dictionary) -> void:
 
 
 func _restore_camera() -> void:
+	_goal_cam_follow = false
 	if _goal_cam != null:
 		_goal_cam.current = false
 	var cam := get_node_or_null("Camera3D") as Camera3D
