@@ -103,6 +103,11 @@ extends Node3D
 @export var net_depth := 0.5
 @export var net_hit_height := 0.7
 @export var goal_shot_arc := 0.9
+## The net bulges where the ball hits and springs back: push distance, affected
+## radius, and settle time. Needs assets/shaders/net_dent.gdshader on the nets.
+@export var net_dent_strength := 0.45
+@export var net_dent_radius := 0.8
+@export var net_dent_time := 0.7
 @export_group("")
 
 # --- Camera auto-fit ---------------------------------------------------------
@@ -184,6 +189,7 @@ var _goal_cam_follow := false   # while true, the goal cam tracks the ball + zoo
 var _goal_center := Vector3.ZERO    # goal-mouth point the cam frames
 var _goal_net_point := Vector3.ZERO # where the scoring ball flies into the net
 var _goal_flight_d0 := 1.0           # ball->goal distance at strike start (for zoom)
+var _net_mats := {}                  # net node name -> its ShaderMaterial (dent)
 
 
 func _ready() -> void:
@@ -228,6 +234,7 @@ func _ready() -> void:
 		_fit_camera_deferred()
 	if enable_goal_cam:
 		_setup_goal_cam()
+		_setup_nets()
 	if spawn_teams:
 		_spawn_teams()
 	if spawn_ball:
@@ -867,6 +874,41 @@ func _activate_goal_cam(goal_cell: Vector2i) -> void:
 
 # Cut to the cinematic angle AND drop into slow motion as the winning strike
 # begins, so the whole shot + keeper dive play out like a replay.
+# Swaps each goal net's material for the dent shader (keeps the white look, adds
+# a bulge uniform). Dense net meshes (~8k verts) deform smoothly.
+func _setup_nets() -> void:
+	var shader := load("res://assets/shaders/net_dent.gdshader") as Shader
+	if shader == null:
+		return
+	for net_name in ["goal1_net", "goal2_net"]:
+		var node := _find_node_named(self, net_name) as MeshInstance3D
+		if node == null:
+			continue
+		var mat := ShaderMaterial.new()
+		mat.shader = shader
+		node.set_surface_override_material(0, mat)
+		_net_mats[net_name] = mat
+
+
+# Bulges the struck net at the ball's contact point, then springs it back.
+func _hit_net() -> void:
+	var net_name := "goal1_net" if _goal_net_point.z < 0.0 else "goal2_net"
+	var mat: ShaderMaterial = _net_mats.get(net_name)
+	if mat == null:
+		return
+	mat.set_shader_parameter("hit_point", _goal_net_point)
+	mat.set_shader_parameter("hit_radius", net_dent_radius)
+	mat.set_shader_parameter("push_dir", Vector3(0.0, -0.15, signf(_goal_net_point.z)))
+	var tw := create_tween()
+	tw.tween_method(_set_net_strength.bind(mat), 0.0, net_dent_strength, 0.04)
+	tw.tween_method(_set_net_strength.bind(mat), net_dent_strength, 0.0, net_dent_time) \
+		.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
+
+func _set_net_strength(v: float, mat: ShaderMaterial) -> void:
+	mat.set_shader_parameter("hit_strength", v)
+
+
 func _begin_goal_drama(goal_cell: Vector2i) -> void:
 	_activate_goal_cam(goal_cell)
 	_goal_center = _cell_world(goal_cell.x, goal_cell.y) + Vector3(0.0, net_hit_height, 0.0)
@@ -892,6 +934,7 @@ func _update_goal_cam() -> void:
 # Beaten keeper dives; hold on the slow-mo moment (real time), then snap back to
 # normal speed and hand the view back.
 func _celebrate_goal(res: Dictionary) -> void:
+	_hit_net()  # the ball has just reached the net — bulge it
 	var defender: String = "AwayTeam" if res["scorer"] == "HomeTeam" else "HomeTeam"
 	var gk := _find_gk(defender)
 	if gk is PlayerRig:

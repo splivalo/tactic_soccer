@@ -31,10 +31,10 @@ func _run() -> void:
 
 	main._do_combo(Vector2i(3, 0))  # fire; flight + goal cam run concurrently
 
-	for i in 6:
-		await create_timer(0.4).timeout
+	for i in 12:
+		await create_timer(0.25, true, false, true).timeout  # real time, ignore slow-mo
 		await RenderingServer.frame_post_draw
 		var img := get_root().get_texture().get_image()
-		img.save_png("res://_goal_%d.png" % i)
+		img.save_png("res://_goal_%02d.png" % i)
 		print("shot %d  ball=%s" % [i, main._ball.position.snapped(Vector3(0.1, 0.1, 0.1))])
 	quit()
