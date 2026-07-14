@@ -86,7 +86,7 @@ extends Node3D
 ## The "make the last shot gorgeous" polish comes later; this is the scaffolding.
 @export_group("Goal Cinematic")
 @export var enable_goal_cam := true
-@export var goal_cam_hold := 1.6           # seconds to hold on the goal
+@export var goal_cam_hold := 1.9           # seconds to hold on the goal
 @export var goal_cam_side := 6.5           # offset to the side of the goal (X)
 @export var goal_cam_height := 2.0         # camera height
 @export var goal_cam_back := 2.0           # offset behind the goal line
@@ -108,6 +108,12 @@ extends Node3D
 @export var net_dent_strength := 0.45
 @export var net_dent_radius := 0.8
 @export var net_dent_time := 0.7
+## After the net-hit, the ball isn't held in the air — it FALLS under gravity
+## (accelerating) to the ground inside the net, then rolls back a touch toward
+## the goal line as the net's give settles it (net elasticity), instead of
+## freezing in place. goal_cam_hold should comfortably cover drop+roll.
+@export var goal_drop_time := 0.35
+@export var goal_settle_roll := 0.22
 @export_group("")
 
 # --- Camera auto-fit ---------------------------------------------------------
@@ -189,6 +195,7 @@ var _goal_cam_follow := false   # while true, the goal cam tracks the ball + zoo
 var _goal_center := Vector3.ZERO    # goal-mouth point the cam frames
 var _goal_net_point := Vector3.ZERO # where the scoring ball flies into the net
 var _goal_flight_d0 := 1.0           # ball->goal distance at strike start (for zoom)
+var _goal_ground_y := 0.0            # resting height inside the net (for the gravity drop)
 var _net_mats := {}                  # net node name -> its ShaderMaterial (dent)
 
 
@@ -369,7 +376,6 @@ func _build_team(team_name: String, pieces: Array[Dictionary], kit: Dictionary, 
 		root.add_child(fig)
 		fig.position = _cell_world(cell.x, cell.y)
 		fig.rotation_degrees = Vector3(0.0, facing + player_facing_offset, 0.0)
-		fig.set_meta("base_yaw", deg_to_rad(facing + player_facing_offset))  # formation facing
 		fig.scale = Vector3.ONE * player_scale
 		fig.name = "%s_%d" % [piece["role"], piece["number"]]
 		# Goalkeepers wear a distinct kit — never the outfield country colours.
@@ -763,10 +769,11 @@ func _process(_delta: float) -> void:
 
 
 # Called once the ball has SETTLED after a move/combo: players within
-# track_radius of the ball calmly turn to watch it; everyone else eases back to
-# formation. Staggered so they don't move in unison; keepers stay forward. This
-# is the whole facing system — no continuous per-frame tracking (that read as a
-# creepy sunflower spin since the figures don't step).
+# track_radius of the ball calmly turn to watch it. Everyone else is left
+# exactly as they are — in particular the figure that JUST kicked the ball away
+# keeps facing the direction it kicked (that's already "looking at the ball's
+# path"), instead of snapping back to a formation facing nobody asked for.
+# Staggered so nearby players don't turn in unison; keepers stay forward.
 func _settle_facing() -> void:
 	if _ball == null or _state == null:
 		return
@@ -778,12 +785,13 @@ func _settle_facing() -> void:
 		var rig := fig as PlayerRig
 		if rig.is_goalkeeper():
 			continue
-		var target_yaw: float = rig.get_meta("base_yaw", 0.0)  # formation by default
-		if _cells(cell, ball_cell) <= track_radius:
-			var dir := _ball.position - rig.position
-			dir.y = 0.0
-			if dir.length_squared() > 0.0001:
-				target_yaw = atan2(dir.x, dir.z) + deg_to_rad(player_facing_offset)
+		if _cells(cell, ball_cell) > track_radius:
+			continue  # leave its current facing alone — no return to formation
+		var dir := _ball.position - rig.position
+		dir.y = 0.0
+		if dir.length_squared() < 0.0001:
+			continue
+		var target_yaw := atan2(dir.x, dir.z) + deg_to_rad(player_facing_offset)
 		rig.turn_to(target_yaw, randf() * settle_stagger)
 
 
@@ -909,10 +917,30 @@ func _set_net_strength(v: float, mat: ShaderMaterial) -> void:
 	mat.set_shader_parameter("hit_strength", v)
 
 
+# The ball doesn't freeze mid-air where it struck the net — gravity takes over:
+# an accelerating fall straight down to the ground inside the net, then a short
+# settle roll back toward the goal line (the net's give nudging it back), so it
+# reads as a real object landing instead of a held pose. _spin_ball (in
+# _process) picks up the roll's horizontal motion automatically.
+func _drop_ball_to_ground() -> void:
+	if _ball == null:
+		return
+	var landed := Vector3(_goal_net_point.x, _goal_ground_y, _goal_net_point.z)
+	var tw := create_tween()
+	tw.tween_property(_ball, "position", landed, goal_drop_time) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)  # accelerating = gravity
+	if goal_settle_roll > 0.0:
+		var back_dir := -signf(_goal_net_point.z - _goal_center.z)
+		var settle := landed + Vector3(0.0, 0.0, back_dir * goal_settle_roll)
+		tw.tween_property(_ball, "position", settle, 0.3) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+
 func _begin_goal_drama(goal_cell: Vector2i) -> void:
 	_activate_goal_cam(goal_cell)
 	_goal_center = _cell_world(goal_cell.x, goal_cell.y) + Vector3(0.0, net_hit_height, 0.0)
 	_goal_net_point = _net_point(goal_cell)
+	_goal_ground_y = _ball_world(goal_cell).y
 	_goal_flight_d0 = maxf(_ball.position.distance_to(_goal_center), 0.5)
 	_goal_cam_follow = true
 	if goal_slowmo < 1.0:
@@ -935,6 +963,7 @@ func _update_goal_cam() -> void:
 # normal speed and hand the view back.
 func _celebrate_goal(res: Dictionary) -> void:
 	_hit_net()  # the ball has just reached the net — bulge it
+	_drop_ball_to_ground()  # ...and gravity takes it from there
 	var defender: String = "AwayTeam" if res["scorer"] == "HomeTeam" else "HomeTeam"
 	var gk := _find_gk(defender)
 	if gk is PlayerRig:
