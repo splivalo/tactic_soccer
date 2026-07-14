@@ -156,11 +156,19 @@ func combo_pass_targets() -> Array[Vector2i]:
 
 ## Empty cells the last chain figure could shoot to. Excludes the ball's own
 ## current resting cell — you cannot "shoot" it back to where it already is.
+## Also excludes the OPPONENT's goal cells unless the shooter is in the
+## opponent's half: from your own half a shot there can never be a goal (see
+## execute_combo), so — matching the original 2006 game, which didn't even mark
+## those cells as selectable — they're not offered as targets. Your OWN goal
+## cells stay targetable from anywhere (a deliberate/accidental autogol).
 func combo_shoot_targets() -> Array[Vector2i]:
 	if chain.is_empty():
 		return [] as Array[Vector2i]
-	var out := _shoot_from(chain[-1])
+	var shooter: Vector2i = chain[-1]
+	var out := _shoot_from(shooter)
 	out.erase(ball)
+	if not in_opponent_half(shooter, current):
+		out = out.filter(func(c): return not is_opponent_goal(c, current))
 	return out
 
 

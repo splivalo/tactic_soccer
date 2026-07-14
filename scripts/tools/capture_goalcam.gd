@@ -17,7 +17,7 @@ func _process(_delta: float) -> bool:
 	_frames += 1
 	if _frames == 20:
 		# Cut to the cinematic angle on the away goal (row 0).
-		_main._activate_goal_cam(Vector2i(3, 0))
+		_main._begin_goal_drama(Vector2i(3, 0))
 	if _frames < 40:
 		return false
 	await RenderingServer.frame_post_draw

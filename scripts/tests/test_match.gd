@@ -234,6 +234,30 @@ func _initialize() -> void:
 	ms.current = "HomeTeam"
 	_check(ms.own_cells() == [Vector2i(1, 1)], "own_cells returns only the current team's figures (%s)" % [ms.own_cells()])
 
+	# Opponent's goal cells are only offered as shoot targets from the opponent's
+	# half — from your own half a shot there can never score (see execute_combo),
+	# so (matching the original game) they're not selectable at all. Own-goal
+	# cells stay targetable from anywhere.
+	ms.pieces.clear()
+	ms.pieces[Vector2i(3, 6)] = {"team": "HomeTeam", "role": "field", "id": 5}  # own half (row 6)
+	ms.ball = Vector2i(3, 5)
+	ms.current = "HomeTeam"
+	ms.phase = MatchState.Phase.COMBO
+	ms.chain = [Vector2i(3, 6)]
+	var targets_from_own_half := ms.combo_shoot_targets()
+	_check(not (Vector2i(3, 0) in targets_from_own_half),
+		"opponent goal (3,0) NOT a shoot target from own half (%s)" % [targets_from_own_half])
+	_check(Vector2i(3, 9) in targets_from_own_half,
+		"own goal (3,9) still a shoot target from own half (autogol stays possible)")
+
+	ms.pieces.clear()
+	ms.pieces[Vector2i(3, 3)] = {"team": "HomeTeam", "role": "field", "id": 6}  # opponent half (row 3)
+	ms.ball = Vector2i(3, 4)
+	ms.chain = [Vector2i(3, 3)]
+	var targets_from_opp_half := ms.combo_shoot_targets()
+	_check(Vector2i(3, 0) in targets_from_opp_half,
+		"opponent goal (3,0) IS a shoot target from the opponent's half")
+
 	if _fail == 0:
 		print("TEST_MATCH: ALL PASSED")
 	else:

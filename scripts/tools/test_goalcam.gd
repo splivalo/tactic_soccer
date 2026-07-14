@@ -18,9 +18,11 @@ func _run() -> void:
 	var gk = main._find_gk("AwayTeam")
 	print("found AwayTeam GK: ", gk.name if gk != null else "<none>")
 
-	main._activate_goal_cam(Vector2i(3, 0))
+	main._begin_goal_drama(Vector2i(3, 0))
+	await process_frame  # let _update_goal_cam place it from the current ball position
 	print("goal cam current after activate: ", main._goal_cam.current)
 	print("goal cam pos: ", main._goal_cam.global_position.snapped(Vector3(0.1, 0.1, 0.1)))
+	print("time scale during flight: ", Engine.time_scale)
 
 	await main._celebrate_goal({"scorer": "HomeTeam"})
 	var cam = main.get_node_or_null("Camera3D")

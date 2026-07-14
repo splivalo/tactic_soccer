@@ -86,14 +86,19 @@ extends Node3D
 ## The "make the last shot gorgeous" polish comes later; this is the scaffolding.
 @export_group("Goal Cinematic")
 @export var enable_goal_cam := true
-@export var goal_cam_hold := 1.9           # seconds to hold on the goal
-@export var goal_cam_side := 6.5           # offset to the side of the goal (X)
+@export var goal_cam_hold := 1.3           # seconds to hold on the goal (after impact, normal speed)
+## Camera position each frame = (goal column + side, height, ball's current
+## depth + back) — a side "dolly" that slides along the touchline tracking the
+## ball's depth as it travels, so it starts framing the KICKER (ball hasn't
+## moved yet) and glides to the goal by the time the ball arrives.
+@export var goal_cam_side := 6.5           # offset to the side of the pitch (X)
 @export var goal_cam_height := 2.0         # camera height
-@export var goal_cam_back := 2.0           # offset behind the goal line
+@export var goal_cam_back := 2.0           # how far behind the ball (toward its own side) the camera trails
 @export var goal_cam_fov := 42.0
 @export_range(0.0, 0.5, 0.01) var goal_cam_blur := 0.12  # background DoF (0 = off)
-## Time scale during the goal strike + celebration (1 = no slow-mo). The whole
-## winning shot and keeper dive play in slow motion, then snap back to normal.
+## Time scale WHILE THE BALL IS IN FLIGHT toward goal (1 = no slow-mo). Snaps
+## back to normal speed the instant the ball reaches the net — the impact,
+## fall, and keeper reaction all play at normal speed, not in slow motion.
 @export_range(0.15, 1.0, 0.05) var goal_slowmo := 0.4
 ## The goal camera tracks the ball and zooms from goal_cam_fov to this FOV as the
 ## ball reaches the net — a tightening replay push-in.
@@ -196,6 +201,7 @@ var _goal_center := Vector3.ZERO    # goal-mouth point the cam frames
 var _goal_net_point := Vector3.ZERO # where the scoring ball flies into the net
 var _goal_flight_d0 := 1.0           # ball->goal distance at strike start (for zoom)
 var _goal_ground_y := 0.0            # resting height inside the net (for the gravity drop)
+var _goal_out_dir := 1.0             # which way "into the goal" is for this net (+1 or -1 on Z)
 var _net_mats := {}                  # net node name -> its ShaderMaterial (dent)
 
 
@@ -862,21 +868,14 @@ func _setup_goal_cam() -> void:
 	add_child(_goal_cam)
 
 
-# Places the cinematic camera low and to the side of the scored-on goal, aimed
-# at the goal mouth, with the crowd/background thrown out of focus.
-func _activate_goal_cam(goal_cell: Vector2i) -> void:
+# Turns on the cinematic camera. Its POSITION is set every frame from here on
+# by _update_goal_cam (a side dolly tracking the ball's depth), so at this
+# instant — kick just starting, ball still at the kicker — it's already framing
+# the shooter; no separate one-time placement needed.
+func _activate_goal_cam() -> void:
 	if _goal_cam == null:
 		return
-	var target := _cell_world(goal_cell.x, goal_cell.y) + Vector3(0, 0.6, 0)
-	# Push the camera outward past the goal line (which end depends on the goal).
-	var out_dir := -1.0 if goal_cell.y * 2 < Board.ROWS else 1.0
-	var pos := target + Vector3(goal_cam_side, goal_cam_height, out_dir * goal_cam_back)
-	_goal_cam.global_position = pos
-	_goal_cam.look_at(target, Vector3.UP)
-	if _goal_cam.attributes is CameraAttributesPractical:
-		var attr := _goal_cam.attributes as CameraAttributesPractical
-		attr.dof_blur_far_distance = pos.distance_to(target) + 1.5
-		attr.dof_blur_far_transition = 1.5
+	_goal_cam.fov = goal_cam_fov
 	_goal_cam.current = true
 
 
@@ -937,40 +936,51 @@ func _drop_ball_to_ground() -> void:
 
 
 func _begin_goal_drama(goal_cell: Vector2i) -> void:
-	_activate_goal_cam(goal_cell)
+	_goal_out_dir = -1.0 if goal_cell.y * 2 < Board.ROWS else 1.0
 	_goal_center = _cell_world(goal_cell.x, goal_cell.y) + Vector3(0.0, net_hit_height, 0.0)
 	_goal_net_point = _net_point(goal_cell)
 	_goal_ground_y = _ball_world(goal_cell).y
 	_goal_flight_d0 = maxf(_ball.position.distance_to(_goal_center), 0.5)
 	_goal_cam_follow = true
+	_activate_goal_cam()
 	if goal_slowmo < 1.0:
 		Engine.time_scale = goal_slowmo
 
 
-# Each frame during the scoring flight: the goal cam tracks the ball (biased
-# toward the goal so it stays framed) and zooms in as the ball reaches the net.
+# Each frame during the scoring flight: the goal cam SLIDES along the touchline
+# tracking the ball's current depth (so it starts on the kicker and glides with
+# the ball to the goal — "kamera klizi i prati loptu"), always looking at the
+# ball, and zooms in as it nears the net. After impact the ball barely moves in
+# depth, so this naturally holds a close, steady shot through the fall/settle.
 func _update_goal_cam() -> void:
 	if not _goal_cam_follow or _goal_cam == null or _ball == null:
 		return
-	# Bias the framing toward the goal so it stays composed as the ball flies in.
-	_goal_cam.look_at(_ball.position.lerp(_goal_center, 0.55), Vector3.UP)
+	_goal_cam.global_position = Vector3(
+		_goal_center.x + goal_cam_side,
+		goal_cam_height,
+		_ball.position.z + _goal_out_dir * goal_cam_back)
+	_goal_cam.look_at(_ball.position.lerp(_goal_center, 0.4), Vector3.UP)
 	var d := _ball.position.distance_to(_goal_center)
 	var t := clampf(1.0 - d / _goal_flight_d0, 0.0, 1.0)
 	_goal_cam.fov = lerpf(goal_cam_fov, goal_cam_zoom_fov, t)
+	if _goal_cam.attributes is CameraAttributesPractical:
+		var attr := _goal_cam.attributes as CameraAttributesPractical
+		attr.dof_blur_far_distance = _goal_cam.global_position.distance_to(_goal_center) + 1.5
+		attr.dof_blur_far_transition = 1.5
 
 
-# Beaten keeper dives; hold on the slow-mo moment (real time), then snap back to
-# normal speed and hand the view back.
+# The ball has just reached the net: slow-mo ends HERE (impact, fall, and the
+# keeper's reaction all play at normal speed) — only the flight was slow-mo.
+# Hold briefly on the settling ball, then hand the view back.
 func _celebrate_goal(res: Dictionary) -> void:
+	Engine.time_scale = 1.0
 	_hit_net()  # the ball has just reached the net — bulge it
 	_drop_ball_to_ground()  # ...and gravity takes it from there
 	var defender: String = "AwayTeam" if res["scorer"] == "HomeTeam" else "HomeTeam"
 	var gk := _find_gk(defender)
 	if gk is PlayerRig:
 		(gk as PlayerRig).gk_miss()
-	# ignore_time_scale so the hold is real seconds even during slow-mo.
-	await get_tree().create_timer(goal_cam_hold, true, false, true).timeout
-	Engine.time_scale = 1.0
+	await get_tree().create_timer(goal_cam_hold).timeout
 	_restore_camera()
 
 
