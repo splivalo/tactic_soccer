@@ -92,7 +92,8 @@ extends Node3D
 ## ball's depth as it travels, so it starts framing the KICKER (ball hasn't
 ## moved yet) and glides to the goal by the time the ball arrives.
 @export var goal_cam_side := 6.5           # offset to the side of the pitch (X)
-@export var goal_cam_height := 2.0         # camera height
+@export var goal_cam_height := 2.0         # camera height ABOVE THE PITCH SURFACE (not world Y=0) —
+## keep this clear of the stands (seats mesh spans world Y 0.6-2.2; stay above ~2.6 total).
 @export var goal_cam_back := 2.0           # how far behind the ball (toward its own side) the camera trails
 @export var goal_cam_fov := 42.0
 @export_range(0.0, 0.5, 0.01) var goal_cam_blur := 0.12  # background DoF (0 = off)
@@ -202,6 +203,7 @@ var _goal_net_point := Vector3.ZERO # where the scoring ball flies into the net
 var _goal_flight_d0 := 1.0           # ball->goal distance at strike start (for zoom)
 var _goal_ground_y := 0.0            # resting height inside the net (for the gravity drop)
 var _goal_out_dir := 1.0             # which way "into the goal" is for this net (+1 or -1 on Z)
+var _goal_cam_base_y := 0.0          # pitch-surface Y the camera height is measured from
 var _net_mats := {}                  # net node name -> its ShaderMaterial (dent)
 
 
@@ -940,6 +942,7 @@ func _begin_goal_drama(goal_cell: Vector2i) -> void:
 	_goal_center = _cell_world(goal_cell.x, goal_cell.y) + Vector3(0.0, net_hit_height, 0.0)
 	_goal_net_point = _net_point(goal_cell)
 	_goal_ground_y = _ball_world(goal_cell).y
+	_goal_cam_base_y = _cell_world(goal_cell.x, goal_cell.y).y + 0.6
 	_goal_flight_d0 = maxf(_ball.position.distance_to(_goal_center), 0.5)
 	_goal_cam_follow = true
 	_activate_goal_cam()
@@ -957,7 +960,7 @@ func _update_goal_cam() -> void:
 		return
 	_goal_cam.global_position = Vector3(
 		_goal_center.x + goal_cam_side,
-		goal_cam_height,
+		_goal_cam_base_y + goal_cam_height,  # measured from the pitch surface, not world 0
 		_ball.position.z + _goal_out_dir * goal_cam_back)
 	_goal_cam.look_at(_ball.position.lerp(_goal_center, 0.4), Vector3.UP)
 	var d := _ball.position.distance_to(_goal_center)
