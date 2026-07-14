@@ -2,11 +2,17 @@ extends Control
 ## Entry screen. Any tap/click/key continues to the main menu.
 ## Layout/look is yours to redesign in the editor (this script only wires
 ## the "continue" action — it doesn't care where anything is positioned).
+##
+## Uses _input (not _unhandled_input): the full-screen Control + its children
+## have the default mouse_filter = Stop, so the GUI SWALLOWS taps/clicks before
+## they'd reach _unhandled_input. On desktop a key press still slipped through,
+## but on a real phone touch is the only input — so it looked dead. _input fires
+## for every event before GUI mouse-filtering, so a tap anywhere always works.
 
 var _going := false
 
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if _going:
 		return
 	var is_continue: bool = false

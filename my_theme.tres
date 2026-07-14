@@ -56,7 +56,7 @@ bg_color = Color(0.96862745, 0.7607843, 0.14901961, 1)
 [resource]
 default_font = ExtResource("1_pvayc")
 default_font_size = 42
-Button/colors/font_color = Color(0.22548783, 0.14468324, 0.043112256, 1)
+Button/colors/font_color = Color(0.22352941, 0.14509805, 0.043137256, 1)
 Button/colors/font_disabled_color = Color(0.38, 0.35, 0.3, 1)
 Button/colors/font_hover_color = Color(0.2900315, 0.19297743, 0.06688863, 1)
 Button/colors/font_pressed_color = Color(0.2901961, 0.19215687, 0.06666667, 1)
