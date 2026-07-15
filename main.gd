@@ -86,7 +86,7 @@ extends Node3D
 ## The "make the last shot gorgeous" polish comes later; this is the scaffolding.
 @export_group("Goal Cinematic")
 @export var enable_goal_cam := true
-@export var goal_cam_hold := 1.3           # seconds to hold on the goal (after impact, normal speed)
+@export var goal_cam_hold := 1.8           # seconds to hold on the goal (after impact, normal speed)
 ## Camera position each frame = (goal column + side, height, ball's current
 ## depth + back) — a side "dolly" that slides along the touchline tracking the
 ## ball's depth as it travels, so it starts framing the KICKER (ball hasn't
@@ -100,7 +100,7 @@ extends Node3D
 ## Time scale WHILE THE BALL IS IN FLIGHT toward goal (1 = no slow-mo). Snaps
 ## back to normal speed the instant the ball reaches the net — the impact,
 ## fall, and keeper reaction all play at normal speed, not in slow motion.
-@export_range(0.15, 1.0, 0.05) var goal_slowmo := 0.4
+@export_range(0.15, 1.0, 0.05) var goal_slowmo := 0.28
 ## The goal camera tracks the ball and zooms from goal_cam_fov to this FOV as the
 ## ball reaches the net — a tightening replay push-in.
 @export var goal_cam_zoom_fov := 22.0

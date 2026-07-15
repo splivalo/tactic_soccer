@@ -1,9 +1,99 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://drgnvsghpnush"]
 
-[ext_resource type="Script" path="res://scripts/ui/info_stub.gd" id="1_info_stub"]
+[ext_resource type="Script" uid="uid://1kdarq06p2f0" path="res://scripts/ui/instructions_screen.gd" id="1_instructions"]
 [ext_resource type="Theme" uid="uid://3sfso1by5eio" path="res://my_theme.tres" id="2_theme"]
+[ext_resource type="Texture2D" uid="uid://n6yamn4iu4fv" path="res://assets/textures/ui/choose_team_bkg.png" id="3_hdnbd"]
+[ext_resource type="Texture2D" uid="uid://bq7i4e65ddeq5" path="res://assets/textures/ui/menu_background.png" id="4_0bf4q"]
+[ext_resource type="Texture2D" uid="uid://bkjm1ejgqsgpu" path="res://assets/textures/ui/instructions/arrow_button.png" id="5_0bf4q"]
+[ext_resource type="Texture2D" uid="uid://b0lw4y4q5eldk" path="res://assets/textures/ui/instructions/rules_card_1.png" id="7_card1"]
+[ext_resource type="Texture2D" uid="uid://d2dhhqhoa6a85" path="res://assets/textures/ui/instructions/rules_card_2.png" id="8_card2"]
+[ext_resource type="Texture2D" uid="uid://bo7t8y8i7vmi" path="res://assets/textures/ui/instructions/rules_card_3.png" id="9_card3"]
+[ext_resource type="Texture2D" uid="uid://dmxaf2eyyr0" path="res://assets/textures/ui/instructions/rules_ball.png" id="10_ball"]
+[ext_resource type="Texture2D" uid="uid://ba6vdj7ugo7iu" path="res://assets/textures/ui/instructions/rules_flag.png" id="11_flag"]
+[ext_resource type="Texture2D" uid="uid://jrj3j65ai12w" path="res://assets/textures/ui/instructions/rules_goalkeeper.png" id="12_gk"]
+[ext_resource type="Texture2D" uid="uid://bq2f3pbr622vw" path="res://assets/textures/ui/instructions/rules_yellowcard.png" id="13_yellow"]
+[ext_resource type="Texture2D" uid="uid://dae2b3htlc870" path="res://assets/textures/ui/instructions/rules_redcard.png" id="14_red"]
 
-[node name="InstructionsScreen" type="Control"]
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_card"]
+
+[sub_resource type="SystemFont" id="SystemFont_0bf4q"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_frame"]
+bg_color = Color(0.08, 0.16, 0.09, 1)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+corner_detail = 1
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_prev_normal"]
+content_margin_left = 16.0
+content_margin_top = 16.0
+content_margin_right = 16.0
+content_margin_bottom = 16.0
+bg_color = Color(0.22352941, 0.5137255, 0.32941177, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+corner_detail = 1
+shadow_color = Color(0.08, 0.03, 0.02, 0.4)
+shadow_size = 10
+shadow_offset = Vector2(0, 6)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_prev_hover"]
+content_margin_left = 16.0
+content_margin_top = 16.0
+content_margin_right = 16.0
+content_margin_bottom = 16.0
+bg_color = Color(0.32, 0.64, 0.42, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+corner_detail = 1
+shadow_color = Color(0.08, 0.03, 0.02, 0.4)
+shadow_size = 12
+shadow_offset = Vector2(0, 6)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_dot"]
+bg_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_next_normal"]
+content_margin_left = 16.0
+content_margin_top = 16.0
+content_margin_right = 16.0
+content_margin_bottom = 16.0
+bg_color = Color(0.22352941, 0.5137255, 0.32941177, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+corner_detail = 1
+shadow_color = Color(0.08, 0.03, 0.02, 0.4)
+shadow_size = 10
+shadow_offset = Vector2(0, 6)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_next_hover"]
+content_margin_left = 16.0
+content_margin_top = 16.0
+content_margin_right = 16.0
+content_margin_bottom = 16.0
+bg_color = Color(0.32, 0.64, 0.42, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+corner_detail = 1
+shadow_color = Color(0.08, 0.03, 0.02, 0.4)
+shadow_size = 12
+shadow_offset = Vector2(0, 6)
+
+[node name="InstructionsScreen" type="Control" unique_id=1674817461]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -11,62 +101,526 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 theme = ExtResource("2_theme")
-script = ExtResource("1_info_stub")
-title_text = "Instructions"
-body_text = "A turn = 2 actions. If you have the ball: first you pass/shoot it in a straight line (horizontal, vertical, or diagonal) through your players, and the last player in the chain MUST shoot into an empty cell. Then you move one of your pieces 1 cell.
+script = ExtResource("1_instructions")
 
-A goal only counts from the opponent's half. Offside: if every opposing outfield player is strictly behind you when you shoot, the goal doesn't count.
-
-You can hold the ball among your players as long as you like. But: if a new shot lands too close to where your last clean shot landed, you get a yellow card; a second time, red; a third time, you must remove one of your players from the pitch."
-
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="TextureRect" parent="." unique_id=1245415860]
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.06, 0.09, 0.06, 1)
+texture = ExtResource("3_hdnbd")
+expand_mode = 1
+stretch_mode = 6
 
-[node name="SafeArea" type="MarginContainer" parent="."]
+[node name="Background2" type="TextureRect" parent="." unique_id=1464097915]
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 80
-theme_override_constants/margin_right = 80
+texture = ExtResource("4_0bf4q")
+expand_mode = 1
+stretch_mode = 6
 
-[node name="Center" type="CenterContainer" parent="SafeArea"]
-layout_mode = 2
+[node name="Overlay" type="ColorRect" parent="." unique_id=342370471]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.1, 0.06, 1)
 
-[node name="VBox" type="VBoxContainer" parent="SafeArea/Center"]
+[node name="SafeArea" type="MarginContainer" parent="." unique_id=213170563]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 120
+theme_override_constants/margin_top = 120
+theme_override_constants/margin_right = 120
+theme_override_constants/margin_bottom = 120
+
+[node name="VBox" type="VBoxContainer" parent="SafeArea" unique_id=830780933]
 layout_mode = 2
-theme_override_constants/separation = 26
+theme_override_constants/separation = 20
+
+[node name="Title" type="Label" parent="SafeArea/VBox" unique_id=201176787]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 72
+text = "INSTRUCTIONS"
+horizontal_alignment = 1
+
+[node name="CardPanel" type="PanelContainer" parent="SafeArea/VBox" unique_id=233467486]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxEmpty_card")
+
+[node name="Page1" type="VBoxContainer" parent="SafeArea/VBox/CardPanel" unique_id=1669904012]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="CardTitle" type="Label" parent="SafeArea/VBox/CardPanel/Page1" unique_id=1571592520]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 72
+text = "PASS THE BALL"
+horizontal_alignment = 1
+
+[node name="CardBody" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page1" unique_id=296965083]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
+theme_override_font_sizes/normal_font_size = 34
+bbcode_enabled = true
+text = "[center]Chain [color=#f7c226]unlimited[/color] passes,
+then [color=#f7c226]kick[/color] into any empty square.[/center]"
+fit_content = true
+
+[node name="spacer2" type="Control" parent="SafeArea/VBox/CardPanel/Page1" unique_id=256490763]
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 0.02
+
+[node name="FramePanel" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page1" unique_id=840253130]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
+
+[node name="FrameMargin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page1/FramePanel" unique_id=2063487734]
+layout_mode = 2
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_bottom = 40
+
+[node name="DiagramAspect" type="AspectRatioContainer" parent="SafeArea/VBox/CardPanel/Page1/FramePanel/FrameMargin" unique_id=191098546]
+layout_mode = 2
+ratio = 0.7
+
+[node name="Diagram" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page1/FramePanel/FrameMargin/DiagramAspect" unique_id=1035481603]
+custom_minimum_size = Vector2(0, 200)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+texture = ExtResource("7_card1")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Page2" type="VBoxContainer" parent="SafeArea/VBox/CardPanel" unique_id=1669904013]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="CardTitle" type="Label" parent="SafeArea/VBox/CardPanel/Page2" unique_id=1952419184]
+layout_mode = 2
+theme_override_font_sizes/font_size = 72
+text = "MOVE A PLAYER"
+horizontal_alignment = 1
+
+[node name="CardBody" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page2" unique_id=469306665]
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
+theme_override_font_sizes/normal_font_size = 34
+bbcode_enabled = true
+text = "[center]Move one player [color=#f7c226]one square[/color].
+You [color=#f7c226]cannot[/color] move onto another player or the ball.[/center]"
+fit_content = true
+
+[node name="spacer2" type="Control" parent="SafeArea/VBox/CardPanel/Page2" unique_id=415569055]
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 0.02
+
+[node name="FramePanel" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page2" unique_id=736547448]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
+
+[node name="FrameMargin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page2/FramePanel" unique_id=567780597]
+layout_mode = 2
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_bottom = 40
+
+[node name="DiagramAspect" type="AspectRatioContainer" parent="SafeArea/VBox/CardPanel/Page2/FramePanel/FrameMargin" unique_id=1266708261]
+layout_mode = 2
+ratio = 0.7
+
+[node name="Diagram" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page2/FramePanel/FrameMargin/DiagramAspect" unique_id=409052623]
+custom_minimum_size = Vector2(0, 200)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+texture = ExtResource("8_card2")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Page3" type="VBoxContainer" parent="SafeArea/VBox/CardPanel" unique_id=1669904014]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="CardTitle" type="Label" parent="SafeArea/VBox/CardPanel/Page3" unique_id=1384873140]
+layout_mode = 2
+theme_override_font_sizes/font_size = 72
+text = "TAKE POSSESSION"
+horizontal_alignment = 1
+
+[node name="CardBody" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page3" unique_id=583021039]
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
+theme_override_font_sizes/normal_font_size = 34
+bbcode_enabled = true
+text = "[center]If the ball is on an [color=#f7c226]adjacent square[/color], you may take possession on your [color=#f7c226]next turn[/color].[/center]"
+fit_content = true
+
+[node name="spacer2" type="Control" parent="SafeArea/VBox/CardPanel/Page3" unique_id=1131903459]
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 0.02
+
+[node name="FramePanel" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page3" unique_id=1265850684]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
+
+[node name="FrameMargin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page3/FramePanel" unique_id=1805149294]
+layout_mode = 2
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_bottom = 40
+
+[node name="DiagramAspect" type="AspectRatioContainer" parent="SafeArea/VBox/CardPanel/Page3/FramePanel/FrameMargin" unique_id=735905611]
+layout_mode = 2
+ratio = 0.7
+
+[node name="Diagram" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page3/FramePanel/FrameMargin/DiagramAspect" unique_id=1167482590]
+custom_minimum_size = Vector2(0, 200)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+texture = ExtResource("9_card3")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Page4" type="VBoxContainer" parent="SafeArea/VBox/CardPanel" unique_id=1669904015]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="CardTitle" type="Label" parent="SafeArea/VBox/CardPanel/Page4" unique_id=1095221285]
+layout_mode = 2
+theme_override_font_sizes/font_size = 72
+text = "SPECIAL RULES"
+horizontal_alignment = 1
+
+[node name="CardBody" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page4" unique_id=1731052841]
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
+theme_override_font_sizes/normal_font_size = 34
+bbcode_enabled = true
+text = "[center]A few extra rules apply during every match.
+[color=#f7c226]Keep them in mind[/color] as you play.[/center]"
+fit_content = true
+
+[node name="spacerTop" type="Control" parent="SafeArea/VBox/CardPanel/Page4" unique_id=1654111469]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="RulesList" type="VBoxContainer" parent="SafeArea/VBox/CardPanel/Page4" unique_id=214640725]
+layout_mode = 2
+theme_override_constants/separation = 30
+
+[node name="Rule1" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList" unique_id=1037631074]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
+
+[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule1" unique_id=2001677206]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+
+[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule1/Margin" unique_id=142885607]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule1/Margin/HBox" unique_id=1783737898]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+texture = ExtResource("10_ball")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule1/Margin/HBox" unique_id=156127931]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
+theme_override_font_sizes/normal_font_size = 30
+bbcode_enabled = true
+text = "SCORE [color=#f7c226]ONLY[/color]
+from the [color=#f7c226]opponent's half.[/color]"
+fit_content = true
+
+[node name="Rule2" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList" unique_id=2118223504]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
+
+[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule2" unique_id=1389676412]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+
+[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule2/Margin" unique_id=39106335]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule2/Margin/HBox" unique_id=676102472]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+texture = ExtResource("11_flag")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule2/Margin/HBox" unique_id=264741677]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
+theme_override_font_sizes/normal_font_size = 30
+bbcode_enabled = true
+text = "OFFSIDE
+applies."
+fit_content = true
+
+[node name="Rule3" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList" unique_id=1627212610]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
+
+[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule3" unique_id=342148270]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+
+[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule3/Margin" unique_id=1266084233]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule3/Margin/HBox" unique_id=509508433]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+texture = ExtResource("12_gk")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule3/Margin/HBox" unique_id=1845006389]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
+theme_override_font_sizes/normal_font_size = 30
+bbcode_enabled = true
+text = "GOALKEEPER
+may join [color=#f7c226]passing[/color] combinations."
+fit_content = true
+
+[node name="Rule4" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList" unique_id=1182455552]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
+
+[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule4" unique_id=631679377]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+
+[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule4/Margin" unique_id=1550272970]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule4/Margin/HBox" unique_id=978219977]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+texture = ExtResource("13_yellow")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule4/Margin/HBox" unique_id=1299548367]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
+theme_override_font_sizes/normal_font_size = 30
+bbcode_enabled = true
+text = "REPEATED BALL HOLDING
+→ [color=#f7c226]YELLOW CARD.[/color]"
+fit_content = true
+
+[node name="Rule5" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList" unique_id=2067834490]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
+
+[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule5" unique_id=1215663821]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+
+[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule5/Margin" unique_id=1494909970]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule5/Margin/HBox" unique_id=1662863511]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 2
+texture = ExtResource("14_red")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule5/Margin/HBox" unique_id=1546366041]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
+theme_override_font_sizes/normal_font_size = 30
+bbcode_enabled = true
+text = "THIRD OFFENCE
+→ [color=#d92929]RED CARD.[/color]"
+fit_content = true
+
+[node name="spacerBottom" type="Control" parent="SafeArea/VBox/CardPanel/Page4" unique_id=848055847]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="spacer3" type="Control" parent="SafeArea/VBox" unique_id=928818322]
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 0.02
+
+[node name="NavRow" type="HBoxContainer" parent="SafeArea/VBox" unique_id=142965633]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="PrevButton" type="Button" parent="SafeArea/VBox/NavRow" unique_id=1778820898]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 110)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_type_variation = &"ArrowButton"
+theme_override_styles/normal = SubResource("StyleBoxFlat_prev_normal")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_prev_hover")
+theme_override_styles/hover = SubResource("StyleBoxFlat_prev_hover")
+icon = ExtResource("5_0bf4q")
+icon_alignment = 1
+expand_icon = true
+
+[node name="DotsCenter" type="CenterContainer" parent="SafeArea/VBox/NavRow" unique_id=1810720228]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PageDots" type="HBoxContainer" parent="SafeArea/VBox/NavRow/DotsCenter" unique_id=1792629419]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Dot0" type="Panel" parent="SafeArea/VBox/NavRow/DotsCenter/PageDots" unique_id=1821675382]
+modulate = Color(0.97, 0.76, 0.15, 1)
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_dot")
+
+[node name="Dot1" type="Panel" parent="SafeArea/VBox/NavRow/DotsCenter/PageDots" unique_id=1462632041]
+modulate = Color(0.2230382, 0.51362306, 0.3276548, 1)
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_dot")
+
+[node name="Dot2" type="Panel" parent="SafeArea/VBox/NavRow/DotsCenter/PageDots" unique_id=1567345562]
+modulate = Color(0.22352941, 0.5137255, 0.32941177, 1)
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_dot")
+
+[node name="Dot3" type="Panel" parent="SafeArea/VBox/NavRow/DotsCenter/PageDots" unique_id=474126646]
+modulate = Color(0.22352941, 0.5137255, 0.32941177, 1)
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_dot")
+
+[node name="NextButton" type="Button" parent="SafeArea/VBox/NavRow" unique_id=794740910]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 110)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_type_variation = &"ArrowButton"
+theme_override_styles/normal = SubResource("StyleBoxFlat_next_normal")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_next_hover")
+theme_override_styles/hover = SubResource("StyleBoxFlat_next_hover")
+
+[node name="Arrow" type="TextureRect" parent="SafeArea/VBox/NavRow/NextButton" unique_id=401538892]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.15
+anchor_top = 0.15
+anchor_right = 0.85
+anchor_bottom = 0.85
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("5_0bf4q")
+expand_mode = 1
+stretch_mode = 5
+flip_h = true
+
+[node name="spacer" type="Control" parent="SafeArea/VBox" unique_id=1379348597]
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 0.02
+
+[node name="ButtonRow" type="HBoxContainer" parent="SafeArea/VBox" unique_id=1455792356]
+layout_mode = 2
+theme_override_constants/separation = 20
 alignment = 1
 
-[node name="Title" type="Label" parent="SafeArea/Center/VBox"]
-unique_name_in_owner = true
-layout_mode = 2
-horizontal_alignment = 1
-theme_override_font_sizes/font_size = 84
-text = "Instructions"
-
-[node name="Body" type="Label" parent="SafeArea/Center/VBox"]
-unique_name_in_owner = true
-layout_mode = 2
-autowrap_mode = 2
-theme_override_font_sizes/font_size = 36
-custom_minimum_size = Vector2(880, 0)
-text = "A turn = 2 actions. If you have the ball: first you pass/shoot it in a straight line (horizontal, vertical, or diagonal) through your players, and the last player in the chain MUST shoot into an empty cell. Then you move one of your pieces 1 cell.
-
-A goal only counts from the opponent's half. Offside: if every opposing outfield player is strictly behind you when you shoot, the goal doesn't count.
-
-You can hold the ball among your players as long as you like. But: if a new shot lands too close to where your last clean shot landed, you get a yellow card; a second time, red; a third time, you must remove one of your players from the pitch."
-
-[node name="BackButton" type="Button" parent="SafeArea/Center/VBox"]
+[node name="BackButton" type="Button" parent="SafeArea/VBox/ButtonRow" unique_id=1239513039]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(340, 130)
 layout_mode = 2
+size_flags_horizontal = 3
+theme = ExtResource("2_theme")
 text = "Back"

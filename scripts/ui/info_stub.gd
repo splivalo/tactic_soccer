@@ -1,7 +1,7 @@
 extends Control
 ## Generic placeholder screen: title + body text + "Natrag" to the main menu.
-## Reused by options_screen.tscn / instructions_screen.tscn / legal_screen.tscn
-## — each just sets title_text/body_text differently in its own scene file.
+## Reused by options_screen.tscn / legal_screen.tscn — each just sets
+## title_text/body_text differently in its own scene file.
 
 @export var title_text := "Uskoro"
 @export_multiline var body_text := ""
