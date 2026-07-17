@@ -157,6 +157,15 @@ var _ball_last_pos := Vector3.ZERO  # for rolling-spin (see _spin_ball)
 var _move_from := Vector2i(-1, -1) # figure selected to move (view only)
 var _busy := false # true while the ball animates (ignore input)
 var _fx: BoardFx = null
+
+# --- Pre-match placement (formation setup, see _start_placement) -------------
+const PLACEMENT_ROLE_ORDER: Array[String] = ["gk", "field", "field", "field", "field", "field"]
+var _placement_active := false
+var _placement_root: Node3D = null # holds figures placed so far, freed once _build_match spawns the real teams
+var _placement_index := 0 # which slot in PLACEMENT_ROLE_ORDER is being placed next
+var _placement_result: Array[Dictionary] = [] # built up into GameFlow.player_formation
+var _placement_kit: Dictionary = {}
+var _placement_gk_side := 0
 # A second, separate BoardFx layer for transient effects (offside line, etc.)
 # that must NOT get wiped by the normal tap/drag redraws on _fx.
 var _fx_effects: BoardFx = null
@@ -357,12 +366,30 @@ func _spawn_teams() -> void:
 		push_warning("No player_scene assigned — cannot spawn teams.")
 		return
 	_state = MatchState.new()
-	_build_match("HomeTeam")
+	if GameFlow.player_formation.is_empty():
+		_start_placement()
+	else:
+		_build_match("HomeTeam")
 
 
 # The ball node is created inside _build_match; this stays for the _ready toggle.
 func _spawn_ball() -> void:
 	pass
+
+
+## Whichever side is GameFlow.player_side uses the formation they just placed
+## (see _start_placement); the other side (and both, before any placement has
+## happened — e.g. local test runs) falls back to the fixed Formations layout.
+func _home_formation() -> Array[Dictionary]:
+	if GameFlow.player_side == "HomeTeam" and not GameFlow.player_formation.is_empty():
+		return GameFlow.player_formation
+	return Formations.home()
+
+
+func _away_formation() -> Array[Dictionary]:
+	if GameFlow.player_side == "AwayTeam" and not GameFlow.player_formation.is_empty():
+		return GameFlow.player_formation
+	return Formations.away()
 
 
 # (Re)build both teams + the ball, then init or reset the logic (score kept).
@@ -375,15 +402,17 @@ func _build_match(kickoff_team: String) -> void:
 	_node_at.clear()
 	_move_from = NO_CELL
 	var kits := CountryKits.resolve_match(home_country, away_country)
+	var home_formation := _home_formation()
+	var away_formation := _away_formation()
 	# Home defends the bottom goal (faces -Z); away defends the top (faces +Z).
-	_build_team("HomeTeam", Formations.home(), kits["home"], 180.0)
-	_build_team("AwayTeam", Formations.away(), kits["away"], 0.0)
+	_build_team("HomeTeam", home_formation, kits["home"], 180.0)
+	_build_team("AwayTeam", away_formation, kits["away"], 0.0)
 	var ball_cell := _kickoff_cell(kickoff_team)
 	_place_ball(ball_cell)
 	if _state.pieces.is_empty():
-		_state.setup(Formations.home(), Formations.away(), ball_cell, kickoff_team, goals_to_win)
+		_state.setup(home_formation, away_formation, ball_cell, kickoff_team, goals_to_win)
 	else:
-		_state.reset(Formations.home(), Formations.away(), ball_cell, kickoff_team)
+		_state.reset(home_formation, away_formation, ball_cell, kickoff_team)
 	# HUD names (used by the footer's team-code text) must be set before the
 	# turn view reads them, or kickoff briefly shows the previous match's code.
 	_refresh_hud()
@@ -445,6 +474,116 @@ func _ball_world(cell: Vector2i) -> Vector3:
 	return _cell_world(cell.x, cell.y) + Vector3(0, BALL_RADIUS * ball_scale, 0)
 
 
+# --- Pre-match placement (formation setup) ------------------------------------
+# Runs INSIDE the match scene (reusing its already-fitted camera/stadium/HUD)
+# instead of a separate screen, so a later "searching for opponent" step can
+# just be another footer state — see main.gd's chat log for why this beat a
+# standalone 2D setup screen. Only the LOCAL player's own side is placed here;
+# the opponent stays on the fixed Formations layout until real online exists.
+func _start_placement() -> void:
+	_placement_active = true
+	_placement_index = 0
+	_placement_result = []
+	var kits := CountryKits.resolve_match(home_country, away_country)
+	var team := GameFlow.player_side
+	_placement_kit = kits["home"] if team == "HomeTeam" else kits["away"]
+	_placement_gk_side = 0 if team == "HomeTeam" else 1
+	_placement_root = Node3D.new()
+	_placement_root.name = "PlacementRoot"
+	add_child(_placement_root)
+	_refresh_hud()
+	_refresh_placement_view()
+
+
+## Every cell the CURRENT placement slot's role may legally go on — the
+## keeper only the 3 goal cells on the player's own goal line, field players
+## any empty, non-goal cell on the player's own half. Mirrors the same
+## confinement rules MatchState already enforces during play (own_goal_row /
+## is_goal_cell / Board.half_of_row), so a placed team is never in a spot the
+## rules would forbid moving them to later.
+func _placement_valid_cells(role: String) -> Array[Vector2i]:
+	var team := GameFlow.player_side
+	var out: Array[Vector2i] = []
+	if role == "gk":
+		var row := _state.own_goal_row(team)
+		for col in MatchState.GOAL_COLS:
+			var cell := Vector2i(col, row)
+			if not _node_at.has(cell):
+				out.append(cell)
+		return out
+	var own_half := 1 if team == "HomeTeam" else -1
+	for row in range(Board.ROWS):
+		if Board.half_of_row(row) != own_half:
+			continue
+		for col in range(Board.COLS):
+			var cell := Vector2i(col, row)
+			if _node_at.has(cell) or _state.is_goal_cell(cell):
+				continue
+			out.append(cell)
+	return out
+
+
+func _refresh_placement_view() -> void:
+	var role: String = PLACEMENT_ROLE_ORDER[_placement_index]
+	var remaining := PLACEMENT_ROLE_ORDER.size() - _placement_index
+	var text := "Place your goalkeeper" if role == "gk" else "Place a player (%d left)" % remaining
+	if _hud != null:
+		_hud.set_footer_text(text, _placement_kit.get("primary", Color.WHITE))
+	_fx.clear()
+	for cell in _placement_valid_cells(role):
+		_fx.add_tile(_cell_world(cell.x, cell.y), color_move)
+
+
+func _placement_tap(screen_pos: Vector2) -> void:
+	var role: String = PLACEMENT_ROLE_ORDER[_placement_index]
+	var cell := _resolve_target(screen_pos, _placement_valid_cells(role), TAP_HIT_RADIUS)
+	if cell == NO_CELL:
+		return
+	_place_piece(cell, role)
+
+
+## Spawns one figure immediately at `cell` (visual feedback as you place,
+## matching _build_team's own per-piece setup) and records it for the final
+## Array[Dictionary] handed to GameFlow.player_formation once placement ends.
+func _place_piece(cell: Vector2i, role: String) -> void:
+	var number := _placement_index + 1
+	var fig := player_scene.instantiate() as Node3D
+	_placement_root.add_child(fig)
+	fig.position = _cell_world(cell.x, cell.y)
+	var facing := 180.0 if GameFlow.player_side == "HomeTeam" else 0.0
+	fig.rotation_degrees = Vector3(0.0, facing + player_facing_offset, 0.0)
+	fig.scale = Vector3.ONE * player_scale
+	fig.name = "%s_%d" % [role, number]
+	var is_gk := role == "gk"
+	var piece_kit := PlayerAppearance.gk_kit(_placement_gk_side) if is_gk else _placement_kit
+	PlayerAppearance.apply(fig, piece_kit, PlayerAppearance.hair_for(_placement_index), number)
+	if fig is PlayerRig:
+		(fig as PlayerRig).setup(is_gk)
+	_node_at[cell] = fig
+	_placement_result.append({"cell": cell, "role": role, "number": number})
+	_placement_index += 1
+	if _placement_index >= PLACEMENT_ROLE_ORDER.size():
+		_finish_placement()
+	else:
+		_refresh_placement_view()
+
+
+## All 6 placed: hand the layout to GameFlow, show the (placeholder, no real
+## matchmaking yet) "searching" footer state briefly, then tear down the
+## placement-preview figures and let _build_match spawn the real match.
+func _finish_placement() -> void:
+	_placement_active = false
+	GameFlow.player_formation = _placement_result
+	_fx.clear()
+	if _hud != null:
+		_hud.set_footer_text("Searching for opponent...", _placement_kit.get("primary", Color.WHITE))
+	await get_tree().create_timer(1.0).timeout
+	if _placement_root != null:
+		_placement_root.free()
+		_placement_root = null
+	_build_match("HomeTeam")
+
+
 # --- Input: tap vs drag -------------------------------------------------------
 # A TAP always (re)starts the chain at the tapped figure, or rewinds to it if
 # it's already in the chain, or fires a shot if it's a shoot cell — never
@@ -480,7 +619,7 @@ func _on_press(screen_pos: Vector2) -> void:
 
 
 func _on_motion(screen_pos: Vector2) -> void:
-	if not _pressed:
+	if not _pressed or _placement_active: # placement is tap-only, no drag
 		return
 	if not _dragging and screen_pos.distance_to(_press_screen_pos) > DRAG_TAP_THRESHOLD_PX:
 		_dragging = true
@@ -531,6 +670,9 @@ func _on_release(screen_pos: Vector2) -> void:
 	if not _pressed:
 		return
 	_pressed = false
+	if _placement_active:
+		_placement_tap(screen_pos)
+		return
 	if _dragging:
 		_dragging = false
 		var candidate := _drag_candidate

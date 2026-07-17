@@ -5,13 +5,12 @@ extends Node
 ## set) and otherwise falls back to its own @export defaults, so main.tscn
 ## still works fine when run standalone in the editor.
 
-enum Screen { SPLASH, MAIN_MENU, TEAM_SELECT, FORMATION_SETUP, OPTIONS, INSTRUCTIONS, LEGAL, MATCH, WIN_SCREEN, LOSE_SCREEN }
+enum Screen { SPLASH, MAIN_MENU, TEAM_SELECT, OPTIONS, INSTRUCTIONS, LEGAL, MATCH, WIN_SCREEN, LOSE_SCREEN }
 
 const SCENE_PATHS := {
 	Screen.SPLASH: "res://scenes/ui/splash_screen.tscn",
 	Screen.MAIN_MENU: "res://scenes/ui/main_menu.tscn",
 	Screen.TEAM_SELECT: "res://scenes/ui/team_select.tscn",
-	Screen.FORMATION_SETUP: "res://scenes/ui/formation_setup.tscn",
 	Screen.OPTIONS: "res://scenes/ui/options_screen.tscn",
 	Screen.INSTRUCTIONS: "res://scenes/ui/instructions_screen.tscn",
 	Screen.LEGAL: "res://scenes/ui/legal_screen.tscn",
@@ -24,6 +23,9 @@ const SCENE_PATHS := {
 var home_country: String = ""
 var away_country: String = ""
 var player_side: String = "HomeTeam"
+# Set by main.gd's in-match placement phase (see _start_placement); empty =
+# not placed yet, so main.gd falls back to Formations.home()/away().
+var player_formation: Array[Dictionary] = []
 
 # Set by main.gd right before routing to WIN_SCREEN (goals_to_win reached).
 var last_winner: String = "" # "HomeTeam" / "AwayTeam"
@@ -38,3 +40,4 @@ func reset_selection() -> void:
 	home_country = ""
 	away_country = ""
 	player_side = "HomeTeam"
+	player_formation = []

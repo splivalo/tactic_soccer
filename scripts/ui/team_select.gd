@@ -111,4 +111,4 @@ func _on_next_pressed() -> void:
 
 	GameFlow.home_country = _p1_country
 	GameFlow.away_country = picked_country
-	GameFlow.goto(GameFlow.Screen.FORMATION_SETUP)
+	GameFlow.goto(GameFlow.Screen.MATCH) # formation placement now happens in-match, see main.gd

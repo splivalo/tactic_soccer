@@ -69,14 +69,14 @@
 - [ ] Prikaz putanje/finije animacije (Mixamo) + ni​šan na ispucavanju
 
 ## Faza 3.5 — Tok ekrana (splash → meni → odabir → formacija → meč)
-- [x] `scripts/game/game_flow.gd` — `GameFlow` autoload: `Screen` enum (SPLASH, MAIN_MENU, TEAM_SELECT, FORMATION_SETUP, OPTIONS, INSTRUCTIONS, LEGAL, MATCH) + čuva odabranu stranu (`player_side`) i države (`home_country`/`away_country`), `goto(Screen)` mijenja scenu (`get_tree().change_scene_to_file`, deferred)
+- [x] `scripts/game/game_flow.gd` — `GameFlow` autoload: `Screen` enum (SPLASH, MAIN_MENU, TEAM_SELECT, OPTIONS, INSTRUCTIONS, LEGAL, MATCH, WIN_SCREEN, LOSE_SCREEN) + čuva odabranu stranu (`player_side`), države (`home_country`/`away_country`) i postavljenu formaciju (`player_formation`), `goto(Screen)` mijenja scenu (`get_tree().change_scene_to_file`, deferred)
 - [x] `scenes/ui/splash_screen.tscn` — **korisnikov vlastiti dizajn** (pozadina, logo, custom font/theme `my_theme_gold.tres`); bilo koji tap/klik/tipka → glavni izbornik. Kod ne dira izgled, samo cilj navigacije.
 - [x] `scenes/ui/main_menu.tscn` — po uzoru na izbornik originala iz 2006: 1 Player game (onemogućen dok nema AI), 2 Player game → odabir momčadi, Options, Instructions, Credits (namjerno `flat` gumb, ne ističe se kao ostali), Quit. Layout je placeholder (samo `my_theme_gold.tres` font), za redizajn u editoru.
 - [x] `scenes/ui/team_select.tscn` — dva `OptionButton`-a (država za Domaći/Gost, popunjeno iz `CountryKits.KITS`) + prekidač "Ja igram kao: Domaći/Gost" (`player_side`) + Natrag/Dalje
 - [x] `scenes/ui/options_screen.tscn`, `instructions_screen.tscn`, `legal_screen.tscn` — dijele isti generički `scripts/ui/info_stub.gd` (naslov + tekst + Natrag). Instructions ima pravi sažetak pravila; Options je "uskoro"; Legal ima TODO placeholder tekst za autora/impressum/licence koji treba urediti izravno u `legal_screen.tscn` (`LegalScreen.body_text`)
 - [x] `main.gd` (`_ready`) čita `GameFlow.home_country`/`away_country` ako su postavljeni (prazan string = nepostavljeno → koristi svoj `@export` default), tako da `main.tscn` i dalje radi samostalno pokrenut u editoru
 - [x] `run/main_scene` je `splash_screen.tscn`
-- [ ] `scenes/ui/formation_setup.tscn` — **STUB**: samo tekst + "Počni meč" gumb, i dalje koristi automatski `Formations.home()/away()`. Pravo ručno postavljanje figura (redom, počevši od golmana, na svoju polovicu) nije napravljeno — sljedeći veći korak.
+- [x] Ručno postavljanje figura (golman pa redom ostali, na svoju polovicu) — nije zaseban `formation_setup.tscn` ekran (uklonjen), nego rana faza unutar `main.gd`/`main.tscn` samog (`_start_placement`/`_placement_*`), ponovno koristi već učitanu kameru/teren/HUD. Postavlja se samo IGRAČEVA strana (`GameFlow.player_side`); protivnik i dalje koristi `Formations.home()/away()` dok ne postoji pravi online.
 - [ ] Options ekran bez stvarnog sadržaja (zvuk/jezik/kontrole) — čeka te sustave
 
 ## Faza 4 — Animacije (Mixamo) + kamera

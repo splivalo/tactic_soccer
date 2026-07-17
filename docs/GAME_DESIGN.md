@@ -68,17 +68,18 @@ Node `Pitch` mora se poklapati s logičkom mrežom 7×10 (detalji u `assets/mode
 
 ## 9. Prezentacija / meta
 - 16 reprezentacija, single-elimination bracket (vidi `country_kits.gd`).
-- Zastave: `assets/flags/<drzava>.png`.
+- Zastave: `assets/textures/ui/countries/<kod>.png`.
 - Brojevi na dresu: `assets/textures/numbers/`.
-- **HUD — na kraju** (`scenes/ui/`): skor, kartoni, imena timova, tko je na potezu.
+- **HUD** (`scenes/ui/hud.tscn`): grbovi, skor, kartoni, timer, footer (tko je na potezu).
 - **Tok ekrana** (`GameFlow` autoload, `scripts/game/game_flow.gd`): splash →
   glavni izbornik (po uzoru na original iz 2006: 1/2 Player, Options,
-  Instructions, Credits, Quit) → odabir momčadi/strane → formacija → meč.
-  `run/main_scene` je sad `scenes/ui/splash_screen.tscn` (ne `main.tscn`).
+  Instructions, Credits, Quit) → odabir momčadi (Player 1=Home, Player 2=Away,
+  fiksno) → meč. `run/main_scene` je `scenes/ui/splash_screen.tscn` (ne `main.tscn`).
   Splash je korisnikov vlastiti dizajn (ne dirati izgled); ostali ekrani u
   `scenes/ui/` su namjerno gole placeholder scene (izgled je za urediti u
-  editoru). Formacija je trenutno stub — ručno postavljanje figura (od
-  golmana) je otvoreno. Instructions ekran već ima pravi sažetak pravila.
+  editoru). Ručno postavljanje figura (golman pa redom ostali, samo igračeva
+  strana) živi kao rana faza unutar SAME meč-scene (`main.gd::_start_placement`),
+  ne kao zaseban ekran. Instructions ekran već ima pravi sažetak pravila.
 
 ## 10. Otvorena pitanja / odluke za kasnije
 - [ ] Online multiplayer ili samo hot-seat?

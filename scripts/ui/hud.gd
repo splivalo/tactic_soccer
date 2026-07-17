@@ -64,6 +64,11 @@ func _ready() -> void:
 	# colour (e.g. navy) erase the border's contrast entirely.
 	_dot_style = (_footer_dot.get_theme_stylebox("panel") as StyleBoxFlat).duplicate()
 	_footer_dot.add_theme_stylebox_override("panel", _dot_style)
+	# The scene's own default is visible (no explicit visible=false override in
+	# hud.tscn) — only update_timer() hides it once urgent=false, and that
+	# never runs before the first turn timer actually starts, so anything
+	# shown before then (e.g. the new placement phase) would flash a stray "5".
+	_big_countdown.visible = false
 
 
 ## Android/system back gesture: open the same pause+confirm modal instead of
@@ -138,6 +143,14 @@ func update_timer(seconds_left: int) -> void:
 	_big_countdown.visible = urgent
 	if urgent:
 		_big_countdown.text = str(seconds_left)
+
+
+## Literal footer text + dot colour — used by the pre-match placement/search
+## phase (main.gd), which has no MatchState.Phase yet to derive text from the
+## way update_turn_hint below does.
+func set_footer_text(text: String, dot_color: Color) -> void:
+	_footer_label.text = text
+	_dot_style.bg_color = dot_color
 
 
 ## side = "HomeTeam"/"AwayTeam", phase = MatchState.Phase — bottom hint bar

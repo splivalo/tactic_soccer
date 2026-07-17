@@ -1,7 +1,12 @@
-# scripts/game — logika igre (bez vizuala)
+# scripts/game — logika igre + autoload singletoni
 
-Prazno za sad. Ovdje ide state machine poteza i pravila iz `rules/igra_pravila.md`:
-`board.gd`, `match_state.gd`, `rules.gd`, `piece.gd`, `team.gd`.
+| Fajl              | Što radi                                                          |
+|-------------------|---------------------------------------------------------------------|
+| `board.gd`        | 7×10 mreža — konstante, `grid_to_world`, `half_of_row`.            |
+| `match_state.gd`  | Čista logika pravila (combo, move, kartoni, offside…) — bez čvorova, bez 3D. |
+| `formations.gd`   | Fiksni default raspored igrača (koristi se dok nema pravog placementa/protivnika). |
+| `game_flow.gd`    | Autoload — koji je ekran otvoren + podaci proslijeđeni između ekrana. |
+| `settings.gd`     | Autoload — glasnoća/vibracija, sprema u `user://settings.cfg`.     |
+| `player_rig.gd`   | Kontroler animacije po figuri (jedini fajl ovdje koji ZNA za 3D — animira ono što `main.gd` pozicionira). |
 
-Cilj: ova logika ne zna ništa o 3D modelima — samo o mreži 7×10 i pravilima.
-Scena (`scenes/`) je vizualni sloj koji je čita i prikazuje + okida Mixamo animacije.
+`match_state.gd` je čista logika (ne zna ništa o 3D modelima, samo o mreži i pravilima) — `main.gd` je vizualni sloj koji je čita/prikazuje i okida Mixamo animacije preko `player_rig.gd`.
