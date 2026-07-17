@@ -105,6 +105,11 @@ func _on_next_pressed() -> void:
 
 	if _stage == 0:
 		_p1_country = picked_country
+		# Single Player has no human "Player 2" — don't make the player
+		# configure their OWN opponent, just assign the AI a country and go.
+		if GameFlow.single_player:
+			_finish_single_player()
+			return
 		_stage = 1
 		_refresh_stage()
 		return
@@ -112,3 +117,16 @@ func _on_next_pressed() -> void:
 	GameFlow.home_country = _p1_country
 	GameFlow.away_country = picked_country
 	GameFlow.goto(GameFlow.Screen.MATCH) # formation placement now happens in-match, see main.gd
+
+
+## Random country for the AI (different from the player's pick where
+## possible) instead of a second manual pick — see _on_next_pressed.
+func _finish_single_player() -> void:
+	var choices := _country_buttons.keys()
+	choices.erase(_p1_country)
+	if choices.is_empty():
+		choices = _country_buttons.keys()
+	var ai_country: String = choices[randi() % choices.size()]
+	GameFlow.home_country = _p1_country
+	GameFlow.away_country = ai_country
+	GameFlow.goto(GameFlow.Screen.MATCH)

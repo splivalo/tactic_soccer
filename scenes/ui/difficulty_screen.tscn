@@ -1,0 +1,89 @@
+[gd_scene format=3 uid="uid://c8n2yqv5v1a2x"]
+
+[ext_resource type="Script" uid="uid://dxqjwvg76kym4" path="res://scripts/ui/difficulty_screen.gd" id="1_difficulty"]
+[ext_resource type="Theme" uid="uid://3sfso1by5eio" path="res://my_theme.tres" id="2_theme"]
+[ext_resource type="Texture2D" uid="uid://bq7i4e65ddeq5" path="res://assets/textures/ui/menu_background.png" id="3_bg"]
+
+[node name="DifficultyScreen" type="Control" unique_id=-1403962784]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_difficulty")
+
+[node name="Background" type="TextureRect" parent="." unique_id=1091234567]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_bg")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Overlay" type="ColorRect" parent="." unique_id=1091234568]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.025840001, 0.17184411, 0.11774104, 0.84700006)
+
+[node name="SafeArea" type="MarginContainer" parent="." unique_id=1091234569]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 120
+theme_override_constants/margin_top = 120
+theme_override_constants/margin_right = 120
+theme_override_constants/margin_bottom = 120
+
+[node name="VBox" type="VBoxContainer" parent="SafeArea" unique_id=1091234570]
+layout_mode = 2
+theme_override_constants/separation = 30
+
+[node name="Title" type="Label" parent="SafeArea/VBox" unique_id=1091234571]
+layout_mode = 2
+theme_override_font_sizes/font_size = 96
+text = "Choose Difficulty"
+horizontal_alignment = 1
+
+[node name="ButtonsCenter" type="CenterContainer" parent="SafeArea/VBox" unique_id=1091234577]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ButtonsList" type="VBoxContainer" parent="SafeArea/VBox/ButtonsCenter" unique_id=1091234578]
+layout_mode = 2
+theme_override_constants/separation = 45
+
+[node name="EasyButton" type="Button" parent="SafeArea/VBox/ButtonsCenter/ButtonsList" unique_id=1091234572]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(820, 150)
+layout_mode = 2
+text = "Easy"
+
+[node name="MediumButton" type="Button" parent="SafeArea/VBox/ButtonsCenter/ButtonsList" unique_id=1091234573]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(820, 150)
+layout_mode = 2
+text = "Medium"
+
+[node name="HardButton" type="Button" parent="SafeArea/VBox/ButtonsCenter/ButtonsList" unique_id=1091234574]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(820, 150)
+layout_mode = 2
+text = "Hard"
+
+[node name="BackButton" type="Button" parent="SafeArea/VBox" unique_id=1091234576]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(340, 130)
+layout_mode = 2
+text = "Back"

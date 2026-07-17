@@ -704,6 +704,12 @@ func _remove_tap(screen_pos: Vector2) -> void:
 	var cell := _resolve_target(screen_pos, _state.own_cells(), TAP_HIT_RADIUS)
 	if cell == NO_CELL:
 		return
+	_remove_at(cell)
+
+
+## Cell-based core of _remove_tap, shared with the AI (see _maybe_ai_turn),
+## which already knows the target cell and has no screen position to resolve.
+func _remove_at(cell: Vector2i) -> void:
 	if not _state.remove_figure(cell):
 		return
 	var fig: Node3D = _node_at.get(cell)
@@ -1334,6 +1340,37 @@ func _refresh_turn_view() -> void:
 		_turn_timer.start(maxf(_pool_seconds_left, 0.05))
 	if _hud != null:
 		_hud.update_turn_hint(_state.current, _state.phase)
+	_maybe_ai_turn()
+
+
+## Single Player only: if it's now the AI's turn, decide (AIPlayer, pure
+## logic) and execute through the SAME functions a human tap would call
+## (_do_combo/_apply_move/_remove_at), so it animates identically. A short
+## "thinking" pause avoids the move reading as an instant, jarring snap.
+const AI_THINK_TIME := 0.6
+
+func _maybe_ai_turn() -> void:
+	if not GameFlow.single_player or _busy:
+		return
+	var ai_team := "AwayTeam" if GameFlow.player_side == "HomeTeam" else "HomeTeam"
+	if _state.current != ai_team:
+		return
+	_busy = true
+	await get_tree().create_timer(AI_THINK_TIME).timeout
+	_busy = false
+	match _state.phase:
+		MatchState.Phase.COMBO:
+			var shoot := AIPlayer.decide_combo(_state, GameFlow.ai_difficulty)
+			if shoot != NO_CELL:
+				_do_combo(shoot)
+		MatchState.Phase.MOVE:
+			var decision := AIPlayer.decide_move(_state, GameFlow.ai_difficulty)
+			if decision.has("from"):
+				_apply_move(decision["from"], decision["to"])
+		MatchState.Phase.REMOVE:
+			var cell := AIPlayer.decide_removal(_state, GameFlow.ai_difficulty)
+			if cell != NO_CELL:
+				_remove_at(cell)
 
 
 # Ran out of time to act — forfeit this decision with no move made (see
