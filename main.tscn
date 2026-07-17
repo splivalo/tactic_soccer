@@ -34,6 +34,7 @@ emission_energy_multiplier = 10.43
 
 [node name="Main" type="Node3D" unique_id=1257774303]
 script = ExtResource("1_main")
+camera_fit_margin = 0.0
 fx_trail_width = 0.2
 fx_trail_fill = 0.2
 fx_trail_pattern = 1
@@ -42,14 +43,14 @@ fx_trail_pattern = 1
 environment = SubResource("Env_1")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1031677832]
-transform = Transform3D(0.7071068, -0.61237246, 0.35355338, 0, 0.49999997, 0.86602545, -0.7071068, -0.61237246, 0.35355338, 0, 12, 0)
+transform = Transform3D(0.7071068, -0.61237246, 0.35355338, 0, 0.49999997, 0.86602545, -0.7071068, -0.61237246, 0.35355338, 0, 12, 0.43722296)
 light_color = Color(1, 1, 0.9019608, 1)
 light_specular = 0.75
 shadow_enabled = true
 shadow_opacity = 0.5
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=101495328]
-transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 11.4, -0.765)
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 11.842, -1.206)
 fov = 66.0
 
 [node name="CharacterSpawn" type="Marker3D" parent="." unique_id=156859860]

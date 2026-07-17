@@ -1,9 +1,21 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://daengm2t3060i"]
 
-[ext_resource type="Script" path="res://scripts/ui/info_stub.gd" id="1_info_stub"]
+[ext_resource type="Script" uid="uid://bvsd6ro4qv3wc" path="res://scripts/ui/legal_screen.gd" id="1_legal_screen"]
 [ext_resource type="Theme" uid="uid://3sfso1by5eio" path="res://my_theme.tres" id="2_theme"]
+[ext_resource type="Texture2D" uid="uid://n6yamn4iu4fv" path="res://assets/textures/ui/choose_team_bkg.png" id="3_s4pyx"]
 
-[node name="LegalScreen" type="Control"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_5bulj"]
+bg_color = Color(0.078431375, 0.16078432, 0.09019608, 1)
+border_color = Color(0.97, 0.76, 0.15, 1)
+corner_radius_top_left = 24
+corner_radius_top_right = 24
+corner_radius_bottom_right = 24
+corner_radius_bottom_left = 24
+corner_detail = 1
+
+[sub_resource type="SystemFont" id="SystemFont_body"]
+
+[node name="LegalScreen" type="Control" unique_id=1467877454]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -11,54 +23,148 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 theme = ExtResource("2_theme")
-script = ExtResource("1_info_stub")
-title_text = "Credits & Legal"
-body_text = "TODO (edit this text in legal_screen.tscn -> LegalScreen -> body_text): author/studio, year, contact, third-party licenses (fonts, audio), a note that this is an original implementation of rules inspired by Football Mania (DiviCo, 2006) — graphics/code are original."
+script = ExtResource("1_legal_screen")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="TextureRect" parent="." unique_id=1675797859]
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.06, 0.09, 0.06, 1)
+texture = ExtResource("3_s4pyx")
+expand_mode = 1
+stretch_mode = 6
 
-[node name="SafeArea" type="MarginContainer" parent="."]
+[node name="Overlay" type="ColorRect" parent="." unique_id=702005660]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 80
-theme_override_constants/margin_right = 80
+color = Color(0.050980393, 0.09803922, 0.05882353, 1)
 
-[node name="Center" type="CenterContainer" parent="SafeArea"]
-layout_mode = 2
+[node name="SafeArea" type="MarginContainer" parent="." unique_id=365628911]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 120
+theme_override_constants/margin_top = 120
+theme_override_constants/margin_right = 120
+theme_override_constants/margin_bottom = 120
 
-[node name="VBox" type="VBoxContainer" parent="SafeArea/Center"]
+[node name="VBox" type="VBoxContainer" parent="SafeArea" unique_id=600136455]
 layout_mode = 2
-theme_override_constants/separation = 26
+theme_override_constants/separation = 30
+
+[node name="Title" type="Label" parent="SafeArea/VBox" unique_id=163290563]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 96
+text = "Legal"
+horizontal_alignment = 1
+
+[node name="BodyScroll" type="ScrollContainer" parent="SafeArea/VBox" unique_id=1506456241]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="BodyCard" type="PanelContainer" parent="SafeArea/VBox/BodyScroll" unique_id=2006061996]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"Card"
+theme_override_styles/panel = SubResource("StyleBoxFlat_5bulj")
+
+[node name="BodyMargin" type="MarginContainer" parent="SafeArea/VBox/BodyScroll/BodyCard" unique_id=1235449683]
+layout_mode = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 30
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 30
+
+[node name="Body" type="RichTextLabel" parent="SafeArea/VBox/BodyScroll/BodyCard/BodyMargin" unique_id=1176980470]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_fonts/normal_font = SubResource("SystemFont_body")
+theme_override_font_sizes/normal_font_size = 32
+bbcode_enabled = true
+text = "[b][color=#f7c226]Version[/color][/b]
+1.0.0
+
+[b][color=#f7c226]Developer[/color][/b]
+KUNGFU DIGITAL j.d.o.o.
+
+[b][color=#f7c226]Contact[/color][/b]
+splivalo@gmail.com
+
+
+[b][color=#f7c226]Privacy Policy[/color][/b]
+
+TACTIC SOCCER respects your privacy.
+
+This game may use trusted third-party services including Google Play Services, Firebase and Google AdMob to provide game functionality, improve stability, collect anonymous diagnostics and display advertisements.
+
+These services may collect anonymous technical information such as device information, crash reports, gameplay statistics and advertising identifiers in accordance with their own privacy policies.
+
+KUNGFU DIGITAL j.d.o.o. does not knowingly collect, sell or share personally identifiable information.
+
+
+[b][color=#f7c226]Third-Party Services[/color][/b]
+
+• Google Play Services
+
+• Firebase
+
+• Google AdMob
+
+Each third-party service operates under its own Terms of Service and Privacy Policy.
+
+
+[b][color=#f7c226]Terms of Use[/color][/b]
+
+This application is provided \"as is\" without warranties of any kind.
+
+By installing or using this application, you agree that you use it at your own risk.
+
+KUNGFU DIGITAL j.d.o.o. shall not be liable for any direct, indirect, incidental or consequential damages arising from the use of this application.
+
+The developer reserves the right to modify, update or discontinue the application at any time without prior notice.
+
+
+[b][color=#f7c226]Intellectual Property[/color][/b]
+
+All graphics, artwork, animations, game mechanics, audio, user interface, trademarks and source code are the intellectual property of KUNGFU DIGITAL j.d.o.o.
+
+No part of this application may be copied, reproduced, modified, distributed or reverse engineered without prior written permission.
+
+
+[b][color=#f7c226]Copyright[/color][/b]
+
+© 2026 KUNGFU DIGITAL j.d.o.o.
+
+All rights reserved."
+fit_content = true
+autowrap_mode = 2
+
+[node name="spacer" type="Control" parent="SafeArea/VBox" unique_id=1477976342]
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 0.02
+
+[node name="ButtonRow" type="HBoxContainer" parent="SafeArea/VBox" unique_id=526052285]
+layout_mode = 2
+theme_override_constants/separation = 20
 alignment = 1
 
-[node name="Title" type="Label" parent="SafeArea/Center/VBox"]
-unique_name_in_owner = true
-layout_mode = 2
-horizontal_alignment = 1
-theme_override_font_sizes/font_size = 84
-text = "Credits & Legal"
-
-[node name="Body" type="Label" parent="SafeArea/Center/VBox"]
-unique_name_in_owner = true
-layout_mode = 2
-autowrap_mode = 2
-theme_override_font_sizes/font_size = 36
-custom_minimum_size = Vector2(880, 0)
-text = "TODO (edit this text in legal_screen.tscn -> LegalScreen -> body_text): author/studio, year, contact, third-party licenses (fonts, audio), a note that this is an original implementation of rules inspired by Football Mania (DiviCo, 2006) — graphics/code are original."
-
-[node name="BackButton" type="Button" parent="SafeArea/Center/VBox"]
+[node name="BackButton" type="Button" parent="SafeArea/VBox/ButtonRow" unique_id=848872017]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(340, 130)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "Back"

@@ -36,12 +36,6 @@ extends Node3D
 ## Minimum time (s) for the opening roll to the first figure, so it has room for
 ## the (now short) wind-up and strikes the ball on arrival rather than waiting.
 @export var first_touch_windup := 0.3
-## After a move/combo settles, only players within this many cells of the ball
-## turn to face it; everyone else eases back to formation. Keeps a few players
-## watching the ball instead of all 20 spinning in place like sunflowers.
-@export var track_radius := 2
-## Max random delay (s) before each player settles, so they don't turn as one.
-@export var settle_stagger := 0.35
 ## How high a full-power ball lofts at mid-flight (world units). Scales with the
 ## hop's power, so short balls stay on the ground and long balls arc over.
 @export var max_ball_arc := 0.7
@@ -52,6 +46,12 @@ extends Node3D
 @export var ball_start_cell := Vector2i(3, 8) # empty cell by the home GK (ball never sits on a figure)
 @export var ball_scale := 1.0
 @export var goals_to_win := 2 # match ends when a team reaches this
+## Seconds a team has for its WHOLE turn — COMBO (build+shoot) and the MOVE or
+## REMOVE that follows it share this one pool, however the player splits their
+## thinking between the two, instead of each phase getting its own separate
+## clock. Runs out with no move made = forfeit. Keeps ticking in real time even
+## behind the pause modal, so pausing can't be used to stall the clock.
+@export var turn_time_limit := 30.0
 
 # --- Path debug --------------------------------------------------------------
 ## Green markers = every cell the piece on `reach_from_cell` could shoot the
@@ -91,11 +91,15 @@ extends Node3D
 ## depth + back) — a side "dolly" that slides along the touchline tracking the
 ## ball's depth as it travels, so it starts framing the KICKER (ball hasn't
 ## moved yet) and glides to the goal by the time the ball arrives.
-@export var goal_cam_side := 6.5           # offset to the side of the pitch (X)
-@export var goal_cam_height := 2.0         # camera height ABOVE THE PITCH SURFACE (not world Y=0) —
-## keep this clear of the stands (seats mesh spans world Y 0.6-2.2; stay above ~2.6 total).
-@export var goal_cam_back := 2.0           # how far behind the ball (toward its own side) the camera trails
-@export var goal_cam_fov := 42.0
+@export var goal_cam_side := 6.5           # offset to the side of the pitch (X) — clamped in
+## _update_goal_cam() to GOAL_CAM_MAX_X so off-center goal columns can't push it
+## into the stands/floodlight towers (seats/walls/reflectors all start ~X 7.0+).
+@export var goal_cam_height := 1.5         # camera height ABOVE THE PITCH SURFACE (not world Y=0) —
+## keep this clear of BOTH the stands (seats mesh spans world Y 0.6-2.2) AND the
+## floodlight towers (reflectors span world Y 2.6-4.0) — total must stay under
+## ~2.6 (this + the ~0.83 base) or it clips straight into a reflector tower.
+@export var goal_cam_back := 2.5           # how far behind the ball (toward its own side) the camera trails —
+@export var goal_cam_fov := 62.0 # wide at the start — the keeper's dive fires the instant the shot is struck, but a tight FOV cropped it out of frame until the camera panned in
 @export_range(0.0, 0.5, 0.01) var goal_cam_blur := 0.12  # background DoF (0 = off)
 ## Time scale WHILE THE BALL IS IN FLIGHT toward goal (1 = no slow-mo). Snaps
 ## back to normal speed the instant the ball reaches the net — the impact,
@@ -142,6 +146,12 @@ var _fit_meshes: Array[MeshInstance3D] = []
 
 # Pure game logic lives in MatchState; the view below just mirrors it.
 var _state: MatchState = null
+var _hud: Control = null # HUD/Hud — shields, score, card counts (see _refresh_hud)
+var _turn_timer: Timer = null # per-turn pooled countdown (see _refresh_turn_view / _on_turn_timeout)
+var _pool_team := "" # which team the running _turn_timer pool belongs to (see _refresh_turn_view)
+var _pool_seconds_left := 0.0 # snapshot of the pool while _turn_timer is stopped mid-combo-animation
+var _shown_time_left := -1 # last whole-second value pushed to the HUD (avoid redundant sets)
+var _shown_intro := false # true once the "first to N goals" footer intro has been shown
 var _node_at: Dictionary = {} # Vector2i(cell) -> Node3D (figure standing there)
 var _ball: Node3D = null
 var _ball_last_pos := Vector3.ZERO  # for rolling-spin (see _spin_ball)
@@ -215,6 +225,12 @@ func _ready() -> void:
 		home_country = GameFlow.home_country
 	if GameFlow.away_country != "":
 		away_country = GameFlow.away_country
+	_hud = get_node_or_null("HUD/Hud")
+	_turn_timer = Timer.new()
+	_turn_timer.name = "TurnTimer"
+	_turn_timer.one_shot = true
+	_turn_timer.timeout.connect(_on_turn_timeout)
+	add_child(_turn_timer)
 	_grid_origin = _read_field_origin()
 	_fx = BoardFx.new()
 	_fx.name = "BoardFx"
@@ -370,6 +386,13 @@ func _build_match(kickoff_team: String) -> void:
 	else:
 		_state.reset(Formations.home(), Formations.away(), ball_cell, kickoff_team)
 	_refresh_turn_view()
+	_refresh_hud()
+
+
+# Single call point that mirrors MatchState (shields/names/score/cards) onto the HUD.
+func _refresh_hud() -> void:
+	if _hud != null:
+		_hud.refresh(_state, home_country, away_country)
 
 
 func _build_team(team_name: String, pieces: Array[Dictionary], kit: Dictionary, facing: float) -> void:
@@ -602,12 +625,18 @@ func _commit_combo_target(cell: Vector2i) -> void:
 		_do_combo(cell)
 
 
-# --- COMBO: a plain tap (re)starts the chain or rewinds it -------------------
+# --- COMBO: a plain tap (re)starts the chain, rewinds it, extends it with a
+# pass, or shoots --------------------------------------------------------------
 # Figures (cylinder hit-test) are ALWAYS checked before empty target tiles
 # (flat hit-test): a tap on a tall figure's body can visually overlap a
 # nearby empty tile under the tilted camera, so if we checked tiles first, a
 # tap clearly meant for a figure could get misread as tapping the tile behind
 # it. Checking figures first means the figure always wins when both match.
+# Priority order resolves the one real ambiguity (a teammate who is BOTH a
+# valid starter — adjacent to the ball — AND a valid pass target in a straight
+# line from the chain): starter is checked first and returns immediately, so
+# that cell always means "(re)start the chain here", never "pass here". A tap
+# only reads as a pass once it's confirmed NOT a starter.
 func _combo_tap(screen_pos: Vector2) -> void:
 	if not _state.chain.is_empty():
 		var rewind_cell := _resolve_target(screen_pos, _state.chain, TAP_HIT_RADIUS)
@@ -621,6 +650,11 @@ func _combo_tap(screen_pos: Vector2) -> void:
 			_draw_combo()
 		return
 	if not _state.chain.is_empty():
+		var pass_cell := _resolve_target(screen_pos, _state.combo_pass_targets(), TAP_HIT_RADIUS)
+		if pass_cell != NO_CELL:
+			_state.extend(pass_cell) # tap-to-pass — connects the chain, same as a drag
+			_draw_combo()
+			return
 		var shoot_cell := _resolve_target(screen_pos, _state.combo_shoot_targets(), TAP_HIT_RADIUS)
 		if shoot_cell != NO_CELL:
 			_do_combo(shoot_cell) # direct tap-to-shoot still works, no ambiguity
@@ -636,6 +670,11 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 	var res := _state.execute_combo(shoot_cell)
 	if not res["ok"]:
 		return
+	# Already decided — don't let the old countdown fire mid-animation. This team's
+	# turn isn't over though (MOVE/REMOVE still to come): snapshot whatever's left
+	# of their pool so _refresh_turn_view can resume it, not hand out a fresh 30s.
+	_pool_seconds_left = _turn_timer.time_left
+	_turn_timer.stop()
 	_busy = true
 	_fx.clear()
 	print("COMBO -> shoot %s (goal=%s)" % [shoot_cell, res["goal"]])
@@ -655,7 +694,16 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 		arrive.append(arrive[k] + durs[k])
 
 	# 3) Schedule every chain figure's kick to CONTACT the ball on arrival —
-	#    starting the windup earlier, overlapping the incoming roll.
+	#    starting the windup earlier, overlapping the incoming roll. Also work
+	#    out the REAL point the ball should meet at each kicker: not the cell
+	#    center, but the kicker's actual toe-bone position at contact (measured
+	#    offline, see PlayerRig.get_contact_offset), rotated by the same facing
+	#    _face_toward() will give them — otherwise the timing can be perfect and
+	#    the ball still visually connects with the wrong part of the leg (or
+	#    misses it) because it was never aimed at where the boot actually is.
+	var ball_points: Array[Vector3] = []
+	for cell in path:
+		ball_points.append(_ball_world(cell))
 	for i in range(1, n - 1):
 		var from_cell: Vector2i = path[i]
 		var to_cell: Vector2i = path[i + 1]
@@ -668,23 +716,46 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 			power = maxf(power, 0.6)  # a shot always reads as powerful, even up close
 		var kicker: Node3D = _node_at.get(from_cell)
 		var contact := 0.0
+		var jitter := 1.0
 		if kicker is PlayerRig:
-			contact = (kicker as PlayerRig).contact_delay(kind, power)
-		var start: float = maxf(arrive[i] - contact, 0.0)
-		_schedule_kick(start, from_cell, path[i - 1], to_cell, kind, power)
+			# Roll the jitter ONCE and reuse it for both the schedule estimate
+			# and the actual playback, so the real contact lands exactly when
+			# predicted instead of drifting by up to kick_speed_jitter.
+			var rig := kicker as PlayerRig
+			jitter = rig.roll_kick_jitter()
+			contact = rig.contact_delay(kind, power, jitter)
+			if not rig.is_goalkeeper():
+				var left := _incoming_on_left(from_cell, path[i - 1], to_cell)
+				var d := _cell_world(to_cell.x, to_cell.y) - _cell_world(path[i - 1].x, path[i - 1].y)
+				if Vector2(d.x, d.z).length() >= 0.001:
+					var yaw := atan2(d.x, d.z) + deg_to_rad(player_facing_offset)
+					var offset := rig.get_contact_offset(kind, left)
+					# offset is the TOE's position — the ball's CENTER must sit one
+					# radius above that (same convention as _ball_world()), or a low
+					# contact point (the strike's toe offset is only 0.05 up) sinks
+					# the ball's rendered sphere down into the pitch mesh.
+					ball_points[i] = (_cell_world(from_cell.x, from_cell.y) + Basis(Vector3.UP, yaw) * offset
+						+ Vector3(0, BALL_RADIUS * ball_scale, 0))
+		# Never start this figure's windup before the PREVIOUS kicker has actually
+		# struck the ball (arrive[i - 1]) — on fast/short chained passes the
+		# anticipation lead can otherwise exceed the gap between touches, so two
+		# (or more) figures end up winding up at the same time, all swinging
+		# their leg at once like a chaotic mob instead of one clean chain.
+		var start: float = clampf(arrive[i] - contact, arrive[i - 1], arrive[i])
+		_schedule_kick(start, from_cell, path[i - 1], to_cell, kind, power, jitter)
 		# Cut to the cinematic angle + slow-mo as the scorer begins the strike.
 		if is_final and res["goal"] and enable_goal_cam:
-			_schedule(start, _begin_goal_drama.bind(to_cell))
+			_schedule(start, _begin_goal_drama.bind(to_cell, res["scorer"], from_cell))
 
 	# 4) One uninterrupted ball tween through the whole path. Each segment lofts
 	#    into an arc scaled by its power (short = grounded roll, long = high ball);
 	#    only the final approach eases out as it settles.
 	var tween := create_tween()
-	_ball.position = _ball_world(path[0])
+	_ball.position = ball_points[0]
 	_ball_last_pos = _ball.position
 	for k in range(n - 1):
-		var a := _ball_world(path[k])
-		var b := _ball_world(path[k + 1])
+		var a := ball_points[k]
+		var b := ball_points[k + 1]
 		var h := max_ball_arc * _power(_cells(path[k], path[k + 1]))
 		# The scoring shot flies THROUGH the line into the net, with a bigger arc.
 		if k == n - 2 and res["goal"]:
@@ -729,18 +800,18 @@ func _schedule(delay: float, cb: Callable) -> void:
 		get_tree().create_timer(delay).timeout.connect(cb)
 
 
-func _schedule_kick(delay: float, at_cell: Vector2i, from_cell: Vector2i, to_cell: Vector2i, kind: String, power: float) -> void:
-	_schedule(delay, _fire_kick.bind(at_cell, from_cell, to_cell, kind, power))
+func _schedule_kick(delay: float, at_cell: Vector2i, from_cell: Vector2i, to_cell: Vector2i, kind: String, power: float, jitter: float) -> void:
+	_schedule(delay, _fire_kick.bind(at_cell, from_cell, to_cell, kind, power, jitter))
 
 
 # Fired at windup-start: the figure turns to the target and swings; its contact
 # frame is timed to land as the continuously-rolling ball reaches its cell.
-func _fire_kick(at_cell: Vector2i, from_cell: Vector2i, to_cell: Vector2i, kind: String, power: float) -> void:
+func _fire_kick(at_cell: Vector2i, from_cell: Vector2i, to_cell: Vector2i, kind: String, power: float, jitter: float) -> void:
 	var kicker: Node3D = _node_at.get(at_cell)
 	if kicker is PlayerRig:
 		_face_toward(kicker, from_cell, to_cell)
 		var left := _incoming_on_left(at_cell, from_cell, to_cell)
-		(kicker as PlayerRig).kick(kind, power, left)
+		(kicker as PlayerRig).kick(kind, power, left, jitter)
 
 
 # Straight-line distance in cells ("broj polja").
@@ -774,33 +845,19 @@ func _incoming_on_left(at: Vector2i, from: Vector2i, target: Vector2i) -> bool:
 func _process(_delta: float) -> void:
 	_spin_ball()
 	_update_goal_cam()
+	_update_turn_timer_display()
 
 
-# Called once the ball has SETTLED after a move/combo: players within
-# track_radius of the ball calmly turn to watch it. Everyone else is left
-# exactly as they are — in particular the figure that JUST kicked the ball away
-# keeps facing the direction it kicked (that's already "looking at the ball's
-# path"), instead of snapping back to a formation facing nobody asked for.
-# Staggered so nearby players don't turn in unison; keepers stay forward.
-func _settle_facing() -> void:
-	if _ball == null or _state == null:
+# Pushes the whole-seconds countdown to the HUD, only when it actually ticks
+# over (avoid poking the label every frame for no reason).
+func _update_turn_timer_display() -> void:
+	if _hud == null or _turn_timer.is_stopped():
 		return
-	var ball_cell: Vector2i = _state.ball
-	for cell in _node_at:
-		var fig = _node_at[cell]
-		if not (fig is PlayerRig):
-			continue
-		var rig := fig as PlayerRig
-		if rig.is_goalkeeper():
-			continue
-		if _cells(cell, ball_cell) > track_radius:
-			continue  # leave its current facing alone — no return to formation
-		var dir := _ball.position - rig.position
-		dir.y = 0.0
-		if dir.length_squared() < 0.0001:
-			continue
-		var target_yaw := atan2(dir.x, dir.z) + deg_to_rad(player_facing_offset)
-		rig.turn_to(target_yaw, randf() * settle_stagger)
+	var seconds_left: int = ceili(_turn_timer.time_left)
+	if seconds_left != _shown_time_left:
+		_shown_time_left = seconds_left
+		_hud.update_timer(seconds_left)
+
 
 
 # Rolls the ball visually: spins it about the axis across its travel, by the
@@ -838,21 +895,31 @@ func _after_combo(res: Dictionary) -> void:
 		print("YELLOW CARD: %s (same figure shot twice in a row)" % _state.current)
 	elif res["card"] == "red":
 		print("RED CARD: %s — choose a figure to remove" % _state.current)
+	_refresh_hud() # score + card counts, right as MatchState changed them
 	if res["goal"]:
 		print("%s %s  ->  Home %d : %d Away"
 			% ["AUTOGOL!" if res.get("own_goal", false) else "GOAL!", res["scorer"],
 				_state.score["HomeTeam"], _state.score["AwayTeam"]])
-		if res["win"]:
-			print("=== %s WINS THE MATCH ===" % res["scorer"])
 		# Stay busy through the celebration so the torn-down board can't take input.
 		if enable_goal_cam and _goal_cam != null:
-			await _celebrate_goal(res)
+			await _celebrate_goal()
+		if res["win"]:
+			print("=== %s WINS THE MATCH ===" % res["scorer"])
+			GameFlow.last_winner = res["scorer"]
+			GameFlow.last_score = _state.score.duplicate()
+			# Perspective: the viewing player's own side determines which
+			# screen they see — real per-device perspective once Online
+			# (Firebase) exists; for now GameFlow.player_side anchors it.
+			if GameFlow.player_side == res["scorer"]:
+				GameFlow.goto(GameFlow.Screen.WIN_SCREEN)
+			else:
+				GameFlow.goto(GameFlow.Screen.LOSE_SCREEN)
+			return # leaving the scene — stay _busy so no stray input sneaks in first
 		_build_match(res["kickoff"])
 		_busy = false
 	else:
 		_busy = false
 		_refresh_turn_view()
-		_settle_facing()  # players near the ball's new resting cell turn to watch it
 
 
 # --- Goal cinematic ----------------------------------------------------------
@@ -937,7 +1004,7 @@ func _drop_ball_to_ground() -> void:
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 
-func _begin_goal_drama(goal_cell: Vector2i) -> void:
+func _begin_goal_drama(goal_cell: Vector2i, scorer_team: String, shooter_cell: Vector2i) -> void:
 	_goal_out_dir = -1.0 if goal_cell.y * 2 < Board.ROWS else 1.0
 	_goal_center = _cell_world(goal_cell.x, goal_cell.y) + Vector3(0.0, net_hit_height, 0.0)
 	_goal_net_point = _net_point(goal_cell)
@@ -948,23 +1015,51 @@ func _begin_goal_drama(goal_cell: Vector2i) -> void:
 	_activate_goal_cam()
 	if goal_slowmo < 1.0:
 		Engine.time_scale = goal_slowmo
+	# Send the keeper into the dive AS the shot is struck, not after it's already
+	# in the net — so the miss reads as a beaten attempt, not a late reaction.
+	var defender: String = "AwayTeam" if scorer_team == "HomeTeam" else "HomeTeam"
+	var gk := _find_gk(defender)
+	if gk is PlayerRig:
+		(gk as PlayerRig).gk_miss()
+	# Declutter the cinematic: hide every figure except the shooter and the
+	# keeper being beaten, so nobody else can stand between the camera and the
+	# action. Happens on the exact frame the camera hard-cuts to the goal cam
+	# (no pan/fade to notice it in), and _build_match() throws every figure
+	# away and respawns fresh ones once the celebration ends, so there's
+	# nothing to un-hide afterward.
+	var shooter: Node3D = _node_at.get(shooter_cell)
+	for cell in _node_at:
+		var fig = _node_at[cell]
+		if fig is PlayerRig and fig != shooter and fig != gk:
+			fig.visible = false
 
 
 # Each frame during the scoring flight: the goal cam SLIDES along the touchline
 # tracking the ball's current depth (so it starts on the kicker and glides with
-# the ball to the goal — "kamera klizi i prati loptu"), always looking at the
-# ball, and zooms in as it nears the net. After impact the ball barely moves in
-# depth, so this naturally holds a close, steady shot through the fall/settle.
+# the ball to the goal — "kamera klizi i prati loptu"), and zooms in as it nears
+# the net. After impact the ball barely moves in depth, so this naturally holds
+# a close, steady shot through the fall/settle.
+# The look-at target starts ON THE SHOOTER (the ball is still at their feet, so
+# looking at the ball IS looking at the player — full body, not just the boot)
+# and only eases toward the goal center as the shot nears the net, instead of
+# being permanently skewed toward the goal from frame one.
 func _update_goal_cam() -> void:
 	if not _goal_cam_follow or _goal_cam == null or _ball == null:
 		return
+	# Hard safety clamp: whatever the goal column or export tuning, never let the
+	# dolly reach the stands/walls/floodlight towers, which all start around
+	# world X/Z ~7.0-7.6 / ~8.6-9.3 (see stadium.glb bounds). Keeping well inside
+	# that means a goal scored from ANY position can't clip into stadium geometry.
+	var cam_x: float = clampf(_goal_center.x + goal_cam_side, -6.3, 6.3)
+	var cam_z: float = clampf(_ball.position.z + _goal_out_dir * goal_cam_back, -7.5, 7.5)
 	_goal_cam.global_position = Vector3(
-		_goal_center.x + goal_cam_side,
+		cam_x,
 		_goal_cam_base_y + goal_cam_height,  # measured from the pitch surface, not world 0
-		_ball.position.z + _goal_out_dir * goal_cam_back)
-	_goal_cam.look_at(_ball.position.lerp(_goal_center, 0.4), Vector3.UP)
+		cam_z)
 	var d := _ball.position.distance_to(_goal_center)
 	var t := clampf(1.0 - d / _goal_flight_d0, 0.0, 1.0)
+	var look_bias := lerpf(0.0, 0.5, t)
+	_goal_cam.look_at(_ball.position.lerp(_goal_center, look_bias), Vector3.UP)
 	_goal_cam.fov = lerpf(goal_cam_fov, goal_cam_zoom_fov, t)
 	if _goal_cam.attributes is CameraAttributesPractical:
 		var attr := _goal_cam.attributes as CameraAttributesPractical
@@ -975,14 +1070,10 @@ func _update_goal_cam() -> void:
 # The ball has just reached the net: slow-mo ends HERE (impact, fall, and the
 # keeper's reaction all play at normal speed) — only the flight was slow-mo.
 # Hold briefly on the settling ball, then hand the view back.
-func _celebrate_goal(res: Dictionary) -> void:
+func _celebrate_goal() -> void:
 	Engine.time_scale = 1.0
 	_hit_net()  # the ball has just reached the net — bulge it
 	_drop_ball_to_ground()  # ...and gravity takes it from there
-	var defender: String = "AwayTeam" if res["scorer"] == "HomeTeam" else "HomeTeam"
-	var gk := _find_gk(defender)
-	if gk is PlayerRig:
-		(gk as PlayerRig).gk_miss()
 	await get_tree().create_timer(goal_cam_hold).timeout
 	_restore_camera()
 
@@ -1065,7 +1156,6 @@ func _apply_move(from: Vector2i, to: Vector2i) -> void:
 	if fig is PlayerRig:
 		tween.tween_callback((fig as PlayerRig).idle.bind(false))
 	_refresh_turn_view()
-	_settle_facing()  # nearby players watch the new position, rest hold formation
 
 
 # --- View refresh (mirror MatchState) ---------------------------------------
@@ -1078,6 +1168,29 @@ func _refresh_turn_view() -> void:
 	else:
 		_fx.clear()
 	print("TURN: %s  phase=%s" % [_state.current, MatchState.Phase.keys()[_state.phase]])
+	_shown_time_left = -1
+	if _state.current != _pool_team:
+		# A genuinely new team's turn (next_turn() ran since the last refresh) —
+		# fresh full pool. Same team continuing COMBO -> MOVE/REMOVE instead just
+		# resumes whatever was left of theirs (see _do_combo's snapshot above).
+		_pool_team = _state.current
+		_turn_timer.start(turn_time_limit)
+	else:
+		_turn_timer.start(maxf(_pool_seconds_left, 0.05))
+	if _hud != null:
+		var intro := ""
+		if not _shown_intro:
+			_shown_intro = true
+			intro = "First to %d goals wins" % goals_to_win
+		_hud.update_turn_hint(_state.current, _state.phase, intro)
+
+
+# Ran out of time to act — forfeit this decision with no move made (see
+# MatchState.forfeit) and move straight on to whatever comes next.
+func _on_turn_timeout() -> void:
+	print("TIME UP: %s forfeits (phase=%s)" % [_state.current, MatchState.Phase.keys()[_state.phase]])
+	_state.forfeit()
+	_refresh_turn_view()
 
 
 # Highlights every one of the carded team's figures as a removable target.

@@ -15,9 +15,14 @@ run/main_scene="res://scenes/ui/splash_screen.tscn"
 config/features=PackedStringArray("4.6", "Mobile")
 config/icon="res://icon.svg"
 
+[audio]
+
+buses/default_bus_layout="res://assets/audio/bus_layout.tres"
+
 [autoload]
 
 GameFlow="*res://scripts/game/game_flow.gd"
+Settings="*res://scripts/game/settings.gd"
 
 [display]
 
@@ -25,7 +30,7 @@ window/size/viewport_width=1080
 window/size/viewport_height=1920
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-window/handheld/orientation="portrait"
+window/handheld/orientation=1
 
 [physics]
 

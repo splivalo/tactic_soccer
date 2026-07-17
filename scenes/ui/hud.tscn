@@ -30,6 +30,19 @@ corner_radius_top_right = 4
 corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_turn_dot"]
+bg_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="LabelSettings" id="LabelSettings_gss2c"]
+font = ExtResource("2_font")
+font_size = 200
+font_color = Color(0.9019608, 0.12156863, 0.12156863, 1)
+outline_size = 5
+
 [node name="Hud" type="Control" unique_id=1350924689]
 layout_mode = 3
 anchors_preset = 15
@@ -40,6 +53,21 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_hud")
 
+[node name="PauseButton" type="Button" parent="." unique_id=481900919]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -96.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 76.0
+grow_horizontal = 0
+theme = ExtResource("7_gss2c")
+theme_override_font_sizes/font_size = 32
+text = "II"
+
 [node name="Background" type="ColorRect" parent="." unique_id=1588371809]
 layout_mode = 1
 anchors_preset = 10
@@ -47,7 +75,7 @@ anchor_right = 1.0
 offset_bottom = 241.0
 grow_horizontal = 2
 mouse_filter = 2
-color = Color(0.09320182, 0.09985284, 0.050708726, 1)
+color = Color(0.08721582, 0.095399715, 0.09650535, 1)
 
 [node name="BottomBorder" type="ColorRect" parent="Background" unique_id=645735874]
 layout_mode = 1
@@ -171,7 +199,7 @@ layout_mode = 2
 theme_override_constants/separation = 8
 
 [node name="RedIcon" type="Panel" parent="Bar/Row/HomeSide/VBox/HBox" unique_id=1385664266]
-custom_minimum_size = Vector2(18, 20)
+custom_minimum_size = Vector2(24, 32)
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_styles/panel = SubResource("StyleBoxFlat_red")
@@ -179,7 +207,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_red")
 [node name="HomeRedCount" type="Label" parent="Bar/Row/HomeSide/VBox/HBox" unique_id=43691427]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 34
 text = "0"
 
 [node name="Sep" type="ColorRect" parent="Bar/Row/HomeSide/VBox/HBox" unique_id=1238711190]
@@ -189,7 +217,7 @@ size_flags_vertical = 4
 color = Color(1, 1, 1, 0.25)
 
 [node name="YellowIcon" type="Panel" parent="Bar/Row/HomeSide/VBox/HBox" unique_id=1288568312]
-custom_minimum_size = Vector2(18, 20)
+custom_minimum_size = Vector2(24, 32)
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_styles/panel = SubResource("StyleBoxFlat_yellow")
@@ -197,7 +225,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_yellow")
 [node name="HomeYellowCount" type="Label" parent="Bar/Row/HomeSide/VBox/HBox" unique_id=1676738287]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 34
 text = "0"
 
 [node name="ScoreCenter" type="CenterContainer" parent="Bar/Row" unique_id=992068590]
@@ -214,11 +242,12 @@ theme_override_constants/separation = 10
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_fonts/font = ExtResource("2_font")
-theme_override_font_sizes/font_size = 80
+theme_override_font_sizes/font_size = 96
 text = "2 : 1"
 horizontal_alignment = 1
 
 [node name="Timer" type="Control" parent="Bar/Row/ScoreCenter/CenterStack" unique_id=678561938]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(220, 48)
 layout_mode = 2
 script = ExtResource("6_oj5la")
@@ -236,15 +265,14 @@ offset_right = 37.0
 offset_bottom = 23.0
 grow_horizontal = 2
 grow_vertical = 2
-
-[node name="Icon" type="TextureRect" parent="Bar/Row/ScoreCenter/CenterStack/Timer/Content" unique_id=1237835416]
-layout_mode = 2
+alignment = 1
 
 [node name="TimeLabel" type="Label" parent="Bar/Row/ScoreCenter/CenterStack/Timer/Content" unique_id=1697355856]
+unique_name_in_owner = true
 layout_mode = 2
 theme = ExtResource("7_gss2c")
 theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_font_sizes/font_size = 34
+theme_override_font_sizes/font_size = 46
 text = "15 SEC"
 
 [node name="AwaySide" type="HBoxContainer" parent="Bar/Row" unique_id=671830960]
@@ -273,7 +301,7 @@ layout_mode = 2
 theme_override_constants/separation = 8
 
 [node name="RedIcon" type="Panel" parent="Bar/Row/AwaySide/VBox/HBox" unique_id=1852381052]
-custom_minimum_size = Vector2(18, 20)
+custom_minimum_size = Vector2(24, 32)
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_styles/panel = SubResource("StyleBoxFlat_red")
@@ -281,7 +309,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_red")
 [node name="AwayRedCount" type="Label" parent="Bar/Row/AwaySide/VBox/HBox" unique_id=396273983]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 34
 text = "0"
 
 [node name="Sep" type="ColorRect" parent="Bar/Row/AwaySide/VBox/HBox" unique_id=2076808098]
@@ -291,7 +319,7 @@ size_flags_vertical = 4
 color = Color(1, 1, 1, 0.25)
 
 [node name="YellowIcon" type="Panel" parent="Bar/Row/AwaySide/VBox/HBox" unique_id=110697524]
-custom_minimum_size = Vector2(18, 20)
+custom_minimum_size = Vector2(24, 32)
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_styles/panel = SubResource("StyleBoxFlat_yellow")
@@ -299,7 +327,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_yellow")
 [node name="AwayYellowCount" type="Label" parent="Bar/Row/AwaySide/VBox/HBox" unique_id=312581821]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 34
 text = "0"
 
 [node name="Shield" type="Control" parent="Bar/Row/AwaySide" unique_id=1918315039]
@@ -352,3 +380,132 @@ mouse_filter = 2
 texture = ExtResource("6_frame")
 expand_mode = 1
 stretch_mode = 5
+
+[node name="Footer" type="ColorRect" parent="." unique_id=562089472]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 241.0
+offset_bottom = 331.0
+grow_horizontal = 2
+mouse_filter = 2
+color = Color(0.08627451, 0.09411765, 0.09803922, 1)
+
+[node name="TopBorder" type="ColorRect" parent="Footer" unique_id=300043668]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 2.0
+grow_horizontal = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 1)
+
+[node name="Content" type="HBoxContainer" parent="Footer" unique_id=1363274114]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="TurnDot" type="Panel" parent="Footer/Content" unique_id=1127444204]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_turn_dot")
+
+[node name="FooterLabel" type="Label" parent="Footer/Content" unique_id=1875960443]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 46
+text = "..."
+
+[node name="BigCountdown" type="Label" parent="." unique_id=1011400493]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -160.0
+offset_top = -160.0
+offset_right = 160.0
+offset_bottom = 160.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.9, 0.12, 0.12, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 14
+theme_override_font_sizes/font_size = 260
+text = "5"
+label_settings = SubResource("LabelSettings_gss2c")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PauseModal" type="Control" parent="." unique_id=170484495]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("7_gss2c")
+
+[node name="Dim" type="ColorRect" parent="PauseModal" unique_id=1048571154]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.75)
+
+[node name="Center" type="CenterContainer" parent="PauseModal" unique_id=1959970941]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="PauseModal/Center" unique_id=1292855481]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="Margin" type="MarginContainer" parent="PauseModal/Center/Panel" unique_id=1327125666]
+layout_mode = 2
+theme_override_constants/margin_left = 60
+theme_override_constants/margin_top = 50
+theme_override_constants/margin_right = 60
+theme_override_constants/margin_bottom = 50
+
+[node name="VBox" type="VBoxContainer" parent="PauseModal/Center/Panel/Margin" unique_id=1663768482]
+layout_mode = 2
+theme_override_constants/separation = 30
+
+[node name="Title" type="Label" parent="PauseModal/Center/Panel/Margin/VBox" unique_id=331093844]
+layout_mode = 2
+theme_override_font_sizes/font_size = 64
+text = "Paused"
+horizontal_alignment = 1
+
+[node name="ResumeButton" type="Button" parent="PauseModal/Center/Panel/Margin/VBox" unique_id=1417431668]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 130)
+layout_mode = 2
+text = "Resume"
+
+[node name="ExitButton" type="Button" parent="PauseModal/Center/Panel/Margin/VBox" unique_id=1465114351]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 130)
+layout_mode = 2
+text = "Exit to Menu"

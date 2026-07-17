@@ -216,6 +216,16 @@ func _initialize() -> void:
 	_check(ms.pending_removal == "", "pending_removal is cleared after removal")
 	_check(ms.current == "AwayTeam", "removal spends the turn (hands it to the opponent)")
 
+	# forfeit(): ran out of time to act — no move made, turn just passes (and
+	# drops a pending forced removal rather than leaving the state stuck).
+	ms.phase = MatchState.Phase.REMOVE
+	ms.pending_removal = ms.current
+	var before_forfeit: String = ms.current
+	ms.forfeit()
+	_check(ms.current == ms.opponent(before_forfeit), "forfeit() hands the turn to the opponent")
+	_check(ms.pending_removal == "", "forfeit() clears a pending forced removal")
+	_check(ms.chain.is_empty(), "forfeit() leaves no dangling chain")
+
 	# Moving the reference figure clears it (matches the tutorial text: "this
 	# counts only when the previous figure has not been moved in the meantime").
 	ms.pieces.clear()

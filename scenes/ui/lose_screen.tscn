@@ -1,0 +1,230 @@
+[gd_scene format=3 uid="uid://c8k2n5w6r1x0q"]
+
+[ext_resource type="Script" uid="uid://ll1hnnjwdfib" path="res://scripts/ui/lose_screen.gd" id="1_lose_screen"]
+[ext_resource type="Theme" uid="uid://3sfso1by5eio" path="res://my_theme.tres" id="2_theme"]
+[ext_resource type="Texture2D" uid="uid://bq7i4e65ddeq5" path="res://assets/textures/ui/menu_background.png" id="3_86rj4"]
+[ext_resource type="Texture2D" uid="uid://bjo21ruu8osuk" path="res://assets/textures/ui/hud_shield_primary_color.png" id="4_primary"]
+[ext_resource type="Texture2D" uid="uid://b3tlj5kmeribl" path="res://assets/textures/ui/hud_shield_secondary_color.png" id="5_secondary"]
+[ext_resource type="Texture2D" uid="uid://cw5serhkjf8te" path="res://assets/textures/ui/hud_shield_frame.png" id="6_frame"]
+[ext_resource type="Texture2D" uid="uid://bvjx2gcw3nbxy" path="res://assets/textures/ui/star_divider.png" id="7_divider"]
+[ext_resource type="Shader" uid="uid://boh0vh2l0xn5i" path="res://assets/shaders/soft_glow.gdshader" id="8_soft_glow"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_glow"]
+shader = ExtResource("8_soft_glow")
+shader_parameter/glow_color = Color(3.294485, 8.453226, 5.2774367, 1)
+shader_parameter/rect_size = Vector2(980, 1080)
+shader_parameter/corner_radius = 0.0
+shader_parameter/glow_softness = 229.13601083646
+shader_parameter/max_alpha = 0.0030000001425
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+bg_color = Color(0.078431375, 0.16078432, 0.09019608, 1)
+border_color = Color(0.96862745, 0.7607843, 0.14901961, 1)
+corner_radius_top_left = 24
+corner_radius_top_right = 24
+corner_radius_bottom_right = 24
+corner_radius_bottom_left = 24
+corner_detail = 1
+
+[node name="LoseScreen" type="Control" unique_id=902430152]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_lose_screen")
+
+[node name="Background" type="TextureRect" parent="." unique_id=361982016]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_86rj4")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Overlay" type="ColorRect" parent="." unique_id=1744488973]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.1, 0.06, 0.9)
+
+[node name="CardGlow" type="Control" parent="." unique_id=130563805]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Glow" type="ColorRect" parent="CardGlow" unique_id=1947368797]
+visible = false
+material = SubResource("ShaderMaterial_glow")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="SafeArea" type="MarginContainer" parent="." unique_id=1313150137]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 120
+theme_override_constants/margin_top = 120
+theme_override_constants/margin_right = 120
+theme_override_constants/margin_bottom = 120
+
+[node name="VBox" type="VBoxContainer" parent="SafeArea" unique_id=2012067288]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="Subtitle" type="Label" parent="SafeArea/VBox" unique_id=1751379764]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 96
+text = "MATCH OVER"
+horizontal_alignment = 1
+
+[node name="TopDivider" type="TextureRect" parent="SafeArea/VBox" unique_id=644589406]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+size_flags_horizontal = 3
+texture = ExtResource("7_divider")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Divider" type="Control" parent="SafeArea/VBox" unique_id=149745360]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+
+[node name="ResultCenter" type="VBoxContainer" parent="SafeArea/VBox" unique_id=2138678754]
+layout_mode = 2
+size_flags_vertical = 3
+alignment = 1
+
+[node name="Card" type="PanelContainer" parent="SafeArea/VBox/ResultCenter" unique_id=946127017]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="CardMargin" type="MarginContainer" parent="SafeArea/VBox/ResultCenter/Card" unique_id=996573975]
+layout_mode = 2
+theme_override_constants/margin_left = 90
+theme_override_constants/margin_top = 60
+theme_override_constants/margin_right = 90
+theme_override_constants/margin_bottom = 60
+
+[node name="CardVBox" type="VBoxContainer" parent="SafeArea/VBox/ResultCenter/Card/CardMargin" unique_id=863463336]
+layout_mode = 2
+theme_override_constants/separation = 28
+alignment = 1
+
+[node name="Shield" type="Control" parent="SafeArea/VBox/ResultCenter/Card/CardMargin/CardVBox" unique_id=1514877442]
+custom_minimum_size = Vector2(312, 362)
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="LoserPrimary" type="TextureRect" parent="SafeArea/VBox/ResultCenter/Card/CardMargin/CardVBox/Shield" unique_id=633064111]
+unique_name_in_owner = true
+texture_filter = 4
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("4_primary")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="LoserSecondary" type="TextureRect" parent="SafeArea/VBox/ResultCenter/Card/CardMargin/CardVBox/Shield" unique_id=1286244115]
+unique_name_in_owner = true
+texture_filter = 4
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("5_secondary")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Frame" type="TextureRect" parent="SafeArea/VBox/ResultCenter/Card/CardMargin/CardVBox/Shield" unique_id=174333733]
+texture_filter = 4
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("6_frame")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="SafeArea/VBox/ResultCenter/Card/CardMargin/CardVBox" unique_id=354180677]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 96
+text = "YOU LOSE"
+horizontal_alignment = 1
+
+[node name="MidDivider" type="TextureRect" parent="SafeArea/VBox/ResultCenter/Card/CardMargin/CardVBox" unique_id=1305730241]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+size_flags_horizontal = 3
+texture = ExtResource("7_divider")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ScoreLabel" type="Label" parent="SafeArea/VBox/ResultCenter/Card/CardMargin/CardVBox" unique_id=1603270374]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 96
+text = "1 : 2"
+horizontal_alignment = 1
+
+[node name="BottomDivider" type="TextureRect" parent="SafeArea/VBox/ResultCenter/Card/CardMargin/CardVBox" unique_id=693764050]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+size_flags_horizontal = 3
+texture = ExtResource("7_divider")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="spacer" type="Control" parent="SafeArea/VBox" unique_id=500887850]
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 0.02
+
+[node name="Divider2" type="Control" parent="SafeArea/VBox" unique_id=1282656403]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+
+[node name="ButtonRow" type="HBoxContainer" parent="SafeArea/VBox" unique_id=8201491]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="BackButton" type="Button" parent="SafeArea/VBox/ButtonRow" unique_id=740201817]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 130)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Main Menu"

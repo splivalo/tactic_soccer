@@ -2,13 +2,13 @@
 
 [ext_resource type="Script" uid="uid://1kdarq06p2f0" path="res://scripts/ui/instructions_screen.gd" id="1_instructions"]
 [ext_resource type="Theme" uid="uid://3sfso1by5eio" path="res://my_theme.tres" id="2_theme"]
-[ext_resource type="Texture2D" uid="uid://n6yamn4iu4fv" path="res://assets/textures/ui/choose_team_bkg.png" id="3_hdnbd"]
-[ext_resource type="Texture2D" uid="uid://bq7i4e65ddeq5" path="res://assets/textures/ui/menu_background.png" id="4_0bf4q"]
 [ext_resource type="Texture2D" uid="uid://bkjm1ejgqsgpu" path="res://assets/textures/ui/instructions/arrow_button.png" id="5_0bf4q"]
+[ext_resource type="Texture2D" uid="uid://bvjx2gcw3nbxy" path="res://assets/textures/ui/star_divider.png" id="5_jvq8h"]
 [ext_resource type="Texture2D" uid="uid://b0lw4y4q5eldk" path="res://assets/textures/ui/instructions/rules_card_1.png" id="7_card1"]
 [ext_resource type="Texture2D" uid="uid://d2dhhqhoa6a85" path="res://assets/textures/ui/instructions/rules_card_2.png" id="8_card2"]
 [ext_resource type="Texture2D" uid="uid://bo7t8y8i7vmi" path="res://assets/textures/ui/instructions/rules_card_3.png" id="9_card3"]
 [ext_resource type="Texture2D" uid="uid://dmxaf2eyyr0" path="res://assets/textures/ui/instructions/rules_ball.png" id="10_ball"]
+[ext_resource type="Texture2D" uid="uid://b1a7bdofqy57c" path="res://assets/textures/ui/instructions/rules_2_wins.png" id="10_snemp"]
 [ext_resource type="Texture2D" uid="uid://ba6vdj7ugo7iu" path="res://assets/textures/ui/instructions/rules_flag.png" id="11_flag"]
 [ext_resource type="Texture2D" uid="uid://jrj3j65ai12w" path="res://assets/textures/ui/instructions/rules_goalkeeper.png" id="12_gk"]
 [ext_resource type="Texture2D" uid="uid://bq2f3pbr622vw" path="res://assets/textures/ui/instructions/rules_yellowcard.png" id="13_yellow"]
@@ -103,30 +103,6 @@ grow_vertical = 2
 theme = ExtResource("2_theme")
 script = ExtResource("1_instructions")
 
-[node name="Background" type="TextureRect" parent="." unique_id=1245415860]
-visible = false
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-texture = ExtResource("3_hdnbd")
-expand_mode = 1
-stretch_mode = 6
-
-[node name="Background2" type="TextureRect" parent="." unique_id=1464097915]
-visible = false
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-texture = ExtResource("4_0bf4q")
-expand_mode = 1
-stretch_mode = 6
-
 [node name="Overlay" type="ColorRect" parent="." unique_id=342370471]
 layout_mode = 1
 anchors_preset = 15
@@ -152,33 +128,44 @@ theme_override_constants/margin_bottom = 120
 layout_mode = 2
 theme_override_constants/separation = 20
 
-[node name="Title" type="Label" parent="SafeArea/VBox" unique_id=201176787]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-theme_override_font_sizes/font_size = 72
-text = "INSTRUCTIONS"
-horizontal_alignment = 1
-
 [node name="CardPanel" type="PanelContainer" parent="SafeArea/VBox" unique_id=233467486]
+unique_name_in_owner = true
+clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxEmpty_card")
 
-[node name="Page1" type="VBoxContainer" parent="SafeArea/VBox/CardPanel" unique_id=1669904012]
-unique_name_in_owner = true
+[node name="PageStage" type="Control" parent="SafeArea/VBox/CardPanel" unique_id=991450600]
 layout_mode = 2
+
+[node name="Page1" type="VBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage" unique_id=1669904012]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 theme_override_constants/separation = 24
 
-[node name="CardTitle" type="Label" parent="SafeArea/VBox/CardPanel/Page1" unique_id=1571592520]
+[node name="CardTitle" type="Label" parent="SafeArea/VBox/CardPanel/PageStage/Page1" unique_id=1571592520]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 72
+theme_override_font_sizes/font_size = 96
 text = "PASS THE BALL"
 horizontal_alignment = 1
 
-[node name="CardBody" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page1" unique_id=296965083]
+[node name="TopDivider" type="TextureRect" parent="SafeArea/VBox/CardPanel/PageStage/Page1" unique_id=726921468]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+size_flags_horizontal = 3
+texture = ExtResource("5_jvq8h")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="CardBody" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/PageStage/Page1" unique_id=296965083]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 0)
 layout_mode = 2
@@ -190,28 +177,28 @@ text = "[center]Chain [color=#f7c226]unlimited[/color] passes,
 then [color=#f7c226]kick[/color] into any empty square.[/center]"
 fit_content = true
 
-[node name="spacer2" type="Control" parent="SafeArea/VBox/CardPanel/Page1" unique_id=256490763]
+[node name="spacer2" type="Control" parent="SafeArea/VBox/CardPanel/PageStage/Page1" unique_id=256490763]
 layout_mode = 2
 size_flags_vertical = 3
 size_flags_stretch_ratio = 0.02
 
-[node name="FramePanel" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page1" unique_id=840253130]
+[node name="FramePanel" type="PanelContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page1" unique_id=840253130]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
 
-[node name="FrameMargin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page1/FramePanel" unique_id=2063487734]
+[node name="FrameMargin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page1/FramePanel" unique_id=2063487734]
 layout_mode = 2
 theme_override_constants/margin_top = 40
 theme_override_constants/margin_bottom = 40
 
-[node name="DiagramAspect" type="AspectRatioContainer" parent="SafeArea/VBox/CardPanel/Page1/FramePanel/FrameMargin" unique_id=191098546]
+[node name="DiagramAspect" type="AspectRatioContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page1/FramePanel/FrameMargin" unique_id=191098546]
 layout_mode = 2
 ratio = 0.7
 
-[node name="Diagram" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page1/FramePanel/FrameMargin/DiagramAspect" unique_id=1035481603]
-custom_minimum_size = Vector2(0, 200)
+[node name="Diagram" type="TextureRect" parent="SafeArea/VBox/CardPanel/PageStage/Page1/FramePanel/FrameMargin/DiagramAspect" unique_id=1035481603]
+custom_minimum_size = Vector2(0, 600)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -219,19 +206,32 @@ texture = ExtResource("7_card1")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Page2" type="VBoxContainer" parent="SafeArea/VBox/CardPanel" unique_id=1669904013]
+[node name="Page2" type="VBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage" unique_id=1669904013]
 unique_name_in_owner = true
 visible = false
-layout_mode = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 theme_override_constants/separation = 24
 
-[node name="CardTitle" type="Label" parent="SafeArea/VBox/CardPanel/Page2" unique_id=1952419184]
+[node name="CardTitle" type="Label" parent="SafeArea/VBox/CardPanel/PageStage/Page2" unique_id=1952419184]
 layout_mode = 2
-theme_override_font_sizes/font_size = 72
+theme_override_font_sizes/font_size = 96
 text = "MOVE A PLAYER"
 horizontal_alignment = 1
 
-[node name="CardBody" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page2" unique_id=469306665]
+[node name="TopDivider" type="TextureRect" parent="SafeArea/VBox/CardPanel/PageStage/Page2" unique_id=128718092]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+size_flags_horizontal = 3
+texture = ExtResource("5_jvq8h")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="CardBody" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/PageStage/Page2" unique_id=469306665]
 custom_minimum_size = Vector2(400, 0)
 layout_mode = 2
 size_flags_horizontal = 3
@@ -242,28 +242,28 @@ text = "[center]Move one player [color=#f7c226]one square[/color].
 You [color=#f7c226]cannot[/color] move onto another player or the ball.[/center]"
 fit_content = true
 
-[node name="spacer2" type="Control" parent="SafeArea/VBox/CardPanel/Page2" unique_id=415569055]
+[node name="spacer2" type="Control" parent="SafeArea/VBox/CardPanel/PageStage/Page2" unique_id=415569055]
 layout_mode = 2
 size_flags_vertical = 3
 size_flags_stretch_ratio = 0.02
 
-[node name="FramePanel" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page2" unique_id=736547448]
+[node name="FramePanel" type="PanelContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page2" unique_id=736547448]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
 
-[node name="FrameMargin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page2/FramePanel" unique_id=567780597]
+[node name="FrameMargin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page2/FramePanel" unique_id=567780597]
 layout_mode = 2
 theme_override_constants/margin_top = 40
 theme_override_constants/margin_bottom = 40
 
-[node name="DiagramAspect" type="AspectRatioContainer" parent="SafeArea/VBox/CardPanel/Page2/FramePanel/FrameMargin" unique_id=1266708261]
+[node name="DiagramAspect" type="AspectRatioContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page2/FramePanel/FrameMargin" unique_id=1266708261]
 layout_mode = 2
 ratio = 0.7
 
-[node name="Diagram" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page2/FramePanel/FrameMargin/DiagramAspect" unique_id=409052623]
-custom_minimum_size = Vector2(0, 200)
+[node name="Diagram" type="TextureRect" parent="SafeArea/VBox/CardPanel/PageStage/Page2/FramePanel/FrameMargin/DiagramAspect" unique_id=409052623]
+custom_minimum_size = Vector2(0, 600)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -271,19 +271,32 @@ texture = ExtResource("8_card2")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Page3" type="VBoxContainer" parent="SafeArea/VBox/CardPanel" unique_id=1669904014]
+[node name="Page3" type="VBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage" unique_id=1669904014]
 unique_name_in_owner = true
 visible = false
-layout_mode = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 theme_override_constants/separation = 24
 
-[node name="CardTitle" type="Label" parent="SafeArea/VBox/CardPanel/Page3" unique_id=1384873140]
+[node name="CardTitle" type="Label" parent="SafeArea/VBox/CardPanel/PageStage/Page3" unique_id=1384873140]
 layout_mode = 2
-theme_override_font_sizes/font_size = 72
+theme_override_font_sizes/font_size = 96
 text = "TAKE POSSESSION"
 horizontal_alignment = 1
 
-[node name="CardBody" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page3" unique_id=583021039]
+[node name="TopDivider" type="TextureRect" parent="SafeArea/VBox/CardPanel/PageStage/Page3" unique_id=1775731754]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+size_flags_horizontal = 3
+texture = ExtResource("5_jvq8h")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="CardBody" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/PageStage/Page3" unique_id=583021039]
 custom_minimum_size = Vector2(400, 0)
 layout_mode = 2
 size_flags_horizontal = 3
@@ -293,28 +306,28 @@ bbcode_enabled = true
 text = "[center]If the ball is on an [color=#f7c226]adjacent square[/color], you may take possession on your [color=#f7c226]next turn[/color].[/center]"
 fit_content = true
 
-[node name="spacer2" type="Control" parent="SafeArea/VBox/CardPanel/Page3" unique_id=1131903459]
+[node name="spacer2" type="Control" parent="SafeArea/VBox/CardPanel/PageStage/Page3" unique_id=1131903459]
 layout_mode = 2
 size_flags_vertical = 3
 size_flags_stretch_ratio = 0.02
 
-[node name="FramePanel" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page3" unique_id=1265850684]
+[node name="FramePanel" type="PanelContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page3" unique_id=1265850684]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
 
-[node name="FrameMargin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page3/FramePanel" unique_id=1805149294]
+[node name="FrameMargin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page3/FramePanel" unique_id=1805149294]
 layout_mode = 2
 theme_override_constants/margin_top = 40
 theme_override_constants/margin_bottom = 40
 
-[node name="DiagramAspect" type="AspectRatioContainer" parent="SafeArea/VBox/CardPanel/Page3/FramePanel/FrameMargin" unique_id=735905611]
+[node name="DiagramAspect" type="AspectRatioContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page3/FramePanel/FrameMargin" unique_id=735905611]
 layout_mode = 2
 ratio = 0.7
 
-[node name="Diagram" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page3/FramePanel/FrameMargin/DiagramAspect" unique_id=1167482590]
-custom_minimum_size = Vector2(0, 200)
+[node name="Diagram" type="TextureRect" parent="SafeArea/VBox/CardPanel/PageStage/Page3/FramePanel/FrameMargin/DiagramAspect" unique_id=1167482590]
+custom_minimum_size = Vector2(0, 600)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -322,19 +335,31 @@ texture = ExtResource("9_card3")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Page4" type="VBoxContainer" parent="SafeArea/VBox/CardPanel" unique_id=1669904015]
+[node name="Page4" type="VBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage" unique_id=1669904015]
 unique_name_in_owner = true
-visible = false
-layout_mode = 2
-theme_override_constants/separation = 24
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 18
 
-[node name="CardTitle" type="Label" parent="SafeArea/VBox/CardPanel/Page4" unique_id=1095221285]
+[node name="CardTitle" type="Label" parent="SafeArea/VBox/CardPanel/PageStage/Page4" unique_id=1095221285]
 layout_mode = 2
-theme_override_font_sizes/font_size = 72
+theme_override_font_sizes/font_size = 96
 text = "SPECIAL RULES"
 horizontal_alignment = 1
 
-[node name="CardBody" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page4" unique_id=1731052841]
+[node name="TopDivider" type="TextureRect" parent="SafeArea/VBox/CardPanel/PageStage/Page4" unique_id=1671861571]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+size_flags_horizontal = 3
+texture = ExtResource("5_jvq8h")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="CardBody" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/PageStage/Page4" unique_id=1731052841]
 custom_minimum_size = Vector2(400, 0)
 layout_mode = 2
 size_flags_horizontal = 3
@@ -345,189 +370,221 @@ text = "[center]A few extra rules apply during every match.
 [color=#f7c226]Keep them in mind[/color] as you play.[/center]"
 fit_content = true
 
-[node name="spacerTop" type="Control" parent="SafeArea/VBox/CardPanel/Page4" unique_id=1654111469]
+[node name="spacer2" type="Control" parent="SafeArea/VBox/CardPanel/PageStage/Page4" unique_id=1984091053]
 layout_mode = 2
 size_flags_vertical = 3
+size_flags_stretch_ratio = 0.02
 
-[node name="RulesList" type="VBoxContainer" parent="SafeArea/VBox/CardPanel/Page4" unique_id=214640725]
+[node name="RulesList" type="VBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4" unique_id=214640725]
 layout_mode = 2
-theme_override_constants/separation = 30
+size_flags_vertical = 6
+theme_override_constants/separation = 12
 
-[node name="Rule1" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList" unique_id=1037631074]
+[node name="Rule1" type="PanelContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList" unique_id=1037631074]
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
 
-[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule1" unique_id=2001677206]
+[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule1" unique_id=2001677206]
 layout_mode = 2
 theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 16
+theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 16
+theme_override_constants/margin_bottom = 20
 
-[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule1/Margin" unique_id=142885607]
+[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule1/Margin" unique_id=142885607]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule1/Margin/HBox" unique_id=1783737898]
-custom_minimum_size = Vector2(140, 140)
+[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule1/Margin/HBox" unique_id=1783737898]
+custom_minimum_size = Vector2(95, 95)
 layout_mode = 2
 texture = ExtResource("10_ball")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule1/Margin/HBox" unique_id=156127931]
+[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule1/Margin/HBox" unique_id=156127931]
 custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
-theme_override_font_sizes/normal_font_size = 30
+theme_override_font_sizes/normal_font_size = 27
 bbcode_enabled = true
-text = "SCORE [color=#f7c226]ONLY[/color]
-from the [color=#f7c226]opponent's half.[/color]"
+text = "[color=#f7c226]HOW TO SCORE[/color]
+Score only from the opponent's half."
 fit_content = true
 
-[node name="Rule2" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList" unique_id=2118223504]
+[node name="RuleWin" type="PanelContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList" unique_id=1999056911]
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
 
-[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule2" unique_id=1389676412]
+[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/RuleWin" unique_id=321553761]
 layout_mode = 2
 theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 16
+theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 16
+theme_override_constants/margin_bottom = 20
 
-[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule2/Margin" unique_id=39106335]
+[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/RuleWin/Margin" unique_id=1685362007]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule2/Margin/HBox" unique_id=676102472]
-custom_minimum_size = Vector2(140, 140)
+[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/RuleWin/Margin/HBox" unique_id=1242653643]
+custom_minimum_size = Vector2(95, 95)
+layout_mode = 2
+texture = ExtResource("10_snemp")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/RuleWin/Margin/HBox" unique_id=545833761]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
+theme_override_font_sizes/normal_font_size = 27
+bbcode_enabled = true
+text = "[color=#f7c226]HOW TO WIN[/color]
+Be the first to score 2 goals."
+fit_content = true
+
+[node name="Rule2" type="PanelContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList" unique_id=2118223504]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
+
+[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule2" unique_id=1389676412]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule2/Margin" unique_id=39106335]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule2/Margin/HBox" unique_id=676102472]
+custom_minimum_size = Vector2(95, 95)
 layout_mode = 2
 texture = ExtResource("11_flag")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule2/Margin/HBox" unique_id=264741677]
+[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule2/Margin/HBox" unique_id=264741677]
 custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
-theme_override_font_sizes/normal_font_size = 30
+theme_override_font_sizes/normal_font_size = 27
 bbcode_enabled = true
-text = "OFFSIDE
-applies."
+text = "[color=#f7c226]OFFSIDE[/color]
+Keep a defender level ahead of your shooter."
 fit_content = true
 
-[node name="Rule3" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList" unique_id=1627212610]
+[node name="Rule3" type="PanelContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList" unique_id=1627212610]
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
 
-[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule3" unique_id=342148270]
+[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule3" unique_id=342148270]
 layout_mode = 2
 theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 16
+theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 16
+theme_override_constants/margin_bottom = 20
 
-[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule3/Margin" unique_id=1266084233]
+[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule3/Margin" unique_id=1266084233]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule3/Margin/HBox" unique_id=509508433]
-custom_minimum_size = Vector2(140, 140)
+[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule3/Margin/HBox" unique_id=509508433]
+custom_minimum_size = Vector2(95, 95)
 layout_mode = 2
 texture = ExtResource("12_gk")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule3/Margin/HBox" unique_id=1845006389]
+[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule3/Margin/HBox" unique_id=1845006389]
 custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
-theme_override_font_sizes/normal_font_size = 30
+theme_override_font_sizes/normal_font_size = 27
 bbcode_enabled = true
-text = "GOALKEEPER
-may join [color=#f7c226]passing[/color] combinations."
+text = "[color=#f7c226]GOALKEEPER[/color]
+May join passing combinations."
 fit_content = true
 
-[node name="Rule4" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList" unique_id=1182455552]
+[node name="Rule4" type="PanelContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList" unique_id=1182455552]
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
 
-[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule4" unique_id=631679377]
+[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule4" unique_id=631679377]
 layout_mode = 2
 theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 16
+theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 16
+theme_override_constants/margin_bottom = 20
 
-[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule4/Margin" unique_id=1550272970]
+[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule4/Margin" unique_id=1550272970]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule4/Margin/HBox" unique_id=978219977]
-custom_minimum_size = Vector2(140, 140)
+[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule4/Margin/HBox" unique_id=978219977]
+custom_minimum_size = Vector2(95, 95)
 layout_mode = 2
 texture = ExtResource("13_yellow")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule4/Margin/HBox" unique_id=1299548367]
+[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule4/Margin/HBox" unique_id=1299548367]
 custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
-theme_override_font_sizes/normal_font_size = 30
+theme_override_font_sizes/normal_font_size = 27
 bbcode_enabled = true
-text = "REPEATED BALL HOLDING
-→ [color=#f7c226]YELLOW CARD.[/color]"
+text = "[color=#f7c226]STALLING → YELLOW CARD[/color]
+Passing back to your last shooter is stalling."
 fit_content = true
 
-[node name="Rule5" type="PanelContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList" unique_id=2067834490]
+[node name="Rule5" type="PanelContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList" unique_id=2067834490]
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
 
-[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule5" unique_id=1215663821]
+[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule5" unique_id=1215663821]
 layout_mode = 2
 theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 16
+theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 16
+theme_override_constants/margin_bottom = 20
 
-[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule5/Margin" unique_id=1494909970]
+[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule5/Margin" unique_id=1494909970]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule5/Margin/HBox" unique_id=1662863511]
-custom_minimum_size = Vector2(140, 140)
+[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule5/Margin/HBox" unique_id=1662863511]
+custom_minimum_size = Vector2(95, 95)
 layout_mode = 2
 texture = ExtResource("14_red")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/Page4/RulesList/Rule5/Margin/HBox" unique_id=1546366041]
+[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/Rule5/Margin/HBox" unique_id=1546366041]
 custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
-theme_override_font_sizes/normal_font_size = 30
+theme_override_font_sizes/normal_font_size = 27
 bbcode_enabled = true
-text = "THIRD OFFENCE
-→ [color=#d92929]RED CARD.[/color]"
+text = "[color=#d92929]REPEAT OFFENSE → RED CARD[/color]
+A third offense removes a player."
 fit_content = true
 
-[node name="spacerBottom" type="Control" parent="SafeArea/VBox/CardPanel/Page4" unique_id=848055847]
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="spacer3" type="Control" parent="SafeArea/VBox" unique_id=928818322]
+[node name="spacer2" type="Control" parent="SafeArea/VBox" unique_id=1056705856]
 layout_mode = 2
 size_flags_vertical = 3
 size_flags_stretch_ratio = 0.02

@@ -84,6 +84,15 @@ func next_turn() -> void:
 	start_turn()
 
 
+## The current team ran out of time to act (COMBO/MOVE/REMOVE) — no move is
+## made, the board stays exactly as it is, and the turn simply passes to the
+## opponent (a pending forced removal is dropped, same as skipping any other
+## decision).
+func forfeit() -> void:
+	pending_removal = ""
+	next_turn()
+
+
 # --- queries -----------------------------------------------------------------
 func opponent(team: String) -> String:
 	return "AwayTeam" if team == "HomeTeam" else "HomeTeam"

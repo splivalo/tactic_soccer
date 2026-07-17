@@ -5,7 +5,7 @@ extends Node
 ## set) and otherwise falls back to its own @export defaults, so main.tscn
 ## still works fine when run standalone in the editor.
 
-enum Screen { SPLASH, MAIN_MENU, TEAM_SELECT, FORMATION_SETUP, OPTIONS, INSTRUCTIONS, LEGAL, MATCH }
+enum Screen { SPLASH, MAIN_MENU, TEAM_SELECT, FORMATION_SETUP, OPTIONS, INSTRUCTIONS, LEGAL, MATCH, WIN_SCREEN, LOSE_SCREEN }
 
 const SCENE_PATHS := {
 	Screen.SPLASH: "res://scenes/ui/splash_screen.tscn",
@@ -16,12 +16,18 @@ const SCENE_PATHS := {
 	Screen.INSTRUCTIONS: "res://scenes/ui/instructions_screen.tscn",
 	Screen.LEGAL: "res://scenes/ui/legal_screen.tscn",
 	Screen.MATCH: "res://main.tscn",
+	Screen.WIN_SCREEN: "res://scenes/ui/win_screen.tscn",
+	Screen.LOSE_SCREEN: "res://scenes/ui/lose_screen.tscn",
 }
 
 # Empty string = unset -> main.gd keeps its own @export default.
 var home_country: String = ""
 var away_country: String = ""
 var player_side: String = "HomeTeam"
+
+# Set by main.gd right before routing to WIN_SCREEN (goals_to_win reached).
+var last_winner: String = "" # "HomeTeam" / "AwayTeam"
+var last_score: Dictionary = {"HomeTeam": 0, "AwayTeam": 0}
 
 
 func goto(screen: int) -> void:

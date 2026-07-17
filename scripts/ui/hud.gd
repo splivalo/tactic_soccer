@@ -17,6 +17,59 @@ extends Control
 @onready var _away_red: Label = %AwayRedCount
 @onready var _away_yellow: Label = %AwayYellowCount
 
+@onready var _time_label: Label = %TimeLabel
+@onready var _timer_pill: Control = %Timer # turn_timer.gd — draws the pill shape behind the icon+text
+@onready var _big_countdown: Label = %BigCountdown
+
+@onready var _pause_button: Button = %PauseButton
+@onready var _pause_modal: Control = %PauseModal
+@onready var _resume_button: Button = %ResumeButton
+@onready var _exit_button: Button = %ExitButton
+
+@onready var _footer_dot: Panel = %TurnDot
+@onready var _footer_label: Label = %FooterLabel
+
+const TIMER_COLOR_NORMAL := Color("f7c41c") # matches turn_timer.gd's own default fill_color
+const TIMER_COLOR_URGENT := Color(0.85, 0.1, 0.1, 1)
+const TIMER_URGENT_AT := 5 # seconds_left at/below which the pill starts blinking red
+
+var _timer_blink_on := false
+
+
+func _ready() -> void:
+	_pause_button.pressed.connect(_open_pause_modal)
+	_resume_button.pressed.connect(_close_pause_modal)
+	_exit_button.pressed.connect(_exit_to_menu)
+	_pause_modal.visible = false
+
+
+## Android/system back gesture: open the same pause+confirm modal instead of
+## quitting straight to the OS.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		_open_pause_modal()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		if _pause_modal.visible:
+			_close_pause_modal()
+		else:
+			_open_pause_modal()
+		get_viewport().set_input_as_handled()
+
+
+func _open_pause_modal() -> void:
+	_pause_modal.visible = true
+
+
+func _close_pause_modal() -> void:
+	_pause_modal.visible = false
+
+
+func _exit_to_menu() -> void:
+	GameFlow.goto(GameFlow.Screen.MAIN_MENU)
+
 
 ## side = "HomeTeam" / "AwayTeam". Colours the shield and sets the 3-letter code.
 func set_team(side: String, country: String) -> void:
@@ -42,6 +95,46 @@ func update_cards(yellow: Dictionary, red: Dictionary) -> void:
 	_home_red.text = str(int(red.get("HomeTeam", false)))
 	_away_yellow.text = str(int(yellow.get("AwayTeam", false)))
 	_away_red.text = str(int(red.get("AwayTeam", false)))
+
+
+## Whole seconds left in the current player's decision (see main.gd's turn
+## timer). Called once per whole-second tick, so toggling the blink here
+## (rather than on a separate timer) naturally blinks once per second.
+func update_timer(seconds_left: int) -> void:
+	_time_label.text = "%d SEC" % seconds_left
+	var urgent: bool = seconds_left > 0 and seconds_left <= TIMER_URGENT_AT
+	if urgent:
+		_timer_blink_on = not _timer_blink_on
+	else:
+		_timer_blink_on = false
+	_timer_pill.fill_color = TIMER_COLOR_URGENT if _timer_blink_on else TIMER_COLOR_NORMAL
+	_timer_pill.queue_redraw()
+	_time_label.add_theme_color_override("font_color", Color.WHITE if _timer_blink_on else Color.BLACK)
+	# Big center-pitch countdown — the small HUD pill blink alone doesn't read
+	# as urgent enough. Same threshold, dead simple: just show the number.
+	_big_countdown.visible = urgent
+	if urgent:
+		_big_countdown.text = str(seconds_left)
+
+
+## side = "HomeTeam"/"AwayTeam", phase = MatchState.Phase — bottom hint bar
+## telling the player whose turn it is and what to do (dot tinted with that
+## team's kit colour). `intro`, if given, is prefixed once (e.g. the goals-to-
+## win reminder shown at kickoff) and dropped again on the next call.
+func update_turn_hint(side: String, phase: int, intro: String = "") -> void:
+	var code: String = _home_name.text if side == "HomeTeam" else _away_name.text
+	var dot_color: Color = _home_primary.modulate if side == "HomeTeam" else _away_primary.modulate
+	var verb := "plays"
+	match phase:
+		MatchState.Phase.COMBO:
+			verb = "pass or shoot"
+		MatchState.Phase.MOVE:
+			verb = "move a player"
+		MatchState.Phase.REMOVE:
+			verb = "remove a player (red card)"
+	var hint := "%s: %s" % [code, verb]
+	_footer_label.text = "%s   —   %s" % [intro, hint] if intro != "" else hint
+	_footer_dot.modulate = dot_color
 
 
 ## Single call point for main.gd's view-refresh — mirrors MatchState in one line.
