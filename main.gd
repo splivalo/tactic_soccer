@@ -151,7 +151,6 @@ var _turn_timer: Timer = null # per-turn pooled countdown (see _refresh_turn_vie
 var _pool_team := "" # which team the running _turn_timer pool belongs to (see _refresh_turn_view)
 var _pool_seconds_left := 0.0 # snapshot of the pool while _turn_timer is stopped mid-combo-animation
 var _shown_time_left := -1 # last whole-second value pushed to the HUD (avoid redundant sets)
-var _shown_intro := false # true once the "first to N goals" footer intro has been shown
 var _node_at: Dictionary = {} # Vector2i(cell) -> Node3D (figure standing there)
 var _ball: Node3D = null
 var _ball_last_pos := Vector3.ZERO  # for rolling-spin (see _spin_ball)
@@ -385,8 +384,10 @@ func _build_match(kickoff_team: String) -> void:
 		_state.setup(Formations.home(), Formations.away(), ball_cell, kickoff_team, goals_to_win)
 	else:
 		_state.reset(Formations.home(), Formations.away(), ball_cell, kickoff_team)
-	_refresh_turn_view()
+	# HUD names (used by the footer's team-code text) must be set before the
+	# turn view reads them, or kickoff briefly shows the previous match's code.
 	_refresh_hud()
+	_refresh_turn_view()
 
 
 # Single call point that mirrors MatchState (shields/names/score/cards) onto the HUD.
@@ -1051,7 +1052,15 @@ func _update_goal_cam() -> void:
 	# world X/Z ~7.0-7.6 / ~8.6-9.3 (see stadium.glb bounds). Keeping well inside
 	# that means a goal scored from ANY position can't clip into stadium geometry.
 	var cam_x: float = clampf(_goal_center.x + goal_cam_side, -6.3, 6.3)
-	var cam_z: float = clampf(_ball.position.z + _goal_out_dir * goal_cam_back, -7.5, 7.5)
+	# Stop the dolly AT the goal line — don't keep tracking the ball on into the
+	# net, or the keeper (who stays pinned to the goal) gets left behind out of
+	# frame right as they're diving/reacting, which is the moment that matters.
+	var track_z: float = _ball.position.z
+	if _goal_out_dir > 0.0:
+		track_z = minf(track_z, _goal_center.z)
+	else:
+		track_z = maxf(track_z, _goal_center.z)
+	var cam_z: float = clampf(track_z + _goal_out_dir * goal_cam_back, -7.5, 7.5)
 	_goal_cam.global_position = Vector3(
 		cam_x,
 		_goal_cam_base_y + goal_cam_height,  # measured from the pitch surface, not world 0
@@ -1059,7 +1068,11 @@ func _update_goal_cam() -> void:
 	var d := _ball.position.distance_to(_goal_center)
 	var t := clampf(1.0 - d / _goal_flight_d0, 0.0, 1.0)
 	var look_bias := lerpf(0.0, 0.5, t)
-	_goal_cam.look_at(_ball.position.lerp(_goal_center, look_bias), Vector3.UP)
+	# Same goal-line clamp on the gaze target as the dolly above — otherwise
+	# the camera would stay put but still keep SWIVELLING to track the ball
+	# into the net, panning the keeper toward the frame edge anyway.
+	var look_ball := Vector3(_ball.position.x, _ball.position.y, track_z)
+	_goal_cam.look_at(look_ball.lerp(_goal_center, look_bias), Vector3.UP)
 	_goal_cam.fov = lerpf(goal_cam_fov, goal_cam_zoom_fov, t)
 	if _goal_cam.attributes is CameraAttributesPractical:
 		var attr := _goal_cam.attributes as CameraAttributesPractical
@@ -1178,11 +1191,7 @@ func _refresh_turn_view() -> void:
 	else:
 		_turn_timer.start(maxf(_pool_seconds_left, 0.05))
 	if _hud != null:
-		var intro := ""
-		if not _shown_intro:
-			_shown_intro = true
-			intro = "First to %d goals wins" % goals_to_win
-		_hud.update_turn_hint(_state.current, _state.phase, intro)
+		_hud.update_turn_hint(_state.current, _state.phase)
 
 
 # Ran out of time to act — forfeit this decision with no move made (see

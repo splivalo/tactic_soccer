@@ -32,6 +32,11 @@ corner_radius_bottom_left = 4
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_turn_dot"]
 bg_color = Color(1, 1, 1, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1, 1, 1, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -179,7 +184,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 texture = ExtResource("6_frame")
-expand_mode = 1
+expand_mode = 2
 stretch_mode = 5
 
 [node name="VBox" type="VBoxContainer" parent="Bar/Row/HomeSide" unique_id=1579460082]

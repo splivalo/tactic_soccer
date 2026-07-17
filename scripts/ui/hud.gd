@@ -29,11 +29,26 @@ extends Control
 @onready var _footer_dot: Panel = %TurnDot
 @onready var _footer_label: Label = %FooterLabel
 
+@onready var _home_frame: TextureRect = _home_primary.get_parent().get_node("Frame")
+@onready var _away_frame: TextureRect = _away_primary.get_parent().get_node("Frame")
+
 const TIMER_COLOR_NORMAL := Color("f7c41c") # matches turn_timer.gd's own default fill_color
 const TIMER_COLOR_URGENT := Color(0.85, 0.1, 0.1, 1)
 const TIMER_URGENT_AT := 5 # seconds_left at/below which the pill starts blinking red
 
+const BREATH_LEG_TIME := 1.0 # seconds per half-cycle (fade out OR back in), 0.8-1.2s range
+# Grey, not gold (gold read as a smudge) — and NOT as dark as the earlier 0.35
+# attempt: the frame PNG has a baked-in bevel (darker shadow side), and at
+# 0.35 that shadow side multiplied down into the black HUD background and
+# visually vanished. 0.6 was confirmed safe but too subtle; 0.5 is the
+# stronger-but-still-safe middle ground — verify the shadow side stays
+# visible before pushing any lower.
+const BREATH_DIM := 0.5
+
 var _timer_blink_on := false
+var _dot_style: StyleBoxFlat = null # own copy so recoloring the fill never touches the white border
+var _breathing_side := "" # which team's shield the breathing tween currently targets
+var _breath_tween: Tween = null
 
 
 func _ready() -> void:
@@ -41,6 +56,14 @@ func _ready() -> void:
 	_resume_button.pressed.connect(_close_pause_modal)
 	_exit_button.pressed.connect(_exit_to_menu)
 	_pause_modal.visible = false
+	# TurnDot's fill is recolored per-team (see update_turn_hint); its white
+	# outline must survive that untouched, so it needs its OWN StyleBoxFlat
+	# instance — mutating bg_color on the shared one would affect every user
+	# of that resource, and using node `modulate` (the old approach) tinted
+	# the border by the same team colour as the fill, making a dark team's
+	# colour (e.g. navy) erase the border's contrast entirely.
+	_dot_style = (_footer_dot.get_theme_stylebox("panel") as StyleBoxFlat).duplicate()
+	_footer_dot.add_theme_stylebox_override("panel", _dot_style)
 
 
 ## Android/system back gesture: open the same pause+confirm modal instead of
@@ -134,7 +157,30 @@ func update_turn_hint(side: String, phase: int, intro: String = "") -> void:
 			verb = "remove a player (red card)"
 	var hint := "%s: %s" % [code, verb]
 	_footer_label.text = "%s   —   %s" % [intro, hint] if intro != "" else hint
-	_footer_dot.modulate = dot_color
+	_dot_style.bg_color = dot_color
+	_breathe_shield(side)
+
+
+## Soft "breathing" brightness loop on whichever shield is active (full white
+## -> dim grey -> full white, eased, looping) — a quiet "this one" cue instead
+## of repeating the team code in text. No-ops if the same side is already
+## breathing (a phase change within the same team's turn shouldn't
+## restart/jolt the animation).
+func _breathe_shield(side: String) -> void:
+	if _breathing_side == side:
+		return
+	_breathing_side = side
+	if _breath_tween != null:
+		_breath_tween.kill()
+	_home_frame.modulate = Color.WHITE
+	_away_frame.modulate = Color.WHITE
+	var target: Control = _home_frame if side == "HomeTeam" else _away_frame
+	var dim := Color(BREATH_DIM, BREATH_DIM, BREATH_DIM, 1.0)
+	_breath_tween = create_tween().set_loops()
+	_breath_tween.tween_property(target, "modulate", dim, BREATH_LEG_TIME) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_breath_tween.tween_property(target, "modulate", Color.WHITE, BREATH_LEG_TIME) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
 ## Single call point for main.gd's view-refresh — mirrors MatchState in one line.

@@ -34,7 +34,7 @@ emission_energy_multiplier = 10.43
 
 [node name="Main" type="Node3D" unique_id=1257774303]
 script = ExtResource("1_main")
-camera_fit_margin = 0.0
+camera_fit_margin = 0.01
 fx_trail_width = 0.2
 fx_trail_fill = 0.2
 fx_trail_pattern = 1
@@ -48,10 +48,11 @@ light_color = Color(1, 1, 0.9019608, 1)
 light_specular = 0.75
 shadow_enabled = true
 shadow_opacity = 0.5
+shadow_blur = 2.2
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=101495328]
-transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 11.842, -1.206)
-fov = 66.0
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 11.842, -1.045)
+fov = 66.6
 
 [node name="CharacterSpawn" type="Marker3D" parent="." unique_id=156859860]
 
@@ -59,6 +60,12 @@ fov = 66.0
 
 [node name="arena" parent="stadium" index="1" unique_id=831205437]
 surface_material_override/0 = SubResource("StandardMaterial3D_lquwl")
+
+[node name="fence" parent="stadium" index="2" unique_id=985690638]
+visible = false
+
+[node name="banner" parent="stadium" index="3" unique_id=1272958074]
+visible = false
 
 [node name="goal2_net" parent="stadium" index="9" unique_id=38387077]
 surface_material_override/0 = SubResource("StandardMaterial3D_h2yge")

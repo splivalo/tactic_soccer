@@ -70,11 +70,6 @@ theme_override_constants/margin_right = 80
 layout_mode = 2
 alignment = 1
 
-[node name="top_spacer" type="Control" parent="Center/VBox" unique_id=1786767587]
-visible = false
-layout_mode = 2
-size_flags_vertical = 3
-
 [node name="logo" type="TextureRect" parent="Center/VBox" unique_id=1055497649]
 layout_mode = 2
 size_flags_vertical = 3
