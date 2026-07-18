@@ -120,6 +120,21 @@ static func get_code(country: String) -> String:
 	return KITS[country].get("code", "???")
 
 
+## Flag texture path for the shield icons (HUD shields + coin toss) — see
+## assets/shaders/shield_flag.gdshader, which fills a shield mask with this.
+static func get_flag(country: String) -> String:
+	if not KITS.has(country):
+		return ""
+	return KITS[country].get("flag", "")
+
+
+## True when a colour is white/near-white — used to keep the HUD footer's
+## turn-dot from landing on a colour with no contrast against its own white
+## outline (a kit's OTHER colour is used instead in that case; see hud.gd).
+static func is_near_white(c: Color) -> bool:
+	return c.r > 0.9 and c.g > 0.9 and c.b > 0.9
+
+
 ## True when two primary colours are too similar to tell teams apart.
 static func colors_clash(a: Color, b: Color) -> bool:
 	var dr := a.r - b.r

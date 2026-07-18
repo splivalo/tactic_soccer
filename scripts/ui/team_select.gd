@@ -30,6 +30,10 @@ var _p1_country := ""
 
 
 func _ready() -> void:
+	# Every visit here starts a genuinely NEW match — a formation placed for a
+	# PREVIOUS game must not carry over and silently skip the placement phase
+	# main.gd's _start_placement() checks for.
+	GameFlow.player_formation = []
 	_collect_country_buttons()
 	_back_button.pressed.connect(_on_back_pressed)
 	_next_button.pressed.connect(_on_next_pressed)
@@ -38,7 +42,11 @@ func _ready() -> void:
 
 func _collect_country_buttons() -> void:
 	for wrapper in _country_grid.get_children():
-		var country := wrapper.name
+		# String(), not the raw StringName Node.name gives — Array.erase() in
+		# _finish_single_player() compares by exact variant type, so a
+		# StringName key there never matched the String _p1_country and the
+		# AI could end up "randomly" picking the player's own country back.
+		var country := String(wrapper.name)
 		var flag := wrapper.get_node("Flag") as TextureButton
 		# Per-flag material copy so each can toggle its own border independently.
 		flag.material = flag.material.duplicate()

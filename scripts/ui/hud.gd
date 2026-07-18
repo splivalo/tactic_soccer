@@ -6,9 +6,7 @@ extends Control
 ## never blank when opened alone.
 
 @onready var _home_primary: TextureRect = %HomePrimary
-@onready var _home_secondary: TextureRect = %HomeSecondary
 @onready var _away_primary: TextureRect = %AwayPrimary
-@onready var _away_secondary: TextureRect = %AwaySecondary
 @onready var _home_name: Label = %HomeName
 @onready var _away_name: Label = %AwayName
 @onready var _score_label: Label = %ScoreLabel
@@ -32,6 +30,17 @@ extends Control
 @onready var _home_frame: TextureRect = _home_primary.get_parent().get_node("Frame")
 @onready var _away_frame: TextureRect = _away_primary.get_parent().get_node("Frame")
 
+@onready var _coin_toss: Control = %CoinToss
+@onready var _coin_shield: Control = %Shield
+@onready var _coin_primary: TextureRect = %Primary
+@onready var _coin_code: Label = %CodeLabel
+
+@onready var _announce: Control = %Announce
+@onready var _announce_content: Control = %AnnounceContent
+@onready var _announce_card_wrap: Control = %AnnounceCard.get_parent()
+@onready var _announce_card: Panel = %AnnounceCard
+@onready var _announce_label: Label = %AnnounceLabel
+
 const TIMER_COLOR_NORMAL := Color("f7c41c") # matches turn_timer.gd's own default fill_color
 const TIMER_COLOR_URGENT := Color(0.85, 0.1, 0.1, 1)
 const TIMER_URGENT_AT := 5 # seconds_left at/below which the pill starts blinking red
@@ -47,8 +56,11 @@ const BREATH_DIM := 0.5
 
 var _timer_blink_on := false
 var _dot_style: StyleBoxFlat = null # own copy so recoloring the fill never touches the white border
+var _announce_card_style: StyleBoxFlat = null # own copy, recolored per card type (yellow/red)
 var _breathing_side := "" # which team's shield the breathing tween currently targets
 var _breath_tween: Tween = null
+var _home_color := Color.WHITE # kit primary colour, kept for the footer turn dot (shield itself is a flag now)
+var _away_color := Color.WHITE
 
 
 func _ready() -> void:
@@ -69,6 +81,17 @@ func _ready() -> void:
 	# never runs before the first turn timer actually starts, so anything
 	# shown before then (e.g. the new placement phase) would flash a stray "5".
 	_big_countdown.visible = false
+	# Each shield needs its OWN ShaderMaterial instance (the .tscn assigns the
+	# same shared sub_resource to Home/CoinToss by default) so setting one
+	# side's flag_texture uniform never bleeds into another shield.
+	_home_primary.material = _home_primary.material.duplicate()
+	_away_primary.material = _away_primary.material.duplicate()
+	_coin_primary.material = _coin_primary.material.duplicate()
+	# Same pattern as the turn dot: the card panel is recolored per yellow/red,
+	# so it needs its OWN StyleBoxFlat instance or every user of that shared
+	# resource would follow the last colour set.
+	_announce_card_style = (_announce_card.get_theme_stylebox("panel") as StyleBoxFlat).duplicate()
+	_announce_card.add_theme_stylebox_override("panel", _announce_card_style)
 
 
 ## Android/system back gesture: open the same pause+confirm modal instead of
@@ -99,16 +122,28 @@ func _exit_to_menu() -> void:
 	GameFlow.goto(GameFlow.Screen.MAIN_MENU)
 
 
-## side = "HomeTeam" / "AwayTeam". Colours the shield and sets the 3-letter code.
-func set_team(side: String, country: String) -> void:
-	var kit := CountryKits.get_kit(country, "home")
+## side = "HomeTeam" / "AwayTeam". Fills the shield with the country's own
+## flag (always visually distinct, unlike jersey colours which can still
+## clash across two DIFFERENT match-ups even after resolve_match — see
+## shield_flag.gdshader) and sets the 3-letter code. `kit` is still the
+## clash-resolved kit (used for the 3D players elsewhere); only its primary
+## colour is kept here, for the footer's turn-dot tint — falling back to the
+## kit's secondary colour when primary is white/near-white, since a white
+## dot has no contrast against its own white outline (see set_footer_text's
+## comment on the dot's border).
+func set_team(side: String, country: String, kit: Dictionary) -> void:
 	var code := CountryKits.get_code(country)
 	var primary: TextureRect = _home_primary if side == "HomeTeam" else _away_primary
-	var secondary: TextureRect = _home_secondary if side == "HomeTeam" else _away_secondary
 	var name_label: Label = _home_name if side == "HomeTeam" else _away_name
-	primary.modulate = kit["primary"]
-	secondary.modulate = kit["secondary"]
+	var flag_path := CountryKits.get_flag(country)
+	if flag_path != "":
+		primary.material.set_shader_parameter("flag_texture", load(flag_path))
 	name_label.text = code
+	var dot_color: Color = kit["secondary"] if CountryKits.is_near_white(kit["primary"]) else kit["primary"]
+	if side == "HomeTeam":
+		_home_color = dot_color
+	else:
+		_away_color = dot_color
 
 
 ## score = MatchState.score ({"HomeTeam": int, "AwayTeam": int}).
@@ -159,7 +194,7 @@ func set_footer_text(text: String, dot_color: Color) -> void:
 ## win reminder shown at kickoff) and dropped again on the next call.
 func update_turn_hint(side: String, phase: int, intro: String = "") -> void:
 	var code: String = _home_name.text if side == "HomeTeam" else _away_name.text
-	var dot_color: Color = _home_primary.modulate if side == "HomeTeam" else _away_primary.modulate
+	var dot_color: Color = _home_color if side == "HomeTeam" else _away_color
 	var verb := "plays"
 	match phase:
 		MatchState.Phase.COMBO:
@@ -196,9 +231,114 @@ func _breathe_shield(side: String) -> void:
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
-## Single call point for main.gd's view-refresh — mirrors MatchState in one line.
+## Pre-match coin toss: alternates the big centered shield between the two
+## teams' flags/codes while squashing it edge-on (scale.x 1->0->1), slowing
+## down each leg so it reads as "spinning down" to a stop — then forces the
+## FINAL leg to land on a winner decided up front, regardless of where the
+## alternation pattern would otherwise land. No separate "X KICKS OFF!"
+## reveal — that label popping in grew the VBox and visibly shunted the
+## just-landed shield upward; landing on the winner's flag/code already
+## reads as the result. Returns the winning side once it's held long enough
+## to read, then hidden.
+func play_coin_toss(home_code: String, away_code: String, home_country: String, away_country: String) -> String:
+	var winner: String = "HomeTeam" if randi() % 2 == 0 else "AwayTeam"
+	var codes := {"HomeTeam": home_code, "AwayTeam": away_code}
+	var flags := {
+		"HomeTeam": load(CountryKits.get_flag(home_country)) as Texture2D,
+		"AwayTeam": load(CountryKits.get_flag(away_country)) as Texture2D,
+	}
+
+	_coin_toss.visible = true
+	_coin_shield.scale.x = 1.0
+	var current_side: String = "HomeTeam" if randi() % 2 == 0 else "AwayTeam"
+	_show_coin_side(current_side, codes, flags)
+
+	const FLIP_COUNT := 7
+	for i in range(FLIP_COUNT):
+		var duration: float = lerp(0.09, 0.32, float(i) / float(FLIP_COUNT - 1))
+		var next_side: String = winner if i == FLIP_COUNT - 1 else \
+			("AwayTeam" if current_side == "HomeTeam" else "HomeTeam")
+		var out_tween := create_tween()
+		out_tween.tween_property(_coin_shield, "scale:x", 0.0, duration) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		await out_tween.finished
+		_show_coin_side(next_side, codes, flags)
+		var in_tween := create_tween()
+		in_tween.tween_property(_coin_shield, "scale:x", 1.0, duration) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		await in_tween.finished
+		current_side = next_side
+
+	await get_tree().create_timer(1.1).timeout
+	_coin_toss.visible = false
+	return winner
+
+
+func _show_coin_side(side: String, codes: Dictionary, flags: Dictionary) -> void:
+	_coin_primary.material.set_shader_parameter("flag_texture", flags[side])
+	_coin_code.text = codes[side]
+
+
+const ANNOUNCE_COLOR := {
+	"yellow": Color(0.95, 0.79, 0.1),
+	"red": Color(0.82, 0.1, 0.12),
+	"offside": Color(1.0, 0.62, 0.05),
+}
+const ANNOUNCE_TEXT := {"yellow": "YELLOW CARD", "red": "RED CARD", "offside": "OFFSIDE"}
+
+
+## Big center-pitch flash for a yellow/red card or an offside call — the same
+## "you can't miss it" treatment as the coin toss, because the footer hint alone
+## reads too quietly for something this consequential. A card shows the coloured
+## card graphic + white text; offside hides the card and just flashes the word
+## in its own amber. Awaited: main.gd stays _busy while it plays, so it can't
+## overlap the next action. kind = "yellow" | "red" | "offside" (anything else
+## is a no-op). Safe to await even when a card and something else coincide —
+## calls are serialised by the caller.
+func play_announcement(kind: String) -> void:
+	if not ANNOUNCE_TEXT.has(kind):
+		return
+	var color: Color = ANNOUNCE_COLOR[kind]
+	var is_card: bool = kind != "offside"
+	# Hide the WHOLE card slot (not just the panel) for offside — an invisible
+	# Control still reserves its custom_minimum_size in the VBox, which was
+	# pushing "OFFSIDE" down into the card's text slot instead of centering it.
+	_announce_card_wrap.visible = is_card
+	if is_card:
+		_announce_card_style.bg_color = color
+	_announce_label.text = ANNOUNCE_TEXT[kind]
+	_announce_label.add_theme_color_override("font_color", Color.WHITE if is_card else color)
+	_announce.visible = true
+	_announce.modulate = Color(1, 1, 1, 0)
+	# Node sizes are only valid after this frame's container layout — pivot the
+	# card (its tilt) and the whole stack (the pop) around their real centres.
+	await get_tree().process_frame
+	if is_card:
+		_announce_card.pivot_offset = _announce_card.size / 2.0
+		_announce_card.rotation = deg_to_rad(-7)
+	_announce_content.pivot_offset = _announce_content.size / 2.0
+	_announce_content.scale = Vector2(0.6, 0.6)
+	var pop := create_tween()
+	pop.tween_property(_announce, "modulate:a", 1.0, 0.14)
+	pop.parallel().tween_property(_announce_content, "scale", Vector2(1.12, 1.12), 0.18) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	pop.tween_property(_announce_content, "scale", Vector2.ONE, 0.1) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await pop.finished
+	await get_tree().create_timer(0.85).timeout
+	var fade := create_tween()
+	fade.tween_property(_announce, "modulate:a", 0.0, 0.28)
+	await fade.finished
+	_announce.visible = false
+
+
+## Single call point for main.gd's view-refresh — mirrors MatchState in one
+## line. Re-derives the SAME clash-resolved kits main.gd's _build_team()
+## used for the actual 3D players (resolve_match is a pure function of the
+## two country names, so calling it again here always agrees with them).
 func refresh(state: MatchState, home_country: String, away_country: String) -> void:
-	set_team("HomeTeam", home_country)
-	set_team("AwayTeam", away_country)
+	var kits := CountryKits.resolve_match(home_country, away_country)
+	set_team("HomeTeam", home_country, kits["home"])
+	set_team("AwayTeam", away_country, kits["away"])
 	update_score(state.score)
 	update_cards(state.yellow_card, state.red_card)

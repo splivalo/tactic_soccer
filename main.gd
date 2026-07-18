@@ -369,7 +369,7 @@ func _spawn_teams() -> void:
 	if GameFlow.player_formation.is_empty():
 		_start_placement()
 	else:
-		_build_match("HomeTeam")
+		_start_coin_toss()
 
 
 # The ball node is created inside _build_match; this stays for the _ready toggle.
@@ -581,7 +581,27 @@ func _finish_placement() -> void:
 	if _placement_root != null:
 		_placement_root.free()
 		_placement_root = null
-	_build_match("HomeTeam")
+	_start_coin_toss()
+
+
+## Pre-match coin toss deciding who kicks off first (mirrors the original
+## 2006 game's shield-flip) — replaces the previously-hardcoded
+## _build_match("HomeTeam"). Keeps _busy=true through the flip animation so
+## no stray tap can interact with the empty pitch, then clears it BEFORE
+## _build_match, not after: _build_match -> _refresh_turn_view can hand the
+## kickoff straight to the AI (_maybe_ai_turn), which bails out immediately
+## if _busy is still true when it checks (same lesson as _after_combo's goal
+## branch above).
+func _start_coin_toss() -> void:
+	if _hud == null:
+		_build_match("HomeTeam")
+		return
+	_busy = true
+	var home_code := CountryKits.get_code(home_country)
+	var away_code := CountryKits.get_code(away_country)
+	var winner: String = await _hud.play_coin_toss(home_code, away_code, home_country, away_country)
+	_busy = false
+	_build_match(winner)
 
 
 # --- Input: tap vs drag -------------------------------------------------------
@@ -592,6 +612,13 @@ func _finish_placement() -> void:
 # CONNECT two figures (a pass) or aim a shot with live snap feedback.
 func _unhandled_input(event: InputEvent) -> void:
 	if _busy or _state == null:
+		return
+	# Single Player: never let a tap act on the AI's own turn — normally
+	# _busy already covers the AI's think-time + animation, but if the AI
+	# ever fails to decide anything (see _maybe_ai_turn's fallback forfeit),
+	# this is the hard backstop so the human can't step in and play the AI's
+	# pieces for it.
+	if _is_ai_turn():
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		var mb := event as InputEventMouseButton
@@ -1037,14 +1064,25 @@ func _face_toward(fig: Node3D, from_cell: Vector2i, to_cell: Vector2i) -> void:
 
 
 func _after_combo(res: Dictionary) -> void:
+	_refresh_hud() # score + card counts, right as MatchState changed them
+	# Big center-pitch flash for the calls the footer hint alone reads too
+	# quietly for. Awaited, so the banner fully plays (and blocks input via the
+	# still-set _busy) before the goal celebration / turn handover below.
 	if res["offside"]:
 		print("OFFSIDE — goal not given")
 		_show_offside(res["offside_shooter"], res["offside_line_row"])
+		if _hud != null:
+			await _hud.play_announcement("offside")
+	# yellow (1st) -> red (2nd) -> forced sending-off (3rd, card=="" +
+	# must_remove) — the last two both read as a "red" dismissal to the player.
 	if res["card"] == "yellow":
 		print("YELLOW CARD: %s (same figure shot twice in a row)" % _state.current)
-	elif res["card"] == "red":
-		print("RED CARD: %s — choose a figure to remove" % _state.current)
-	_refresh_hud() # score + card counts, right as MatchState changed them
+		if _hud != null:
+			await _hud.play_announcement("yellow")
+	elif res["card"] == "red" or res["must_remove"] != "":
+		print("RED CARD: %s" % _state.current)
+		if _hud != null:
+			await _hud.play_announcement("red")
 	if res["goal"]:
 		print("%s %s  ->  Home %d : %d Away"
 			% ["AUTOGOL!" if res.get("own_goal", false) else "GOAL!", res["scorer"],
@@ -1064,8 +1102,17 @@ func _after_combo(res: Dictionary) -> void:
 			else:
 				GameFlow.goto(GameFlow.Screen.LOSE_SCREEN)
 			return # leaving the scene — stay _busy so no stray input sneaks in first
-		_build_match(res["kickoff"])
+		# Clear _busy BEFORE _build_match, not after: _build_match ->
+		# _refresh_turn_view may immediately hand the new kickoff to the AI
+		# (_maybe_ai_turn), which itself starts with "if _busy: return" as
+		# its OWN re-entrancy guard — if _busy were still true from this
+		# combo/celebration at that point, the AI would silently bail out
+		# and never act, leaving its turn stuck forever (this was the actual
+		# "AI skips its turn after conceding" bug — clearing busy AFTER
+		# _build_match looked safer but actually starved _maybe_ai_turn
+		# before it could even start).
 		_busy = false
+		_build_match(res["kickoff"])
 	else:
 		_busy = false
 		_refresh_turn_view()
@@ -1343,34 +1390,52 @@ func _refresh_turn_view() -> void:
 	_maybe_ai_turn()
 
 
-## Single Player only: if it's now the AI's turn, decide (AIPlayer, pure
-## logic) and execute through the SAME functions a human tap would call
+## Single Player only: true when it's currently the AI's own turn to act
+## (used both to gate input and to protect _busy from being stomped — see
+## _after_combo's use of this right after _build_match()).
+func _is_ai_turn() -> bool:
+	if not GameFlow.single_player or _state == null:
+		return false
+	return _state.current != GameFlow.player_side
+
+
+## If it's now the AI's turn, decide (AIPlayer, pure logic) and execute
+## through the SAME functions a human tap would call
 ## (_do_combo/_apply_move/_remove_at), so it animates identically. A short
 ## "thinking" pause avoids the move reading as an instant, jarring snap.
 const AI_THINK_TIME := 0.6
 
 func _maybe_ai_turn() -> void:
-	if not GameFlow.single_player or _busy:
-		return
-	var ai_team := "AwayTeam" if GameFlow.player_side == "HomeTeam" else "HomeTeam"
-	if _state.current != ai_team:
+	if _busy or not _is_ai_turn():
 		return
 	_busy = true
 	await get_tree().create_timer(AI_THINK_TIME).timeout
 	_busy = false
+	var acted := false
 	match _state.phase:
 		MatchState.Phase.COMBO:
 			var shoot := AIPlayer.decide_combo(_state, GameFlow.ai_difficulty)
 			if shoot != NO_CELL:
+				acted = true
 				_do_combo(shoot)
 		MatchState.Phase.MOVE:
 			var decision := AIPlayer.decide_move(_state, GameFlow.ai_difficulty)
 			if decision.has("from"):
+				acted = true
 				_apply_move(decision["from"], decision["to"])
 		MatchState.Phase.REMOVE:
 			var cell := AIPlayer.decide_removal(_state, GameFlow.ai_difficulty)
 			if cell != NO_CELL:
+				acted = true
 				_remove_at(cell)
+	if not acted:
+		# Shouldn't happen (the rules guarantee at least one legal action in
+		# every phase) — but if AIPlayer ever fails to find one, forfeit
+		# rather than leave the turn stuck on the AI with nobody able to act.
+		push_warning("AI (%s, phase=%s) found no legal action — forfeiting its turn." \
+			% [_state.current, MatchState.Phase.keys()[_state.phase]])
+		_state.forfeit()
+		_refresh_turn_view()
 
 
 # Ran out of time to act — forfeit this decision with no move made (see

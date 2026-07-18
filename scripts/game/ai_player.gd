@@ -41,7 +41,7 @@ static func decide_combo(state: MatchState, difficulty: String) -> Vector2i:
 	if difficulty == "Easy":
 		return shoot_targets[randi() % shoot_targets.size()]
 	var best := _best_shoot_target(state)
-	return best if best != Vector2i(-1, -1) else _closest_to_goal(state, shoot_targets)
+	return best if best != Vector2i(-1, -1) else _safe_shoot_target(state, shoot_targets)
 
 
 ## Vector2i(-1,-1) if none of the current shoot targets scores right now
@@ -58,8 +58,7 @@ static func _best_shoot_target(state: MatchState) -> Vector2i:
 
 
 ## Whichever candidate cell ends up CLOSEST to the opponent's goal row —
-## used both to pick a starter/pass (advance the chain upfield) and as the
-## non-Easy shoot fallback when no immediate goal is on offer.
+## used to pick a starter/pass (advance the chain upfield).
 static func _closest_to_goal(state: MatchState, candidates: Array[Vector2i]) -> Vector2i:
 	var goal_row := state.opponent_goal_row(state.current)
 	var best := candidates[0]
@@ -69,6 +68,74 @@ static func _closest_to_goal(state: MatchState, candidates: Array[Vector2i]) -> 
 		if d < best_dist:
 			best_dist = d
 			best = c
+	return best
+
+
+## Non-Easy shoot fallback when no immediate goal is on offer: "closest to
+## goal" ALONE used to blindly blast the ball to the far end of whatever lane
+## was open. Two distinct ways that goes wrong, both scored here: (1) landing
+## right next to (or among) the opponent's own defenders — an immediate,
+## uncontested combo turn for them; (2) landing so far from EVERY one of the
+## AI's own remaining pieces (a long clear lane lets one shot travel many
+## cells) that the team can't realistically get back to it before the
+## opponent does, even though nothing is guarding it yet. Guarded cells are
+## excluded first (heaviest penalty), then cells far from any teammate are
+## penalized, and only THEN does distance-to-goal break the tie — advancing
+## is worthless if the ball can't be kept. Heaviest of all: a cell that would
+## trip the stalling rule (shooting the ball back next to this team's own last
+## shooter) is avoided outright — eating a yellow -> red -> sending-off for
+## shuffling the ball around is far worse than conceding a little ground. This
+## was the whole "the AI keeps getting cards on Hard" problem: it recycled the
+## ball among its own figures with no idea that was a foul (see _violates_stall).
+static func _safe_shoot_target(state: MatchState, candidates: Array[Vector2i]) -> Vector2i:
+	var goal_row := state.opponent_goal_row(state.current)
+	var best := candidates[0]
+	var best_score := -INF
+	for c in candidates:
+		var stall := 1 if _violates_stall(state, c) else 0
+		var guarded: int = _opponent_adjacent_count(state, c)
+		var support := _nearest_own_distance(state, c)
+		var dist := absi(c.y - goal_row)
+		var score: float = -stall * 100000.0 - guarded * 1000.0 - support * 8.0 - dist
+		if score > best_score:
+			best_score = score
+			best = c
+	return best
+
+
+## True if a shot LANDING on `cell` would trip the stalling rule for the team
+## on the move — i.e. this team still has an active "last clean shot" anchor and
+## the ball would come to rest within 1 cell of it (mirrors the exact test in
+## MatchState.execute_combo). Only meaningful when a reference is live; a fresh
+## kickoff or a just-moved shooter clears it (stall_ref_id == -1).
+static func _violates_stall(state: MatchState, cell: Vector2i) -> bool:
+	if state.stall_ref_id[state.current] == -1:
+		return false
+	var ref: Vector2i = state.stall_ref_cell[state.current]
+	return maxi(absi(ref.x - cell.x), absi(ref.y - cell.y)) <= 1
+
+
+## How many of the OPPONENT's pieces sit Chebyshev-adjacent to `cell` — i.e.
+## how many of them could immediately start a combo if the ball landed there.
+static func _opponent_adjacent_count(state: MatchState, cell: Vector2i) -> int:
+	var count := 0
+	for c in state.pieces:
+		if state.pieces[c]["team"] != state.current and maxi(absi(c.x - cell.x), absi(c.y - cell.y)) == 1:
+			count += 1
+	return count
+
+
+## Chebyshev distance from `cell` to the NEAREST of the current team's own
+## pieces — how far the team would actually have to travel to reclaim/protect
+## the ball if it landed there (the shooter itself counts, so this is at
+## minimum "how many cells did this shot just travel").
+static func _nearest_own_distance(state: MatchState, cell: Vector2i) -> int:
+	var best := 1 << 30
+	for c in state.pieces:
+		if state.pieces[c]["team"] == state.current:
+			var d := maxi(absi(c.x - cell.x), absi(c.y - cell.y))
+			if d < best:
+				best = d
 	return best
 
 
@@ -88,10 +155,20 @@ static func decide_move(state: MatchState, difficulty: String) -> Dictionary:
 		var from: Vector2i = movable[randi() % movable.size()]
 		var targets := state.move_targets(from)
 		return {"from": from, "to": targets[randi() % targets.size()]}
+	# Hard only: if a stalling anchor is still live (this team's last clean
+	# shooter hasn't moved since), converge with THAT figure — moving it both
+	# closes on the ball AND clears the anchor (see MatchState.do_move), so the
+	# next combo can shoot freely instead of risking a foul. Falls through to
+	# the normal "closest figure to the ball" search when it can't legally move.
+	var sources := movable
+	if difficulty == "Hard" and state.stall_ref_id[state.current] != -1:
+		var ref_cell: Vector2i = state.stall_ref_cell[state.current]
+		if ref_cell in movable:
+			sources = [ref_cell] as Array[Vector2i]
 	var best_from := Vector2i(-1, -1)
 	var best_to := Vector2i(-1, -1)
 	var best_dist := 1 << 30
-	for from in movable:
+	for from in sources:
 		for to in state.move_targets(from):
 			var d := maxi(absi(to.x - state.ball.x), absi(to.y - state.ball.y))
 			if d < best_dist:
