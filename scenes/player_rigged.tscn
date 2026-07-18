@@ -1,7 +1,8 @@
-[gd_scene format=4]
+[gd_scene format=4 uid="uid://7k3kx1g81vp3"]
 
-[ext_resource type="Script" path="res://scripts/game/player_rig.gd" id="1_ie1ew"]
+[ext_resource type="Script" uid="uid://8d00c7oksyia" path="res://scripts/game/player_rig.gd" id="1_ie1ew"]
 [ext_resource type="AnimationLibrary" path="res://assets/animations/player_anims.res" id="2_xm05u"]
+[ext_resource type="Texture2D" uid="uid://tabc47fayrss" path="res://assets/textures/effects/player_tile_glow.png" id="3_xm05u"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_a375u"]
 resource_name = "secondary"
@@ -285,6 +286,16 @@ bind/21/name = &"mixamorig_RightHand"
 bind/21/bone = -1
 bind/21/pose = Transform3D(3.2266672, -99.493164, 9.523569, -87.364845, -7.4359922, -48.084194, 48.54866, -6.7687345, -87.16199, -0.07081931, -0.070648216, 0.96667427)
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_xm05u"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(0.023529412, 0.07450981, 0.019607844, 0.28235295)
+albedo_texture = ExtResource("3_xm05u")
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ybybj"]
+size = Vector2(0.92, 0.92)
+
 [node name="Player" type="Node3D" unique_id=2072610920]
 script = ExtResource("1_ie1ew")
 
@@ -473,3 +484,9 @@ skeleton = NodePath("..")
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=1819305506]
 root_motion_track = NodePath("Skeleton3D:mixamorig_Hips")
 libraries/ = ExtResource("2_xm05u")
+
+[node name="OwnTeamTileGlow" type="MeshInstance3D" parent="." unique_id=1958419638]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.015, 0)
+material_override = SubResource("StandardMaterial3D_xm05u")
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_ybybj")

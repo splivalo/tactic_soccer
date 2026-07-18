@@ -84,6 +84,17 @@ var _turn_delay := 0.0
 ## if the mirror self-check failed at build time — we fall back to right foot).
 var _available := {}
 
+## The own-team ground marker (see main.gd's _set_own_marker_visible) is a
+## plain child, so it would otherwise spin with every facing turn/kick — a
+## rounded SQUARE visibly rotating away from the grid it's meant to sit flush
+## with reads as broken. top_level=true makes its own transform absolute
+## (ignores ours entirely), so we manually re-glue its POSITION to ours each
+## frame while its rotation just stays put at whatever we set once in
+## _ready() — this is what actually cancels the inherited spin.
+const TEAM_MARKER_NAME := "OwnTeamTileGlow"
+var _team_marker: Node3D = null
+var _team_marker_offset := Vector3.ZERO
+
 
 func is_goalkeeper() -> bool:
 	return _is_gk
@@ -105,6 +116,8 @@ func turn_to(yaw: float, delay: float = 0.0) -> void:
 
 
 func _process(delta: float) -> void:
+	if _team_marker != null:
+		_team_marker.global_position = global_position + _team_marker_offset
 	if not _turning or _acting:
 		return
 	if _turn_delay > 0.0:
@@ -132,6 +145,12 @@ func _ready() -> void:
 	_ap.animation_finished.connect(_on_finished)
 	for a in _ap.get_animation_list():
 		_available[a] = true
+	_team_marker = get_node_or_null(TEAM_MARKER_NAME)
+	if _team_marker != null:
+		_team_marker_offset = _team_marker.position
+		_team_marker.top_level = true
+		_team_marker.rotation = Vector3.ZERO
+		_team_marker.global_position = global_position + _team_marker_offset
 
 
 ## Called once after spawn. Picks the right resting animation and desyncs it.

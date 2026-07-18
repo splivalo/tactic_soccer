@@ -80,6 +80,18 @@ extends Node3D
 @export var banner_bg := Color("f4c20d") # jersey/ad yellow
 @export var banner_text := Color("101010") # near-black text
 
+# --- Stadium dressing ----------------------------------------------------------
+## The stadium.glb "crowd dressing" — stands bowl, fence, sponsor banner, seat
+## rows, floodlight rig — everything except the pitch/lines/goal frames+nets
+## (those stay visible always; they're the actual playing surface). On tall
+## phone aspect ratios a sliver of the dressing always peeked in at the screen
+## edges during normal top-down play, competing with the HUD for attention —
+## not worth it outside the one moment it's actually a nice backdrop: the goal
+## cinematic pull-back. Hidden by default; _begin_goal_drama/_restore_camera
+## reveal/re-hide it around that cinematic.
+@export var hide_stadium_dressing_during_play := true
+const STADIUM_DRESSING := ["arena", "fence", "banner", "seats", "reflectors"]
+
 # --- Goal cinematic ----------------------------------------------------------
 ## On a goal, cut to a low side camera by the goal (background blurred) for the
 ## final strike + the keeper's dive, like a replay angle, then restore & kick off.
@@ -210,6 +222,7 @@ const FIGURE_HEIGHT := 1.6 # a bit over the model's real height (~1.45 @ scale 1
 @export_enum("Dash", "Dot") var fx_trail_pattern := 0
 @export_range(0.0, 3.0, 0.01) var fx_trail_emission := 0.0
 @export_range(0.0, 1.0, 0.01) var fx_trail_rim := 0.6
+
 # The camera transform you tuned in the editor — used as the fit reference.
 var _cam_ref := Transform3D.IDENTITY
 var _cam_ref_set := false
@@ -268,6 +281,8 @@ func _ready() -> void:
 	add_child(_fx_effects)
 	if fix_banner:
 		_fix_banner()
+	if hide_stadium_dressing_during_play:
+		_set_stadium_dressing_visible(false)
 	if enable_camera_fit:
 		get_viewport().size_changed.connect(_fit_camera)
 		_fit_camera_deferred()
@@ -430,6 +445,7 @@ func _build_team(team_name: String, pieces: Array[Dictionary], kit: Dictionary, 
 	root.name = team_name
 	add_child(root)
 	var gk_side := 0 if team_name == "HomeTeam" else 1
+	var is_own_team := team_name == GameFlow.player_side
 	var index := 0
 	for piece in pieces:
 		var cell: Vector2i = piece["cell"]
@@ -447,8 +463,25 @@ func _build_team(team_name: String, pieces: Array[Dictionary], kit: Dictionary, 
 		# the keeper's own idle) — see PlayerRig.
 		if fig is PlayerRig:
 			(fig as PlayerRig).setup(is_gk)
+		_set_own_marker_visible(fig, is_own_team)
 		_node_at[cell] = fig
 		index += 1
+
+
+## Every player_scene instance ships its own "OwnTeamTileGlow" child (baked
+## into scenes/player_rigged.tscn by scripts/tools/add_player_tile_glow.gd) —
+## a full-cell rounded-square glow, same shape as BoardFx's own tap/move/shoot
+## tiles, centred under the figure, at deliberately LOW alpha. Low alpha is
+## the point: when a bright Board FX tile lands on the same cell, it simply
+## overpowers this faint tint instead of visually fighting it. Colour, alpha,
+## size and position are ALL real Inspector properties on that node — nothing
+## here recolours it at runtime, so whatever's set in the editor is exactly
+## what shows in the match. Own-team only; the opponent's kit already reads
+## as "not mine" by elimination.
+func _set_own_marker_visible(fig: Node3D, is_own: bool) -> void:
+	var glow := fig.get_node_or_null("OwnTeamTileGlow")
+	if glow != null:
+		glow.visible = is_own
 
 
 # --- Ball helpers ------------------------------------------------------------
@@ -559,6 +592,7 @@ func _place_piece(cell: Vector2i, role: String) -> void:
 	PlayerAppearance.apply(fig, piece_kit, PlayerAppearance.hair_for(_placement_index), number)
 	if fig is PlayerRig:
 		(fig as PlayerRig).setup(is_gk)
+	_set_own_marker_visible(fig, true) # placement is always the local player's own figures
 	_node_at[cell] = fig
 	_placement_result.append({"cell": cell, "role": role, "number": number})
 	_placement_index += 1
@@ -1209,6 +1243,8 @@ func _begin_goal_drama(goal_cell: Vector2i, scorer_team: String, shooter_cell: V
 	_goal_flight_d0 = maxf(_ball.position.distance_to(_goal_center), 0.5)
 	_goal_cam_follow = true
 	_activate_goal_cam()
+	if hide_stadium_dressing_during_play:
+		_set_stadium_dressing_visible(true) # this is the one moment it's worth seeing
 	if goal_slowmo < 1.0:
 		Engine.time_scale = goal_slowmo
 	# Send the keeper into the dive AS the shot is struck, not after it's already
@@ -1293,6 +1329,8 @@ func _restore_camera() -> void:
 	var cam := get_node_or_null("Camera3D") as Camera3D
 	if cam != null:
 		cam.current = true
+	if hide_stadium_dressing_during_play:
+		_set_stadium_dressing_visible(false)
 
 
 func _find_gk(team_name: String) -> Node3D:
@@ -1570,6 +1608,21 @@ func _fix_banner() -> void:
 	m.albedo_color = Color.WHITE
 	m.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
 	banner.set_surface_override_material(0, m)
+
+
+# --- Stadium dressing ----------------------------------------------------------
+## Toggles visibility of every STADIUM_DRESSING mesh under the `stadium` node
+## (see that const's comment) — off for normal top-down play, on only around
+## the goal cinematic pull-back. Silently no-ops for whichever names aren't
+## found (keeps this robust if stadium.glb's node set ever changes).
+func _set_stadium_dressing_visible(v: bool) -> void:
+	var stadium := get_node_or_null("stadium")
+	if stadium == null:
+		return
+	for n in STADIUM_DRESSING:
+		var node := stadium.get_node_or_null(n)
+		if node != null:
+			node.visible = v
 
 
 # Bakes an OPAQUE texture: solid `bg`, with the source's ALPHA used as a mask to
