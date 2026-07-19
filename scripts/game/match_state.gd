@@ -114,6 +114,22 @@ func next_turn() -> void:
 	start_turn()
 
 
+## A lightweight scratch copy for hypothetical "what if" queries (AI defense
+## lookahead — see AIPlayer.team_can_score_next). Copies only what the
+## combo/move query functions actually read: pieces, ball, current team,
+## chain and phase. Cards/score/timers/moves_left are irrelevant to those
+## pure queries and deliberately NOT copied — mutate the clone freely, the
+## real state is never touched.
+func clone_for_query() -> MatchState:
+	var c := MatchState.new()
+	c.pieces = pieces.duplicate(true)
+	c.ball = ball
+	c.current = current
+	c.phase = phase
+	c.chain = chain.duplicate()
+	return c
+
+
 ## The current team ran out of time to act (COMBO/MOVE/REMOVE) — no move is
 ## made, the board stays exactly as it is, and the turn simply passes to the
 ## opponent (a pending forced removal is dropped, same as skipping any other
@@ -223,6 +239,18 @@ func combo_shoot_targets() -> Array[Vector2i]:
 	return out
 
 
+## True if a shot LANDING on `cell` would trip the stalling rule for the
+## CURRENT team right now — mirrors the exact check inside execute_combo(),
+## exposed as its own query so UI/AI code can preview it before the shot is
+## actually taken (see main.gd's shoot-target colouring). False whenever no
+## reference is live (fresh kickoff, or the reference figure has since moved
+## — see do_move()).
+func would_violate_stall(cell: Vector2i) -> bool:
+	if stall_ref_id[current] == -1:
+		return false
+	return _cheby(stall_ref_cell[current], cell) <= 1
+
+
 # --- combo (pass chain -> shoot) --------------------------------------------
 ## Start (or restart) the chain on your figure next to the ball. True if valid.
 func begin(cell: Vector2i) -> bool:
@@ -280,11 +308,7 @@ func execute_combo(shoot_cell: Vector2i) -> Dictionary:
 	# reference figure has since moved (stall_ref_id would already be -1;
 	# see do_move()). Holding the ball among your own figures is otherwise
 	# always fine. 3 strikes: 1st = yellow, 2nd = red, 3rd = remove a figure.
-	var violated := false
-	if stall_ref_id[current] != -1:
-		var ref_cell: Vector2i = stall_ref_cell[current]
-		violated = _cheby(ref_cell, shoot_cell) <= 1
-	if violated:
+	if would_violate_stall(shoot_cell):
 		foul_count[current] += 1
 		if foul_count[current] == 1:
 			yellow_card[current] = true

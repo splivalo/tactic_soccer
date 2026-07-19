@@ -52,13 +52,6 @@ const TIMER_COLOR_URGENT := Color(0.85, 0.1, 0.1, 1)
 const TIMER_URGENT_AT := 5 # seconds_left at/below which the pill starts blinking red
 
 const BREATH_LEG_TIME := 1.0 # seconds per half-cycle (fade out OR back in), 0.8-1.2s range
-# Grey, not gold (gold read as a smudge) — and NOT as dark as the earlier 0.35
-# attempt: the frame PNG has a baked-in bevel (darker shadow side), and at
-# 0.35 that shadow side multiplied down into the black HUD background and
-# visually vanished. 0.6 was confirmed safe but too subtle; 0.5 is the
-# stronger-but-still-safe middle ground — verify the shadow side stays
-# visible before pushing any lower.
-const BREATH_DIM := 0.5
 
 var _timer_blink_on := false
 var _dot_style: StyleBoxFlat = null # own copy so recoloring the fill never touches the white border
@@ -223,11 +216,12 @@ func update_turn_hint(side: String, phase: int, intro: String = "", moves_left: 
 	_breathe_shield(side)
 
 
-## Soft "breathing" brightness loop on whichever shield is active (full white
-## -> dim grey -> full white, eased, looping) — a quiet "this one" cue instead
-## of repeating the team code in text. No-ops if the same side is already
-## breathing (a phase change within the same team's turn shouldn't
-## restart/jolt the animation).
+## Soft "breathing" loop on whichever shield is active (full white -> fully
+## transparent -> full white, eased, looping) — a quiet "this one" cue instead
+## of repeating the team code in text. Fades ALPHA all the way to 0, not just
+## a dimmer RGB, so the frame actually appears/disappears rather than merely
+## dimming. No-ops if the same side is already breathing (a phase change
+## within the same team's turn shouldn't restart/jolt the animation).
 func _breathe_shield(side: String) -> void:
 	if _breathing_side == side:
 		return
@@ -237,9 +231,9 @@ func _breathe_shield(side: String) -> void:
 	_home_frame.modulate = Color.WHITE
 	_away_frame.modulate = Color.WHITE
 	var target: Control = _home_frame if side == "HomeTeam" else _away_frame
-	var dim := Color(BREATH_DIM, BREATH_DIM, BREATH_DIM, 1.0)
+	var gone := Color(1.0, 1.0, 1.0, 0.0)
 	_breath_tween = create_tween().set_loops()
-	_breath_tween.tween_property(target, "modulate", dim, BREATH_LEG_TIME) \
+	_breath_tween.tween_property(target, "modulate", gone, BREATH_LEG_TIME) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_breath_tween.tween_property(target, "modulate", Color.WHITE, BREATH_LEG_TIME) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)

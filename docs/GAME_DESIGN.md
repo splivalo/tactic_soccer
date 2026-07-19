@@ -26,11 +26,34 @@
    1–∞ polja, bez krivudanja. Neograničen broj povezivanja dok postoji ravna putanja između figurica.
    Golman smije sudjelovati ako je na putanji (pazi na autogol — vidi pravila).
 2. **Ispucavanje** — zadnja figurica MORA ispucati loptu (h/v/d), staje gdje želi, ne na zauzeto polje.
-3. **Pomicanje** — igrač pomakne jednu bilo koju figuricu za **1 polje**, ne na polje s figuricom/loptom.
+3. **Pomicanje** — igrač pomakne jednu bilo koju figuricu **neograničeno daleko u ravnoj liniji**
+   (h/v/d), dok ne udari u prvu prepreku (drugu figuricu, loptu, ili rub terena) — ista gramatika
+   kretanja kao i lopta (`Board.DIRS`, `MatchState.move_targets`). Golman i dalje smije stati SAMO
+   na svoja 3 gol-polja. **Promjena od izvornog "1 polje"** (2026-07-1x, vidi `docs/CHANGELOG.md`):
+   bez nje je tim koji nema loptu praktički nikad nije mogao stići do nje.
 
-**Preuzimanje lopte:** moguće samo ako je lopta 1 polje (od 8 susjednih) od figurice → figurica staje na loptu.
+**Svaki tim ima TOČNO 2 akcije po redu** — ovo je temeljni izum koji drži igru poštenom bez obzira
+tko trenutno ima loptu:
+- **Ako tim VEĆ ima loptu** na početku svog reda: 1) combo (dodavanje→ispucavanje, koliko god
+  povezivanja) je 1. akcija, 2) obavezni pomak jedne figurice nakon (neuspio) šuta je 2. akcija
+  (`Phase.MOVE`, `moves_left = 1`).
+- **Ako tim NEMA loptu**: kreće u **reaktivnu MOVE fazu** s **2 raspoloživa poteza**
+  (`moves_left = 2`, `_move_is_reactive = true`) — dovoljno da dovede DRUGU figuricu u igru, ili
+  istu figuricu zaobiđe prepreku u "L" (2 poteza, obrambeno pozicioniranje, BEZ šuta). Ako prvi od
+  ta 2 poteza već dovede figuricu do lopte, red se odmah nadograđuje u pravi `Phase.COMBO` na toj
+  istoj figurici (potez + šut = 2 akcije, isto kao napadač) — drugi rezervni potez se ne troši
+  uzalud. **Ali** ako se lopta dosegne tek **drugim (zadnjim)** reaktivnim potezom, NEMA
+  nadogradnje — red se normalno završava (potez + potez = već 2 akcije potrošene, treći bonus-šut
+  se nikad ne dodjeljuje). Vidi `MatchState.do_move`/`execute_combo`, `_combo_from_reactive`.
+- Tijekom `Phase.MOVE` postoji i "End Move" gumb (HUD) za dragovoljni odustanak od preostalih
+  reaktivnih poteza.
+
+**Preuzimanje lopte / posjed:** tim "ima" loptu čim je JEDNA njegova figurica susjedna lopti
+(Chebyshev 1) — bez obzira koliko je protivničkih figurica isto tako blizu. (Isprobano pa **ukinuto**
+pravilo "nadjačavanja" — tim koji ju je upravo dosegnuo reaktivnim potezom morao bi imati pravo
+igrati loptom bez obzira koliko protivnika stoji uz nju, jer ionako nije njihov red.)
 **Gol:** samo s protivničke polovice. **Zaleđe:** ako su sve protivničke terenske figurice (golman isključen) strogo iza napadača — nema gola. Ako protivnik nema više nijednu terensku figuricu, zaleđe se ne može dogoditi.
-**Kartoni (zadržavanje/vrtnja lopte):** prekršaj je kad novi šut sleti unutar 1 polja (Chebyshev) od figurice koja je odigrala tvoj tim posljednji **čisti** (neprekršajni) šut — bez obzira koja figurica sad puca. Referenca se briše ako se ta figurica u međuvremenu pomakne, ili nakon svakog prekršaja. Samo držati loptu među svojim figuricama je uvijek legalno; kažnjava se doslovno vraćanje istom šutu na isto mjesto. 1. prekršaj = žuti karton, 2. = crveni, 3. = obavezno uklanjanje jedne figurice (`Phase.REMOVE`). Kartoni traju cijelu partiju. Pravilo je potvrđeno dekompilacijom izvornog koda originalne igre iz 2006. (vidi `docs/CHANGELOG.md`, 2026-07-09) — ranije verzije ("ista figurica dva puta zaredom", "isto polje kao zadnji put") su odbačene jer su ili prestroge ili propuštaju rupu s naizmjeničnim figuricama.
+**Kartoni (zadržavanje/vrtnja lopte):** prekršaj je kad novi šut sleti unutar 1 polja (Chebyshev) od figurice koja je odigrala tvoj tim posljednji **čisti** (neprekršajni) šut — bez obzira koja figurica sad puca. Referenca se briše ako se ta figurica u međuvremenu pomakne, ili nakon svakog prekršaja. Samo držati loptu među svojim figuricama je uvijek legalno; kažnjava se doslovno vraćanje istom šutu na isto mjesto. 1. prekršaj = žuti karton, 2. = crveni, 3. = obavezno uklanjanje jedne figurice (`Phase.REMOVE`, timer se tijekom te faze zaustavlja — istek vremena ne smije poništiti kaznu). Kartoni traju cijelu partiju. Pravilo je potvrđeno dekompilacijom izvornog koda originalne igre iz 2006. (vidi `docs/CHANGELOG.md`, 2026-07-09) — ranije verzije ("ista figurica dva puta zaredom", "isto polje kao zadnji put") su odbačene jer su ili prestroge ili propuštaju rupu s naizmjeničnim figuricama.
 
 ## 4. Tehnička arhitektura
 Odvajamo **logiku** od **prikaza**:
@@ -50,16 +73,36 @@ Modeli idu **plosnato** u `assets/models/` (bez podfoldera):
 
 Node `Pitch` mora se poklapati s logičkom mrežom 7×10 (detalji u `assets/models/README.md`).
 
-## 6. Animacije (Mixamo — kasnije)
-- Klipovi u `assets/animations/`, spajaju se preko `AnimationLibrary` na model igrača.
-- **Kombinacija (pass→shoot) okida animaciju.**
-- **Gol:** kamera se spušta i pokazuje akciju atraktivnije + animacija slavlja.
-- Skeleton Mixamo klipova mora odgovarati modelu igrača.
+## 6. Animacije (Mixamo) — implementirano
+- **8 izvornih Mixamo klipova** (Idle, Breathing Idle, Jog Forward, Jog Forward Diagonal, Soccer
+  Pass, Strike Forward Jog, Goalkeeper Idle, Goalkeeper Miss) pečeni u
+  `assets/animations/player_anims.res` preko `scripts/tools/build_player.gd` (headless builder,
+  ne pokreće se svaki put). Automatski su dodane zrcaljene (`_L`) i "soft" varijante za
+  pass/strike (jačina udarca ovisi o udaljenosti) — ukupno 14 klipova u biblioteci.
+  `jog_diag` je pečen ali **trenutno neiskorišten** — lik uvijek rotira prema cilju i koristi
+  obični `jog`, i za ravne i za dijagonalne poteze (odluka: ne uvoditi ga bez punog seta smjerova,
+  vidi `docs/CHANGELOG.md`).
+- **Koreografija combo/šuta** (`main.gd::_play_combo_choreography`, dijeli je i gol repriza — vidi
+  ispod): tempiranje svakog udarca da noga dotakne loptu TOČNO kad stigne (bez zastoja "kotrljanje→
+  stani→zamah→kotrljanje"), stvarna kontakt-točka na nozi (ne centar polja), lukovi lopte skalirani
+  jačinom/udaljenosti, brzina hoda (`jog` speed_scale) skalirana udaljenosti kretanja.
+- **Gol cinematika** (`main.gd`, "Goal Cinematic" export grupa): dvije STATIČNE kamere — Cam A iza
+  strijelca (niz os šuta), Cam B kod gol-linije — s jednim tvrdim rezom između njih dok lopta leti
+  (nikad pan/rotacija kamere). Usporenje leta (`goal_slowmo`), skok golmana (`gk_miss`), bujenje
+  mreže (shader `net_dent.gdshader`), pad lopte pod gravitacijom, tribine se otkrivaju samo za ovaj
+  trenutak (`hide_stadium_dressing_during_play`).
+- **Gol repriza** (export grupa "Goal Replay", `main.gd::_play_goal_replay`): nakon cinematike,
+  JOŠ jedan prikaz iste akcije — fiksna top-down kamera (kut zaključan, samo udaljenost auto-fitana
+  kao i glavna kamera), puna koreografija ponovljena (isti udarci/golmanov skok), HUD sakriven,
+  cijela postava opet vidljiva (cinematika sakriva sve osim strijelca/golmana), bijeli flash-rez pri
+  ulasku, desaturacija + vinjeta samo na repriznoj kameri (`Camera3D.environment`), blinkajući
+  "REPLAY" natpis (`GoalReplayTag/RLabel` u `main.tscn`, tween s `set_ignore_time_scale` da
+  usporenje ne uspori i sam blink).
 
 ## 7. Kamera
 - Portret, taktički pogled odozgo/koso na cijelu ploču.
-- Kut/kompoziciju/FOV **tunira korisnik u editoru** (Camera3D transform u `main.tscn`). Kod (`_fit_camera` u `main.gd`) samo klizi kameru po toj istoj osi gledanja tako da cijeli teren uvijek stane, na bilo kojem omjeru ekrana — nikad ne mijenja kut.
-- Poseban "gol" pogled: spuštanje kamere na akciju (nije još implementirano).
+- Kut/kompoziciju/FOV **tunira korisnik u editoru** (Camera3D transform u `main.tscn`). Kod (`_fit_camera` u `main.gd`) samo klizi kameru po toj istoj osi gledanja tako da cijeli teren uvijek stane, na bilo kojem omjeru ekrana — nikad ne mijenja kut. Ista "autor tunira kut, kod fita samo udaljenost" logika ponovno iskorištena za repriznu top-down kameru (`_place_replay_cam`).
+- Poseban "gol" pogled: implementirano — vidi §6 (gol cinematika dvije statične kamere + top-down repriza).
 - ⚠️ Pri ručnom upisu `Transform3D(...)` u `.tscn`: Godot zapisuje bazis TRANSPONIRANO (vidi `docs/CHANGELOG.md`, 2026-07-08) — ne upisuj `basis.x, basis.y, basis.z` redom bez transponiranja, ili koristi editor/Transform dijalog umjesto ručnog upisa.
 
 ## 8. Zvuk (`assets/audio/`)
@@ -71,6 +114,14 @@ Node `Pitch` mora se poklapati s logičkom mrežom 7×10 (detalji u `assets/mode
 - Zastave: `assets/textures/ui/countries/<kod>.png`.
 - Brojevi na dresu: `assets/textures/numbers/`.
 - **HUD** (`scenes/ui/hud.tscn`): grbovi, skor, kartoni, timer, footer (tko je na potezu).
+  Veliki, jasno vidljivi banner za žuti/crveni karton i zaleđe (`play_announcement`) — footer tekst
+  sam nije bio dovoljno uočljiv. "End Move" gumb (dragovoljni odustanak od preostalih reaktivnih
+  poteza) premješten dolje desno preko terena, veliki, autor ga tunira u editoru. Timer po redu
+  (`turn_time_limit`, dijele ga COMBO+MOVE/REMOVE istog reda) staje tijekom `Phase.REMOVE` (nema
+  isteka — inače bi istek poništio kaznu za treći prekršaj).
+- **Oznaka vlastitog tima** (`scripts/game/player_rig.gd`, `OwnTeamTileGlow` u `player_rigged.tscn`):
+  tihi, nisko-alfa zaobljeni kvadrat pod nogama SAMO igračevih vlastitih figura, boju/alfu/veličinu
+  tunira autor u editoru na baziranoj sceni. `top_level=true` da se ne rotira s figuricom.
 - **Tok ekrana** (`GameFlow` autoload, `scripts/game/game_flow.gd`): splash →
   glavni izbornik (po uzoru na original iz 2006: 1/2 Player, Options,
   Instructions, Credits, Quit) → odabir momčadi (Player 1=Home, Player 2=Away,
@@ -81,12 +132,30 @@ Node `Pitch` mora se poklapati s logičkom mrežom 7×10 (detalji u `assets/mode
   strana) živi kao rana faza unutar SAME meč-scene (`main.gd::_start_placement`),
   ne kao zaseban ekran. Instructions ekran već ima pravi sažetak pravila.
 
-## 10. Otvorena pitanja / odluke za kasnije
-- [ ] Online multiplayer ili samo hot-seat?
-- [ ] AI protivnik?
+## 10. AI protivnik (Single Player)
+- `scripts/game/ai_player.gd` — implementiran, testiran (`scripts/tests/test_ai_ranked.gd`).
+- **Jedan zajednički mehanizam** za SVAKU vrstu odluke (combo korak, pomak, uklanjanje figure nakon
+  crvenog kartona): sve kandidate boduje jedna scoring funkcija, poredaju se po rangu, pa
+  `_rank_pick` bira NASUMIČNO po vjerojatnosti ovisno o težini — ne odvojena heuristika po vrsti
+  odluke.
+- **Težine = vjerojatnost odabira najboljeg (rang #1) poteza**, ne drugačija logika: Easy ~70%,
+  Medium ~90%, Hard 100% (uvijek najbolji). Ostatak vremena Easy/Medium padnu na rang #2/#3.
+- Combo bodovanje: pravi gol vrijedi najviše, teški minus za nepotreban prekršaj zadržavanja i za
+  ostavljanje lopte blizu protivničkih figura, mali bonus za blizinu vlastitih figura (mogućnost
+  daljnjeg dodavanja).
+- **Obrana**: `_defense_score` nagrađuje ulazak na trenutno otvorenu ravnu liniju šuta prema
+  vlastitom golu (`Board.is_straight`/`path_clear`/`cells_between`) — AI ne samo juri loptu, nego i
+  brani gol kad je na potezu za pomicanje.
+- AI izvršava odluke kroz ISTE funkcije koje bi tap odigrao (`_do_combo`/`_apply_move`/`_remove_at`
+  u `main.gd`), pa se animira identično čovjeku; kratka umjetna "razmišljam" pauza
+  (`AI_THINK_TIME`) prije poteza da ne djeluje trenutačno/robotski.
+
+## 11. Otvorena pitanja / odluke za kasnije
+- [ ] Online multiplayer (Firebase) — u planu da zamijeni lokalni hot-seat "2 Player"; taj način
+  za sad ostaje samo kao test placeholder.
 - [ ] Točan izgled/uvjeti "zaleđa" u kodu (rub slučajevi).
 - [ ] Vizual za brojeve: pravi broj na dresu (numbers PNG) vs. `Label3D` iznad glave.
 - [ ] Poklapanje uvezenog terena s logičkom mrežom (skala/origin).
 
 ---
-*Zadnje ažurirano: 2026-07-09. Uz ovaj dokument idi i [`docs/TODO.md`](TODO.md).*
+*Zadnje ažurirano: 2026-07-19. Uz ovaj dokument idi i [`docs/TODO.md`](TODO.md).*

@@ -70,23 +70,32 @@ func _test_no_unnecessary_stall_card_on_hard() -> void:
 		ms.stall_ref_id["HomeTeam"] = ms.pieces[Vector2i(3, 7)]["id"]
 		ms.stall_ref_cell["HomeTeam"] = Vector2i(3, 7)
 		var shoot := AIPlayer.decide_combo(ms, "Hard")
-		if shoot != Vector2i(-1, -1) and AIPlayer._violates_stall(ms, shoot):
+		if shoot != Vector2i(-1, -1) and ms.would_violate_stall(shoot):
 			violations += 1
 	_check(violations == 0, "Hard never trips the stalling foul when a safe option exists (%d/30 violations)" % violations)
 
 
 # --- Regression: AI must step into an open shooting lane on its own goal ------
+# The threat must be REAL (team_can_score_next, not just "a straight line
+# exists") — the shooter has to be a piece that could actually take a shot
+# THIS turn: already adjacent to the ball, AND in the opponent's half (rules
+# require that to score at all — see MatchState.combo_shoot_targets).
 func _test_ai_defends_open_lane() -> void:
 	var ms := MatchState.new()
-	var home := [{"cell": Vector2i(3, 9), "role": "gk"}]
+	var home := [
+		{"cell": Vector2i(3, 9), "role": "gk"},    # irrelevant, nowhere near the ball
+		{"cell": Vector2i(3, 4), "role": "field"},  # already adjacent to the ball, deep in Away's half
+	]
 	var away := [
 		{"cell": Vector2i(4, 0), "role": "gk"},   # off to the side, not on the test lane
-		{"cell": Vector2i(2, 3), "role": "field"}, # one step from the lane, nothing else nearby
+		{"cell": Vector2i(2, 3), "role": "field"}, # blocks the only diagonal alternative, keeps Home onside
 	]
-	ms.setup(home, away, Vector2i(3, 5), "HomeTeam", 99) # ball sits clear on the (3, *) column
+	ms.setup(home, away, Vector2i(3, 3), "HomeTeam", 99) # ball sits clear on the (3, *) column
 	ms.current = "AwayTeam"
 	ms.phase = MatchState.Phase.MOVE
-	var lane := Board.cells_between(Vector2i(3, 5), Vector2i(3, 0)) # AwayTeam's own goal at col 3
+	_check(AIPlayer.team_can_score_next(ms, "HomeTeam"),
+		"setup: HomeTeam has a real, unblocked shot at (3,4)->(3,0) this test relies on")
+	var lane := Board.cells_between(Vector2i(3, 3), Vector2i(3, 0)) # AwayTeam's own goal at col 3
 	var mv := AIPlayer.decide_move(ms, "Hard")
 	_check(mv.has("from"), "defense test: AI found a legal move")
 	if mv.has("from"):

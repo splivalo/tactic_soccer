@@ -27,8 +27,8 @@ extends Node3D
 ## fixed 0.28s tween (which read as a teleport/skate for anything longer than
 ## 1 cell). Duration = max(move_min_duration, move_duration_per_cell * cells);
 ## the min keeps a 1-cell move feeling exactly like it always did.
-@export var move_duration_per_cell := 0.16
-@export var move_min_duration := 0.28
+@export var move_duration_per_cell := 0.22
+@export var move_min_duration := 0.35
 ## The "jog" clip has no baked forward speed of its own (in-place treadmill
 ## cycle — see PlayerRig.jog's doc comment), so distance/urgency has to be
 ## sold by the STRIDE RATE instead: a short 1-cell hop plays relaxed, a long
@@ -48,6 +48,15 @@ extends Node3D
 ## fly. Interpolated by the distance-driven power. >1 = slower, <1 = snappier.
 @export var ball_pace_gentle := 1.9
 @export var ball_pace_strong := 0.55
+## Per-segment ball travel time = clamp(distance * ball_roll_time_scale *
+## ball_pace, ball_roll_min_duration, ball_roll_max_duration) — see
+## _roll_dur. The MAX especially matters now that passes can cross the whole
+## pitch in one hop (unlimited sliding movement): without a generous ceiling,
+## a cross-pitch ball and a 2-cell tap take almost the same time, so a long
+## pass never actually reads as covering real distance.
+@export var ball_roll_time_scale := 0.065
+@export var ball_roll_min_duration := 0.12
+@export var ball_roll_max_duration := 1.1
 ## Flip if the kicking foot ends up on the wrong side for the incoming ball.
 @export var invert_kick_foot := false
 ## Minimum time (s) for the opening roll to the first figure, so it has room for
@@ -274,6 +283,10 @@ const FIGURE_HEIGHT := 1.6 # a bit over the model's real height (~1.45 @ scale 1
 @export var color_trail := Color(0.45, 0.9, 1.0, 0.95) # energy trail
 @export var color_remove := Color(1.0, 0.15, 0.15, 0.95) # figure removable after a red card
 @export var color_offside := Color(1.0, 0.85, 0.1, 0.95) # offside line + flagged figure
+## Shoot target that WOULD trip the stalling foul (MatchState.would_violate_stall)
+## if tapped — matches the HUD's yellow-card colour on purpose, so the meaning
+## reads instantly ("yellow" tile = yellow-card risk) without a legend.
+@export var color_stall_warning := Color(0.95, 0.79, 0.1, 0.95)
 @export_range(0.2, 5.0, 0.1) var offside_flash_seconds := 1.8
 
 @export_group("Board FX Tuning")
@@ -1112,7 +1125,7 @@ func _set_ball_arc(t: float, a: Vector3, b: Vector3, h: float) -> void:
 # Time for the ball to cross one segment (distance * pace, clamped so it reads).
 func _roll_dur(a: Vector2i, b: Vector2i) -> float:
 	var d := _ball_world(a).distance_to(_ball_world(b))
-	return clampf(d * 0.05 * _ball_pace(_cells(a, b)), 0.08, 0.7)
+	return clampf(d * ball_roll_time_scale * _ball_pace(_cells(a, b)), ball_roll_min_duration, ball_roll_max_duration)
 
 
 # Runs `cb` after `delay` seconds (or now if it's already due).
@@ -1734,6 +1747,13 @@ func _apply_move(from: Vector2i, to: Vector2i) -> void:
 	_node_at[to] = fig
 	print("MOVE: %s -> %s" % [from, to])
 	_move_from = NO_CELL
+	# Stay busy for the WHOLE slide, same as _do_combo does for a shot —
+	# without this, nothing stopped the next decision (another AI move, or
+	# even the human's own next tap) from firing before this figure had
+	# visually finished sliding, so moves could overlap/cut each other off
+	# and the whole turn sequence read as sped-up no matter how long
+	# move_duration was tuned to.
+	_busy = true
 	# Turn and jog to the new cell, then settle back into idle on arrival. A
 	# slide can now cover many cells (see MatchState.move_targets), so the
 	# jog's duration scales with distance — a fixed 0.28s regardless of length
@@ -1750,6 +1770,8 @@ func _apply_move(from: Vector2i, to: Vector2i) -> void:
 	tween.tween_property(fig, "position", _cell_world(to.x, to.y), move_duration).set_trans(Tween.TRANS_SINE)
 	if fig is PlayerRig:
 		tween.tween_callback((fig as PlayerRig).idle.bind(false))
+	await tween.finished
+	_busy = false
 	_refresh_turn_view()
 
 
@@ -1887,11 +1909,15 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 	for c in _state.combo_pass_targets():
 		_fx.add_tile(_cell_world(c.x, c.y), color_tap) # blue = next pass
 	for c in _state.combo_shoot_targets():
-		_fx.add_tile(_cell_world(c.x, c.y), color_shoot) # green = shoot cell
+		# green = shoot cell; yellow = would trip the stalling foul (see
+		# MatchState.would_violate_stall) — same colour as the HUD's yellow
+		# card, so the risk reads instantly without needing a legend.
+		var shoot_col := color_stall_warning if _state.would_violate_stall(c) else color_shoot
+		_fx.add_tile(_cell_world(c.x, c.y), shoot_col)
 	if preview != NO_CELL:
 		var col := color_chain
 		if preview in _state.combo_shoot_targets():
-			col = color_shoot
+			col = color_stall_warning if _state.would_violate_stall(preview) else color_shoot
 		elif preview in _state.combo_pass_targets():
 			col = color_tap
 		_fx.add_tile(_cell_world(preview.x, preview.y), col.lightened(0.35), fx_tile_size * 1.1)

@@ -11,14 +11,6 @@
 [ext_resource type="Texture2D" uid="uid://vtou8jaso7kd" path="res://assets/textures/ui/countries/hr.png" id="9_hr"]
 [ext_resource type="Texture2D" uid="uid://bndv6jp1g5udb" path="res://assets/textures/ui/countries/br.png" id="10_br"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_shadow"]
-bg_color = Color(0, 0, 0, 0)
-corner_radius_top_left = 14
-corner_radius_top_right = 14
-corner_radius_bottom_right = 14
-corner_radius_bottom_left = 14
-shadow_size = 30
-
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_flag_home"]
 shader = ExtResource("8_shieldflag")
 shader_parameter/flag_texture = ExtResource("9_hr")
@@ -40,6 +32,13 @@ corner_radius_bottom_left = 4
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_flag_away"]
 shader = ExtResource("8_shieldflag")
 shader_parameter/flag_texture = ExtResource("10_br")
+
+[sub_resource type="Gradient" id="Gradient_kicr4"]
+offsets = PackedFloat32Array(0, 0.5197629, 1)
+colors = PackedColorArray(0.1882353, 0.34901962, 0.19607843, 1, 0.4117647, 0.7137255, 0.37254903, 1, 0.1882353, 0.34901962, 0.19607843, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_mj13f"]
+gradient = SubResource("Gradient_kicr4")
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_turn_dot"]
 bg_color = Color(1, 1, 1, 1)
@@ -101,31 +100,6 @@ offset_bottom = 241.0
 grow_horizontal = 2
 mouse_filter = 2
 color = Color(0.08721582, 0.095399715, 0.09650535, 1)
-
-[node name="BottomBorder" type="ColorRect" parent="Background" unique_id=645735874]
-layout_mode = 1
-anchors_preset = 12
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_top = -2.0
-grow_horizontal = 2
-grow_vertical = 0
-color = Color(0, 0, 0, 1)
-
-[node name="Shadow" type="Panel" parent="." unique_id=-1177484695]
-visible = false
-layout_mode = 1
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -500.0
-offset_top = 40.0
-offset_right = 500.0
-offset_bottom = 194.0
-grow_horizontal = 2
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_shadow")
 
 [node name="Bar" type="Control" parent="." unique_id=2022370975]
 layout_mode = 1
@@ -407,7 +381,7 @@ texture = ExtResource("6_frame")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Footer" type="ColorRect" parent="." unique_id=562089472]
+[node name="Footer" type="TextureRect" parent="." unique_id=860726320]
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
@@ -415,16 +389,17 @@ offset_top = 241.0
 offset_bottom = 331.0
 grow_horizontal = 2
 mouse_filter = 2
-color = Color(0.08627451, 0.09411765, 0.09803922, 1)
+texture = SubResource("GradientTexture2D_mj13f")
 
 [node name="TopBorder" type="ColorRect" parent="Footer" unique_id=300043668]
+visible = false
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
 offset_bottom = 2.0
 grow_horizontal = 2
 mouse_filter = 2
-color = Color(0, 0, 0, 1)
+color = Color(0.1882353, 0.34901962, 0.19607843, 1)
 
 [node name="Content" type="HBoxContainer" parent="Footer" unique_id=1363274114]
 layout_mode = 1
@@ -450,7 +425,52 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 56
-text = "..."
+text = "GAME INSTRUCTIONS"
+
+[node name="Footer" type="ColorRect" parent="Footer" unique_id=985760483]
+visible = false
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 241.0
+offset_bottom = 331.0
+grow_horizontal = 2
+mouse_filter = 2
+color = Color(0.4117647, 0.7137255, 0.37254903, 1)
+
+[node name="TopBorder" type="ColorRect" parent="Footer/Footer" unique_id=19967813]
+visible = false
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 2.0
+grow_horizontal = 2
+mouse_filter = 2
+color = Color(0.1882353, 0.34901962, 0.19607843, 1)
+
+[node name="Content" type="HBoxContainer" parent="Footer/Footer" unique_id=950426347]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="TurnDot" type="Panel" parent="Footer/Footer/Content" unique_id=1364688574]
+custom_minimum_size = Vector2(35, 35)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_turn_dot")
+
+[node name="FooterLabel" type="Label" parent="Footer/Footer/Content" unique_id=315436786]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 56
+text = "GAME INSTRUCTIONS"
 
 [node name="PitchArea" type="Control" parent="." unique_id=-1276514996]
 layout_mode = 1

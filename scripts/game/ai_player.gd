@@ -104,26 +104,15 @@ static func _combo_action_score(state: MatchState, cell: Vector2i, is_shoot: boo
 		if state.is_opponent_goal(cell, state.current) and state.in_opponent_half(shooter, state.current) \
 				and not state.is_offside(shooter, state.current):
 			score += 100000.0 # a real goal outweighs every other consideration
-		# Never worth a card/removal risk unless it's the goal above — see
-		# _violates_stall (this was the "AI keeps getting carded" bug: it used
-		# to recycle the ball among its own figures with no idea that was a foul).
-		if _violates_stall(state, cell):
+		# Never worth a card/removal risk unless it's the goal above (this was
+		# the "AI keeps getting carded" bug: it used to recycle the ball among
+		# its own figures with no idea that was a foul) — see
+		# MatchState.would_violate_stall.
+		if state.would_violate_stall(cell):
 			score -= 5000.0
 	score -= _opponent_adjacent_count(state, cell) * 200.0 # don't hand it straight back
 	score -= _nearest_own_distance(state, cell) * 3.0      # keep support close
 	return score
-
-
-## True if a shot LANDING on `cell` would trip the stalling rule for the team
-## on the move — i.e. this team still has an active "last clean shot" anchor and
-## the ball would come to rest within 1 cell of it (mirrors the exact test in
-## MatchState.execute_combo). Only meaningful when a reference is live; a fresh
-## kickoff or a just-moved shooter clears it (stall_ref_id == -1).
-static func _violates_stall(state: MatchState, cell: Vector2i) -> bool:
-	if state.stall_ref_id[state.current] == -1:
-		return false
-	var ref: Vector2i = state.stall_ref_cell[state.current]
-	return maxi(absi(ref.x - cell.x), absi(ref.y - cell.y)) <= 1
 
 
 ## How many of the OPPONENT's pieces sit Chebyshev-adjacent to `cell` — i.e.
@@ -150,6 +139,15 @@ static func _nearest_own_distance(state: MatchState, cell: Vector2i) -> int:
 	return best
 
 
+## Cap on how many candidates get the EXPENSIVE defense lookahead
+## (team_can_score_next, see _defense_score): unlimited sliding movement can
+## give a single piece dozens of destinations, and decide_move considers
+## every own piece — the full candidate list can run into the hundreds.
+## Cheaply pre-rank by _move_base_score first and only spend the lookahead on
+## the most promising handful; a candidate that's already a poor chase/
+## reposition by that measure wouldn't win rank_pick over a safe one anyway.
+const MAX_DEFENSE_CHECKS := 16
+
 ## {"from": Vector2i, "to": Vector2i} — every legal (from,to) pair across every
 ## movable figure is scored and ranked together (see _move_score), same
 ## difficulty hit-rate as decide_combo.
@@ -160,48 +158,113 @@ static func decide_move(state: MatchState, difficulty: String) -> Dictionary:
 			candidates.append({"from": cell, "to": to})
 	if candidates.is_empty():
 		return {}
-	return _rank_pick(candidates, func(m): return _move_score(state, m), difficulty)
+	candidates.sort_custom(func(a, b): return _move_base_score(state, a) > _move_base_score(state, b))
+	var top: Array[Dictionary] = candidates.slice(0, MAX_DEFENSE_CHECKS)
+	return _rank_pick(top, func(m): return _move_score(state, m), difficulty)
 
 
 ## Primarily "does this close the distance to the ball" (so the team can
 ## start combos) — plus a bonus for moving whichever figure is the team's
 ## live stalling anchor (see MatchState.stall_ref_id): that move both closes
 ## on the ball AND clears the anchor (see MatchState.do_move), unblocking free
-## shooting on the team's next combo turn — and a (usually dominant) bonus for
-## stepping into an open shooting lane on the team's OWN goal right now (see
-## _defense_score). Without that last term the AI only ever chased the ball
-## forward and never noticed it was leaving its own net wide open — this was
-## the "conceded in a few moves because nobody defended" problem.
-static func _move_score(state: MatchState, m: Dictionary) -> float:
+## shooting on the team's next combo turn. Cheap — used both as decide_move's
+## final score's base AND, on its own, to pre-filter candidates before the
+## expensive defense lookahead (see MAX_DEFENSE_CHECKS).
+static func _move_base_score(state: MatchState, m: Dictionary) -> float:
 	var to: Vector2i = m["to"]
 	var score: float = -maxi(absi(to.x - state.ball.x), absi(to.y - state.ball.y))
 	if state.stall_ref_id[state.current] != -1 and m["from"] == state.stall_ref_cell[state.current]:
 		score += 50.0
-	score += _defense_score(state, to)
 	return score
 
 
-## How much moving to `to` would help defend the goal RIGHT NOW: a bonus for
-## landing ON a CURRENTLY CLEAR straight lane (horizontal/vertical/diagonal —
-## the same lines a shot can travel) between the ball and one of the team's
-## own goal cells — i.e. stepping into the path of a shot that could score
-## THIS INSTANT if left alone. Scaled by 1/distance-to-ball so a block right
-## next to the ball (which also shuts every lane THROUGH that cell, not just
-## this one) outweighs a block far down the same lane. Zero whenever no such
-## open lane exists, so it never distorts ordinary ball-chasing play.
-static func _defense_score(state: MatchState, to: Vector2i) -> float:
-	var best := 0.0
-	for gx in MatchState.GOAL_COLS:
-		var goal_cell := Vector2i(gx, state.own_goal_row(state.current))
-		if not Board.is_straight(state.ball, goal_cell):
+## _move_base_score plus a (usually dominant) bonus for a move that keeps the
+## opponent OFF the scoreboard next turn (see _defense_score). Without that
+## term the AI only ever chased the ball forward and never noticed it was
+## leaving its own net wide open — this was the "conceded in a few moves
+## because nobody defended" problem.
+static func _move_score(state: MatchState, m: Dictionary) -> float:
+	return _move_base_score(state, m) + _defense_score(state, m)
+
+
+## How much move `m` helps keep the opponent OFF the scoreboard next turn:
+## simulate it on a scratch copy (MatchState.clone_for_query), then check
+## whether the opponent could still score on THEIR very next turn
+## (team_can_score_next). A move that closes off every scoring path this
+## finds scores far above one that still leaves one open — a flat bonus (not
+## distance-scaled) since "safe" vs "exposed" is the whole question, not a
+## matter of degree. Zero for every candidate only when the opponent already
+## has an unstoppable shot no matter what the AI does here; the other
+## _move_score terms still differentiate those.
+static func _defense_score(state: MatchState, m: Dictionary) -> float:
+	var sim: MatchState = state.clone_for_query()
+	sim.pieces.erase(m["from"])
+	sim.pieces[m["to"]] = state.pieces[m["from"]]
+	if team_can_score_next(sim, state.opponent(state.current)):
+		return 0.0
+	return 400.0
+
+
+## True if `team` could score on their VERY NEXT turn from `state` as it
+## stands — i.e. does a legal path actually exist: a piece already adjacent
+## to the ball, or one whose OWN first move reaches adjacency (only the FIRST
+## of a team's 2 reactive moves can upgrade into a shot — see
+## MatchState.do_move/_combo_from_reactive; reaching the ball on the 2nd/last
+## one never grants a shot, so it isn't a real threat), then ANY pass chain
+## from there to a clear, onside shot into an empty goal cell. An
+## EXISTENCE check over a small graph (<=6 pieces/side) — cheap — not a
+## search for the opponent's best move.
+static func team_can_score_next(state: MatchState, team: String) -> bool:
+	for start in _reach_ball_chains(state, team):
+		if _chain_can_score(state, team, start):
+			return true
+	return false
+
+
+## Every single-cell chain-start `team` could begin a combo from this turn:
+## pieces already adjacent to the ball, plus — for each piece NOT adjacent —
+## every cell its own first slide could reach that lands adjacent.
+static func _reach_ball_chains(state: MatchState, team: String) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for cell in state.pieces:
+		if state.pieces[cell]["team"] != team:
 			continue
-		if not Board.path_clear(state.ball, goal_cell, state.pieces):
-			continue # already blocked by someone, or no clean line to begin with
-		if not (to in Board.cells_between(state.ball, goal_cell)):
+		if maxi(absi(cell.x - state.ball.x), absi(cell.y - state.ball.y)) == 1:
+			out.append(cell)
 			continue
-		var d := maxi(absi(to.x - state.ball.x), absi(to.y - state.ball.y))
-		best = maxf(best, 300.0 / maxf(float(d), 1.0))
-	return best
+		for target in state.move_targets(cell):
+			if maxi(absi(target.x - state.ball.x), absi(target.y - state.ball.y)) == 1:
+				out.append(target)
+	return out
+
+
+const MAX_THREAT_CHAIN_DEPTH := 4 # safety cap on the DFS below, mirrors MAX_CHAIN_EXTENSIONS
+
+
+## True if a combo starting at `chain_start` (hypothetical — the piece isn't
+## actually moved there in `state`, see _reach_ball_chains) can reach a
+## scoring shot, via this starter alone or any pass chain onward from it.
+static func _chain_can_score(state: MatchState, team: String, chain_start: Vector2i) -> bool:
+	var s: MatchState = state.clone_for_query()
+	s.current = team
+	s.phase = MatchState.Phase.COMBO
+	s.chain = [chain_start]
+	return _search_chain(s)
+
+
+static func _search_chain(s: MatchState) -> bool:
+	var shooter: Vector2i = s.chain[-1]
+	for shoot_cell in s.combo_shoot_targets():
+		if s.is_opponent_goal(shoot_cell, s.current) and not s.is_offside(shooter, s.current):
+			return true
+	if s.chain.size() >= MAX_THREAT_CHAIN_DEPTH:
+		return false
+	for next_cell in s.combo_pass_targets():
+		s.chain.append(next_cell)
+		if _search_chain(s):
+			return true
+		s.chain.pop_back()
+	return false
 
 
 ## Which of the carded team's own pieces to permanently remove — every own
