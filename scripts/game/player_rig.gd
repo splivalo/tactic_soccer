@@ -151,6 +151,9 @@ func _ready() -> void:
 		_team_marker.top_level = true
 		_team_marker.rotation = Vector3.ZERO
 		_team_marker.global_position = global_position + _team_marker_offset
+		# The marker's SHAPE and SIZE are set from a single source in main.gd
+		# (_set_own_marker_visible) so it always matches the tap/move/shoot
+		# tiles — see there. Only its position-sync (above) lives here.
 
 
 ## Called once after spawn. Picks the right resting animation and desyncs it.

@@ -244,9 +244,13 @@ func combo_shoot_targets() -> Array[Vector2i]:
 ## exposed as its own query so UI/AI code can preview it before the shot is
 ## actually taken (see main.gd's shoot-target colouring). False whenever no
 ## reference is live (fresh kickoff, or the reference figure has since moved
-## — see do_move()).
+## — see do_move()), and false for your OWN goal cell: conceding an own goal
+## is never a stalling tactic (no team benefits from it), so it's never worth
+## piling a card on top of a goal already lost.
 func would_violate_stall(cell: Vector2i) -> bool:
 	if stall_ref_id[current] == -1:
+		return false
+	if is_own_goal_cell(cell, current):
 		return false
 	return _cheby(stall_ref_cell[current], cell) <= 1
 

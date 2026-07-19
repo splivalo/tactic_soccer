@@ -212,6 +212,17 @@ const STADIUM_DRESSING := ["arena", "fence", "banner", "seats", "reflectors"]
 @export_range(0.0, 1.0, 0.05) var replay_vignette_strength := 0.55
 @export_group("")
 
+# --- Grid alignment ----------------------------------------------------------
+## The logical grid is mathematically centred on the field mesh's geometry (a
+## true 7x10 of 1.0-unit cells), so cell centres land dead-centre of each cell.
+## But if the CHECKERBOARD pattern painted onto the imported field mesh sits a
+## hair off from that geometric centre, EVERYTHING placed by cell (players,
+## ball, all FX tiles, own-team markers — they all go through _cell_world) will
+## look slightly shifted from the visual squares. This nudges the whole grid
+## origin in world XZ so you can line them all up by eye against the squares —
+## one knob, shifts everything together (no per-element offset to keep in sync).
+@export var grid_visual_offset := Vector2.ZERO
+
 # --- Camera auto-fit ---------------------------------------------------------
 ## Keeps the field fully visible (and not too small) on every screen aspect.
 ## YOU tune the camera's angle/composition in the editor; this only slides the
@@ -284,13 +295,15 @@ const FIGURE_HEIGHT := 1.6 # a bit over the model's real height (~1.45 @ scale 1
 @export var color_remove := Color(1.0, 0.15, 0.15, 0.95) # figure removable after a red card
 @export var color_offside := Color(1.0, 0.85, 0.1, 0.95) # offside line + flagged figure
 ## Shoot target that WOULD trip the stalling foul (MatchState.would_violate_stall)
-## if tapped — matches the HUD's yellow-card colour on purpose, so the meaning
-## reads instantly ("yellow" tile = yellow-card risk) without a legend.
-@export var color_stall_warning := Color(0.95, 0.79, 0.1, 0.95)
+## if tapped — close to the HUD's yellow-card colour on purpose, so the meaning
+## reads instantly ("yellow" tile = yellow-card risk) without a legend. Pushed
+## a bit more toward pure yellow (less gold/brown) than the HUD's exact shade
+## so it stays clearly distinct from color_chain's orange as a glowing tile.
+@export var color_stall_warning := Color(1.0, 0.92, 0.1, 0.95)
 @export_range(0.2, 5.0, 0.1) var offside_flash_seconds := 1.8
 
 @export_group("Board FX Tuning")
-@export var fx_tile_size := 0.92
+@export var fx_tile_size := 0.82
 @export var fx_pulse_hz := 1.4
 @export var fx_trail_width := 0.16
 @export var fx_trail_scroll := 1.6
@@ -351,7 +364,7 @@ func _ready() -> void:
 	_turn_timer.one_shot = true
 	_turn_timer.timeout.connect(_on_turn_timeout)
 	add_child(_turn_timer)
-	_grid_origin = _read_field_origin()
+	_grid_origin = _read_field_origin() + Vector3(grid_visual_offset.x, 0.0, grid_visual_offset.y)
 	_fx = BoardFx.new()
 	_fx.name = "BoardFx"
 	_fx.tile_size = fx_tile_size
@@ -424,6 +437,9 @@ func _read_field_origin() -> Vector3:
 		return Vector3.ZERO
 	_field_mesh = field
 	_fit_meshes = [field]
+	var lines_mesh := _find_node_named(stadium, "field_lines") as MeshInstance3D
+	if lines_mesh != null:
+		_fit_meshes.append(lines_mesh) # now bigger than `field` itself — keep it guaranteed on-screen too
 	for goal_name in ["goal1_frame", "goal2_frame", "goal1_net", "goal2_net"]:
 		var goal_mesh := _find_node_named(stadium, goal_name) as MeshInstance3D
 		if goal_mesh != null:
@@ -570,20 +586,28 @@ func _build_team(team_name: String, pieces: Array[Dictionary], kit: Dictionary, 
 		index += 1
 
 
-## Every player_scene instance ships its own "OwnTeamTileGlow" child (baked
-## into scenes/player_rigged.tscn by scripts/tools/add_player_tile_glow.gd) —
-## a full-cell rounded-square glow, same shape as BoardFx's own tap/move/shoot
-## tiles, centred under the figure, at deliberately LOW alpha. Low alpha is
-## the point: when a bright Board FX tile lands on the same cell, it simply
-## overpowers this faint tint instead of visually fighting it. Colour, alpha,
-## size and position are ALL real Inspector properties on that node — nothing
-## here recolours it at runtime, so whatever's set in the editor is exactly
-## what shows in the match. Own-team only; the opponent's kit already reads
-## as "not mine" by elimination.
+## Every player_scene instance ships its own "OwnTeamTileGlow" child — a
+## rounded-square glow centred under the figure, at deliberately LOW alpha. Low
+## alpha is the point: when a bright Board FX tile lands on the same cell, it
+## simply overpowers this faint tint instead of visually fighting it.
+##
+## The marker's SHAPE and SIZE come from the SAME single source as the tap/
+## move/shoot tiles — BoardFx.make_tile_texture (shape) and fx_tile_size
+## (footprint) — set here, once, so tuning either one moves ALL of them
+## together (no separate PNG/mesh to keep in sync by hand). Only the marker's
+## COLOUR/alpha stays a per-node Inspector property (its faint tint is its
+## own look). Own-team only; the opponent's kit already reads as "not mine".
 func _set_own_marker_visible(fig: Node3D, is_own: bool) -> void:
-	var glow := fig.get_node_or_null("OwnTeamTileGlow")
-	if glow != null:
-		glow.visible = is_own
+	var glow := fig.get_node_or_null("OwnTeamTileGlow") as MeshInstance3D
+	if glow == null:
+		return
+	glow.visible = is_own
+	var plane := glow.mesh as PlaneMesh
+	if plane != null:
+		plane.size = Vector2(fx_tile_size, fx_tile_size) # SAME footprint as the FX tiles
+	var mat := glow.material_override as StandardMaterial3D
+	if mat != null and mat.albedo_texture == null: # shared resource — generate once
+		mat.albedo_texture = BoardFx.make_tile_texture() # SAME shape as the FX tiles
 
 
 # --- Ball helpers ------------------------------------------------------------
@@ -1896,9 +1920,12 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 		for cell in _state.combo_starters():
 			_fx.add_tile(_cell_world(cell.x, cell.y), color_tap)
 		return
-	# Energy trail: ball -> each chosen figure -> (live) drag preview.
+	# Energy trail: figure -> figure -> (live) drag preview. Deliberately skips
+	# the ball itself — it's already visually obvious on its own (a real 3D
+	# ball sitting there), so a line TO it only adds a segment that looks
+	# awkward crossing behind the shooter whenever they're facing away from
+	# it, without conveying anything the eye doesn't already see.
 	var pts := PackedVector3Array()
-	pts.append(_cell_world(_state.ball.x, _state.ball.y))
 	for c in _state.chain:
 		pts.append(_cell_world(c.x, c.y))
 	if preview != NO_CELL:

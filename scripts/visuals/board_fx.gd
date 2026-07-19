@@ -28,7 +28,10 @@ extends Node3D
 @export_range(0.0, 3.0, 0.01) var trail_emission := 0.0  # additive glow brightness
 @export_range(0.0, 1.0, 0.01) var trail_rim := 0.6       # brightening near the ribbon's edges
 
-const TILE_Y := 0.03      # height above the pitch surface
+const TILE_Y := 0.014     # height above the pitch surface — kept LOW on purpose: the
+                          # camera is angled, so a tile floating high above the surface
+                          # parallax-shifts away from the checkerboard cell beneath it
+                          # ("bježe"). Just enough to clear z-fighting with the pitch.
 const TRAIL_Y := 0.06
 
 var _tile_tex: Texture2D
@@ -147,18 +150,53 @@ func _flat(color: Color, tex: Texture2D) -> StandardMaterial3D:
 
 
 func _make_tile_tex() -> Texture2D:
-	var s := 64
-	var img := Image.create(s, s, false, Image.FORMAT_RGBA8)
-	for y in s:
-		for x in s:
-			var u := (float(x) + 0.5) / s * 2.0 - 1.0
-			var v := (float(y) + 0.5) / s * 2.0 - 1.0
-			# rounded-square distance (p=4 superellipse)
-			var d := pow(pow(absf(u), 4.0) + pow(absf(v), 4.0), 0.25)
-			var fill := 1.0 - smoothstep(0.72, 1.0, d)
-			var border := smoothstep(0.6, 0.8, d) * (1.0 - smoothstep(0.82, 0.98, d))
-			var a := clampf(fill * 0.45 + border, 0.0, 1.0)
-			img.set_pixel(x, y, Color(1, 1, 1, a))
+	return make_tile_texture()
+
+
+## THE single source of truth for the "rounded-square glow tile" shape — every
+## on-pitch marker that's supposed to look like this (BoardFx's own tap/move/
+## shoot/chain tiles AND PlayerRig's own-team ground marker, see
+## _team_marker in player_rig.gd) calls this SAME function instead of each
+## keeping its own hand-drawn copy. There used to be a second, independently
+## generated copy baked into a PNG asset — any tuning here (like the edge
+## sharpness below) had to be redone by hand in an image editor to match, and
+## silently drifted out of sync. One shape, one place, always in sync — DRY.
+##
+## fill_color/border_color carry their OWN alpha (the usual Godot colour
+## picker already has an alpha slider — no separate alpha parameter needed).
+## BoardFx's own tiles call this with the defaults (white fill + white border)
+## and apply their real colour afterward via the tile's material albedo_color
+## (add_tile's `color` param) — one shape, tinted per use. A caller that wants
+## a genuinely different FILL colour from its BORDER colour (PlayerRig's own-
+## team marker) can just pass both directly; the two are baked into the
+## texture's own pixels instead of relying on a single external tint.
+##
+## roundedness is the superellipse exponent: lower = rounder/more circular
+## corners, higher = squarer/sharper corners (4.0 = this shape's usual look).
+## border_thickness and edge_softness are both in the same 0..1 normalized
+## units as the shape itself (0..~1 from centre to edge).
+static func make_tile_texture(
+		size: int = 256,
+		fill_color: Color = Color(1.0, 1.0, 1.0, 0.45),
+		border_color: Color = Color(1.0, 1.0, 1.0, 0.65),
+		roundedness: float = 4.0,
+		border_thickness: float = 0.26,
+		edge_softness: float = 0.04) -> ImageTexture:
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var border_inner := clampf(1.0 - border_thickness, 0.0, 0.98)
+	for y in size:
+		for x in size:
+			var u := (float(x) + 0.5) / size * 2.0 - 1.0
+			var v := (float(y) + 0.5) / size * 2.0 - 1.0
+			var d := pow(pow(absf(u), roundedness) + pow(absf(v), roundedness), 1.0 / roundedness)
+			# Narrow transition bands (see the sharpness note above) — just
+			# enough width to anti-alias, not an actual soft glow falloff.
+			var fill_mask := 1.0 - smoothstep(border_inner - edge_softness, border_inner, d)
+			var border_mask := smoothstep(border_inner - edge_softness, border_inner, d) \
+				* (1.0 - smoothstep(1.0 - edge_softness, 1.0, d))
+			var rgb := fill_color.lerp(border_color, border_mask)
+			var a := clampf(fill_color.a * fill_mask + border_color.a * border_mask, 0.0, 1.0)
+			img.set_pixel(x, y, Color(rgb.r, rgb.g, rgb.b, a))
 	return ImageTexture.create_from_image(img)
 
 

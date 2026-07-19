@@ -167,7 +167,7 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="Frame" type="TextureRect" parent="Bar/Row/HomeSide/Shield" unique_id=923465049]
-texture_filter = 4
+texture_filter = 2
 custom_minimum_size = Vector2(98, 114)
 layout_mode = 1
 anchors_preset = 8
@@ -366,7 +366,7 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="Frame" type="TextureRect" parent="Bar/Row/AwaySide/Shield" unique_id=1000292727]
-texture_filter = 4
+texture_filter = 2
 custom_minimum_size = Vector2(98, 114)
 layout_mode = 1
 anchors_preset = 8
@@ -378,7 +378,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 texture = ExtResource("6_frame")
-expand_mode = 1
+expand_mode = 2
 stretch_mode = 5
 
 [node name="Footer" type="TextureRect" parent="." unique_id=860726320]
@@ -666,7 +666,7 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="Frame" type="TextureRect" parent="CoinToss/PitchFrame/Center/VBox/ShieldWrap/Shield" unique_id=-1276515081]
-texture_filter = 4
+texture_filter = 2
 custom_minimum_size = Vector2(98, 114)
 layout_mode = 1
 anchors_preset = 8

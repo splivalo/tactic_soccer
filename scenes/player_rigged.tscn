@@ -2,7 +2,6 @@
 
 [ext_resource type="Script" uid="uid://8d00c7oksyia" path="res://scripts/game/player_rig.gd" id="1_ie1ew"]
 [ext_resource type="AnimationLibrary" path="res://assets/animations/player_anims.res" id="2_xm05u"]
-[ext_resource type="Texture2D" uid="uid://tabc47fayrss" path="res://assets/textures/effects/player_tile_glow.png" id="3_xm05u"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_a375u"]
 resource_name = "secondary"
@@ -291,7 +290,6 @@ transparency = 1
 cull_mode = 2
 shading_mode = 0
 albedo_color = Color(0.050980393, 0.12156863, 0.043137256, 0.31764707)
-albedo_texture = ExtResource("3_xm05u")
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_ybybj"]
 size = Vector2(0.92, 0.92)
@@ -486,7 +484,7 @@ root_motion_track = NodePath("Skeleton3D:mixamorig_Hips")
 libraries/ = ExtResource("2_xm05u")
 
 [node name="OwnTeamTileGlow" type="MeshInstance3D" parent="." unique_id=1958419638]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.015, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
 material_override = SubResource("StandardMaterial3D_xm05u")
 cast_shadow = 0
 mesh = SubResource("PlaneMesh_ybybj")
