@@ -290,7 +290,7 @@ bind/21/pose = Transform3D(3.2266672, -99.493164, 9.523569, -87.364845, -7.43599
 transparency = 1
 cull_mode = 2
 shading_mode = 0
-albedo_color = Color(0.023529412, 0.07450981, 0.019607844, 0.28235295)
+albedo_color = Color(0.050980393, 0.12156863, 0.043137256, 0.31764707)
 albedo_texture = ExtResource("3_xm05u")
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_ybybj"]

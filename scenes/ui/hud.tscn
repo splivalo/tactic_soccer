@@ -7,17 +7,9 @@
 [ext_resource type="Texture2D" uid="uid://cw5serhkjf8te" path="res://assets/textures/ui/hud_shield_frame.png" id="6_frame"]
 [ext_resource type="Script" uid="uid://c6w67hphywtup" path="res://scripts/ui/turn_timer.gd" id="6_oj5la"]
 [ext_resource type="Theme" uid="uid://3sfso1by5eio" path="res://my_theme.tres" id="7_gss2c"]
-[ext_resource type="Shader" path="res://assets/shaders/shield_flag.gdshader" id="8_shieldflag"]
-[ext_resource type="Texture2D" path="res://assets/textures/ui/countries/hr.png" id="9_hr"]
-[ext_resource type="Texture2D" path="res://assets/textures/ui/countries/br.png" id="10_br"]
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_flag_home"]
-shader = ExtResource("8_shieldflag")
-shader_parameter/flag_texture = ExtResource("9_hr")
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_flag_away"]
-shader = ExtResource("8_shieldflag")
-shader_parameter/flag_texture = ExtResource("10_br")
+[ext_resource type="Shader" uid="uid://ow0x43uqcn26" path="res://assets/shaders/shield_flag.gdshader" id="8_shieldflag"]
+[ext_resource type="Texture2D" uid="uid://vtou8jaso7kd" path="res://assets/textures/ui/countries/hr.png" id="9_hr"]
+[ext_resource type="Texture2D" uid="uid://bndv6jp1g5udb" path="res://assets/textures/ui/countries/br.png" id="10_br"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_shadow"]
 bg_color = Color(0, 0, 0, 0)
@@ -26,6 +18,10 @@ corner_radius_top_right = 14
 corner_radius_bottom_right = 14
 corner_radius_bottom_left = 14
 shadow_size = 30
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_flag_home"]
+shader = ExtResource("8_shieldflag")
+shader_parameter/flag_texture = ExtResource("9_hr")
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_red"]
 bg_color = Color(0.82, 0.1, 0.12, 1)
@@ -41,6 +37,10 @@ corner_radius_top_right = 4
 corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_flag_away"]
+shader = ExtResource("8_shieldflag")
+shader_parameter/flag_texture = ExtResource("10_br")
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_turn_dot"]
 bg_color = Color(1, 1, 1, 1)
 border_width_left = 3
@@ -53,6 +53,12 @@ corner_radius_top_right = 25
 corner_radius_bottom_right = 25
 corner_radius_bottom_left = 25
 
+[sub_resource type="LabelSettings" id="LabelSettings_gss2c"]
+font = ExtResource("2_font")
+font_size = 250
+font_color = Color(0.9019608, 0.12156863, 0.12156863, 1)
+outline_size = 6
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
 bg_color = Color(0.95, 0.79, 0.1, 1)
 corner_radius_top_left = 20
@@ -61,12 +67,6 @@ corner_radius_bottom_right = 20
 corner_radius_bottom_left = 20
 shadow_color = Color(0, 0, 0, 0.5)
 shadow_size = 26
-
-[sub_resource type="LabelSettings" id="LabelSettings_gss2c"]
-font = ExtResource("2_font")
-font_size = 200
-font_color = Color(0.9019608, 0.12156863, 0.12156863, 1)
-outline_size = 5
 
 [node name="Hud" type="Control" unique_id=1350924689]
 layout_mode = 3
@@ -154,7 +154,7 @@ layout_mode = 2
 size_flags_horizontal = 2
 size_flags_vertical = 3
 size_flags_stretch_ratio = 36.0
-theme_override_constants/separation = 20
+theme_override_constants/separation = 25
 alignment = 1
 
 [node name="Shield" type="Control" parent="Bar/Row/HomeSide" unique_id=1318304221]
@@ -164,8 +164,8 @@ size_flags_vertical = 4
 
 [node name="HomePrimary" type="TextureRect" parent="Bar/Row/HomeSide/Shield" unique_id=255817460]
 unique_name_in_owner = true
-material = SubResource("ShaderMaterial_flag_home")
 texture_filter = 4
+material = SubResource("ShaderMaterial_flag_home")
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -211,13 +211,13 @@ stretch_mode = 5
 [node name="VBox" type="VBoxContainer" parent="Bar/Row/HomeSide" unique_id=1579460082]
 layout_mode = 2
 size_flags_vertical = 4
-theme_override_constants/separation = 6
+theme_override_constants/separation = 0
 
 [node name="HomeName" type="Label" parent="Bar/Row/HomeSide/VBox" unique_id=1918340008]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_fonts/font = ExtResource("2_font")
-theme_override_font_sizes/font_size = 46
+theme_override_font_sizes/font_size = 56
 text = "CRO"
 
 [node name="HBox" type="HBoxContainer" parent="Bar/Row/HomeSide/VBox" unique_id=521676205]
@@ -225,7 +225,7 @@ layout_mode = 2
 theme_override_constants/separation = 8
 
 [node name="RedIcon" type="Panel" parent="Bar/Row/HomeSide/VBox/HBox" unique_id=1385664266]
-custom_minimum_size = Vector2(24, 32)
+custom_minimum_size = Vector2(30, 40)
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_styles/panel = SubResource("StyleBoxFlat_red")
@@ -233,7 +233,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_red")
 [node name="HomeRedCount" type="Label" parent="Bar/Row/HomeSide/VBox/HBox" unique_id=43691427]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 34
+theme_override_font_sizes/font_size = 40
 text = "0"
 
 [node name="Sep" type="ColorRect" parent="Bar/Row/HomeSide/VBox/HBox" unique_id=1238711190]
@@ -243,7 +243,7 @@ size_flags_vertical = 4
 color = Color(1, 1, 1, 0.25)
 
 [node name="YellowIcon" type="Panel" parent="Bar/Row/HomeSide/VBox/HBox" unique_id=1288568312]
-custom_minimum_size = Vector2(24, 32)
+custom_minimum_size = Vector2(30, 40)
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_styles/panel = SubResource("StyleBoxFlat_yellow")
@@ -251,7 +251,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_yellow")
 [node name="HomeYellowCount" type="Label" parent="Bar/Row/HomeSide/VBox/HBox" unique_id=1676738287]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 34
+theme_override_font_sizes/font_size = 40
 text = "0"
 
 [node name="ScoreCenter" type="CenterContainer" parent="Bar/Row" unique_id=992068590]
@@ -262,7 +262,7 @@ size_flags_stretch_ratio = 28.0
 
 [node name="CenterStack" type="VBoxContainer" parent="Bar/Row/ScoreCenter" unique_id=352016614]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 0
 
 [node name="ScoreLabel" type="Label" parent="Bar/Row/ScoreCenter/CenterStack" unique_id=1188415073]
 unique_name_in_owner = true
@@ -274,7 +274,7 @@ horizontal_alignment = 1
 
 [node name="Timer" type="Control" parent="Bar/Row/ScoreCenter/CenterStack" unique_id=678561938]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(220, 48)
+custom_minimum_size = Vector2(220, 60)
 layout_mode = 2
 script = ExtResource("6_oj5la")
 
@@ -298,7 +298,7 @@ unique_name_in_owner = true
 layout_mode = 2
 theme = ExtResource("7_gss2c")
 theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_font_sizes/font_size = 46
+theme_override_font_sizes/font_size = 56
 text = "15 SEC"
 
 [node name="AwaySide" type="HBoxContainer" parent="Bar/Row" unique_id=671830960]
@@ -306,19 +306,19 @@ layout_mode = 2
 size_flags_horizontal = 10
 size_flags_vertical = 3
 size_flags_stretch_ratio = 36.0
-theme_override_constants/separation = 20
+theme_override_constants/separation = 25
 alignment = 1
 
 [node name="VBox" type="VBoxContainer" parent="Bar/Row/AwaySide" unique_id=717596053]
 layout_mode = 2
 size_flags_vertical = 4
-theme_override_constants/separation = 6
+theme_override_constants/separation = 0
 
 [node name="AwayName" type="Label" parent="Bar/Row/AwaySide/VBox" unique_id=1069380153]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_fonts/font = ExtResource("2_font")
-theme_override_font_sizes/font_size = 46
+theme_override_font_sizes/font_size = 56
 text = "BRA"
 horizontal_alignment = 2
 
@@ -327,7 +327,7 @@ layout_mode = 2
 theme_override_constants/separation = 8
 
 [node name="RedIcon" type="Panel" parent="Bar/Row/AwaySide/VBox/HBox" unique_id=1852381052]
-custom_minimum_size = Vector2(24, 32)
+custom_minimum_size = Vector2(30, 40)
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_styles/panel = SubResource("StyleBoxFlat_red")
@@ -335,7 +335,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_red")
 [node name="AwayRedCount" type="Label" parent="Bar/Row/AwaySide/VBox/HBox" unique_id=396273983]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 34
+theme_override_font_sizes/font_size = 40
 text = "0"
 
 [node name="Sep" type="ColorRect" parent="Bar/Row/AwaySide/VBox/HBox" unique_id=2076808098]
@@ -345,7 +345,7 @@ size_flags_vertical = 4
 color = Color(1, 1, 1, 0.25)
 
 [node name="YellowIcon" type="Panel" parent="Bar/Row/AwaySide/VBox/HBox" unique_id=110697524]
-custom_minimum_size = Vector2(24, 32)
+custom_minimum_size = Vector2(30, 40)
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_styles/panel = SubResource("StyleBoxFlat_yellow")
@@ -353,7 +353,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_yellow")
 [node name="AwayYellowCount" type="Label" parent="Bar/Row/AwaySide/VBox/HBox" unique_id=312581821]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 34
+theme_override_font_sizes/font_size = 40
 text = "0"
 
 [node name="Shield" type="Control" parent="Bar/Row/AwaySide" unique_id=1918315039]
@@ -363,8 +363,8 @@ size_flags_vertical = 4
 
 [node name="AwayPrimary" type="TextureRect" parent="Bar/Row/AwaySide/Shield" unique_id=159021870]
 unique_name_in_owner = true
-material = SubResource("ShaderMaterial_flag_away")
 texture_filter = 4
+material = SubResource("ShaderMaterial_flag_away")
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -434,7 +434,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 20
 alignment = 1
 
 [node name="TurnDot" type="Panel" parent="Footer/Content" unique_id=1127444204]
@@ -449,10 +449,10 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_turn_dot")
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_fonts/font = ExtResource("2_font")
-theme_override_font_sizes/font_size = 46
+theme_override_font_sizes/font_size = 56
 text = "..."
 
-[node name="PitchArea" type="Control" parent="." unique_id=3018452300]
+[node name="PitchArea" type="Control" parent="." unique_id=-1276514996]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -462,24 +462,34 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
+[node name="EndMoveButton" type="Button" parent="PitchArea" unique_id=770002001]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -280.0
+offset_top = -130.0
+offset_right = -30.0
+offset_bottom = -30.0
+grow_horizontal = 0
+grow_vertical = 0
+theme = ExtResource("7_gss2c")
+theme_override_font_sizes/font_size = 44
+text = "End Move"
+
 [node name="BigCountdown" type="Label" parent="PitchArea" unique_id=1011400493]
 unique_name_in_owner = true
+visible = false
 layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -160.0
-offset_top = -160.0
-offset_right = 160.0
-offset_bottom = 160.0
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_colors/font_color = Color(0.9, 0.12, 0.12, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 14
-theme_override_font_sizes/font_size = 260
 text = "5"
 label_settings = SubResource("LabelSettings_gss2c")
 horizontal_alignment = 1
@@ -568,7 +578,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0, 0, 0, 0.75)
 
-[node name="PitchFrame" type="Control" parent="CoinToss" unique_id=3018452301]
+[node name="PitchFrame" type="Control" parent="CoinToss" unique_id=-1276514995]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -609,8 +619,8 @@ pivot_offset = Vector2(48, 56)
 
 [node name="Primary" type="TextureRect" parent="CoinToss/PitchFrame/Center/VBox/ShieldWrap/Shield" unique_id=-1276515083]
 unique_name_in_owner = true
-material = SubResource("ShaderMaterial_flag_home")
 texture_filter = 4
+material = SubResource("ShaderMaterial_flag_home")
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -702,9 +712,9 @@ mouse_filter = 2
 [node name="AnnounceContent" type="VBoxContainer" parent="Announce/Region/Center" unique_id=770001005]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 2
 theme_override_constants/separation = 34
 alignment = 1
-mouse_filter = 2
 
 [node name="CardWrap" type="Control" parent="Announce/Region/Center/AnnounceContent" unique_id=770001006]
 custom_minimum_size = Vector2(210, 290)
@@ -726,9 +736,9 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_card")
 [node name="AnnounceLabel" type="Label" parent="Announce/Region/Center/AnnounceContent" unique_id=770001008]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_fonts/font = ExtResource("2_font")
-theme_override_font_sizes/font_size = 80
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 10
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 80
 text = "YELLOW CARD"
 horizontal_alignment = 1

@@ -176,13 +176,19 @@ func idle(desync: bool = false) -> void:
 		_ap.seek(randf() * _ap.get_animation(clip).length, true)
 
 
-## Loop the run cycle while the figure tweens between cells.
-func jog() -> void:
+## Loop the run cycle while the figure tweens between cells. The clip itself
+## has NO baked forward travel (its hip track's net displacement per loop is
+## 0 — it's an in-place treadmill cycle measured via
+## scripts/tools/measure_jog_speed.gd), so there's no "natural speed" to sync
+## the tween to. `speed_scale` instead sells DISTANCE directly — a longer
+## board move plays the stride cadence faster (a purposeful sprint), a short
+## hop stays relaxed — see main.gd's jog_speed_scale_min/max.
+func jog(speed_scale: float = 1.0) -> void:
 	if _ap == null or _is_gk:
 		return
 	_acting = true
 	_set_root_motion(true)  # strip forward travel; the tween owns the cell move
-	_ap.speed_scale = 1.0
+	_ap.speed_scale = speed_scale
 	_ap.play("jog", action_blend)
 
 

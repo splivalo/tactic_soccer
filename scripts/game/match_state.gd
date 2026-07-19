@@ -23,6 +23,30 @@ var chain: Array[Vector2i] = []
 var score: Dictionary = {"HomeTeam": 0, "AwayTeam": 0}
 var goals_to_win: int = 2
 var _next_id: int = 0
+# How many MOVE actions are left this Phase.MOVE before the turn passes — 1
+# for the mandatory tidy-up move right after your OWN combo (see
+# execute_combo), 2 when you're REACTING because you don't have the ball at
+# all (see start_turn/team_has_ball below): enough to physically bring a
+# SECOND figure in (or the same one via two hops, an "L") within one reaction
+# window, so a numbers/reach disadvantage is actually recoverable instead of
+# permanently unreachable — see do_move() and end_move_phase().
+var moves_left: int = 1
+# True only for a REACTIVE move phase (you didn't have the ball at all — see
+# start_turn); false for the mandatory 1-move tidy-up right after your own
+# combo. do_move() checks this to decide whether reaching the ball mid-phase
+# should upgrade the rest of your turn into a real COMBO (reactive only — see
+# do_move's doc comment for why the mandatory case must NEVER do this: it
+# would let a team guard its own ball with its tidy-up move and combo again
+# immediately, forever, which is exactly the "impossible to win the ball
+# back" problem this whole reactive-move system exists to fix).
+var _move_is_reactive: bool = false
+# True while the CURRENT combo/shot exists only because a reactive move just
+# reached the ball (see do_move's upgrade). Every team gets exactly 2 actions
+# a turn: an attacker's is combo-then-move, a defender's is either 2 reactive
+# moves, or 1 reactive move to reach the ball THEN the combo/shot — never
+# both. execute_combo() checks this to skip the mandatory tidy-up move when
+# the shot itself was already the 2nd action, instead of granting a 3rd.
+var _combo_from_reactive: bool = false
 
 # --- cards / stalling ----------------------------------------------------------
 # Verified against the original 2006 game's decompiled source. Holding the
@@ -76,7 +100,13 @@ func reset(home: Array, away: Array, ball_cell: Vector2i, first: String) -> void
 
 func start_turn() -> void:
 	chain.clear()
-	phase = Phase.COMBO if team_has_ball(current) else Phase.MOVE
+	_combo_from_reactive = false
+	if team_has_ball(current):
+		phase = Phase.COMBO
+	else:
+		phase = Phase.MOVE
+		moves_left = 2 # reacting to not having the ball at all — see the field's doc comment
+		_move_is_reactive = true
 
 
 func next_turn() -> void:
@@ -119,11 +149,23 @@ func _cheby(a: Vector2i, b: Vector2i) -> int:
 	return maxi(absi(a.x - b.x), absi(a.y - b.y))
 
 
+## A team "has" the ball the moment one of its own figures is adjacent to it —
+## full stop. How many opponent figures also happen to be nearby doesn't
+## matter: it isn't their turn regardless, so there's nothing for them to
+## contest right now. (An earlier version of this also required not being
+## outnumbered there, but that blocked the exact reactive catch-up move it
+## was meant to reward — reach the ball and you're entitled to act on it.)
 func team_has_ball(team: String) -> bool:
+	return _adjacent_count(team) >= 1
+
+
+## How many of `team`'s figures sit Chebyshev-adjacent to the ball right now.
+func _adjacent_count(team: String) -> int:
+	var count := 0
 	for cell in pieces:
 		if pieces[cell]["team"] == team and _cheby(cell, ball) == 1:
-			return true
-	return false
+			count += 1
+	return count
 
 
 func combo_starters() -> Array[Vector2i]:
@@ -283,8 +325,26 @@ func execute_combo(shoot_cell: Vector2i) -> Dictionary:
 	elif res["must_remove"] != "":
 		phase = Phase.REMOVE
 		pending_removal = current
+	elif _combo_from_reactive:
+		# This combo only happened because a reactive move reached the ball —
+		# that move WAS this turn's 1st action, this shot its 2nd. Every team
+		# gets exactly 2 actions a turn (see _combo_from_reactive's doc
+		# comment); granting a mandatory tidy-up move on top would hand a
+		# defender who just won the ball back a 3rd action a team that
+		# already held the ball outright never gets.
+		_combo_from_reactive = false
+		next_turn()
 	else:
-		phase = Phase.MOVE   # must now move a figure
+		# Mandatory follow-up move — the ONLY point in the whole turn a team
+		# holding the ball ever gets to reposition a figure at all (while you
+		# have the ball, start_turn() always forces Phase.COMBO, never MOVE).
+		# Without this, a team that keeps winning the ball back would never
+		# move a single piece except the one it just shot with — formation
+		# would freeze solid for as long as you keep attacking. Just 1 — this
+		# isn't the reactive case, so no need to close a numbers/reach gap.
+		phase = Phase.MOVE
+		moves_left = 1
+		_move_is_reactive = false
 	return res
 
 
@@ -302,6 +362,15 @@ func remove_figure(cell: Vector2i) -> bool:
 
 
 # --- move --------------------------------------------------------------------
+## Every cell a figure at `from` could slide to: straight lines (the same 8
+## rays a shot travels), stopping at the first occupied cell (another figure
+## OR the ball) or the board edge — mirrors Board.reachable_from, not just a
+## single step. Figures move at the SAME range as a shot for exactly the
+## reason a shot has that range: without it, a team that just launched the
+## ball across the whole pitch in one action could never be chased down by
+## the side that doesn't have it (which only ever gets one MOVE per turn) —
+## the ball would permanently outrun any defence. GKs are further filtered to
+## their own goal cells only; outfield figures may never land on ANY goal cell.
 func move_targets(from: Vector2i) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	if not pieces.has(from):
@@ -310,20 +379,24 @@ func move_targets(from: Vector2i) -> Array[Vector2i]:
 	var team: String = pieces[from]["team"]
 	for dir in Board.DIRS:
 		var c: Vector2i = from + dir
-		if not Board.in_bounds(c):
-			continue
-		if pieces.has(c) or c == ball:
-			continue                              # not onto a figure or the ball
-		if role == "gk":
-			if not is_own_goal_cell(c, team):
-				continue                          # keeper stays in its own goal
-		elif is_goal_cell(c):
-			continue                              # outfield may not enter a goal
-		out.append(c)
+		while Board.in_bounds(c) and not pieces.has(c) and c != ball:
+			if role == "gk":
+				if is_own_goal_cell(c, team):
+					out.append(c)
+			elif not is_goal_cell(c):
+				out.append(c)
+			c += dir
 	return out
 
 
-## Move a figure and hand the turn over. True if the move was legal.
+## Move a figure. Spends one of moves_left. If this was a REACTIVE move (see
+## _move_is_reactive) and you now have the ball — even with a move still left
+## — the rest of this turn upgrades straight into a real Phase.COMBO instead
+## of forcing (or offering) another move: winning the ball back is the whole
+## point of the extra reactive move, so the moment it happens you get to
+## actually PLAY it, same turn, instead of the leftover slot going to waste.
+## Otherwise hands the turn over once every move is used. True if the move
+## was legal.
 func do_move(from: Vector2i, to: Vector2i) -> bool:
 	if phase != Phase.MOVE or not is_own(from) or not (to in move_targets(from)):
 		return false
@@ -337,6 +410,39 @@ func do_move(from: Vector2i, to: Vector2i) -> bool:
 	if stall_ref_id[team] == info["id"]:
 		stall_ref_id[team] = -1
 		stall_ref_cell[team] = Vector2i(-1, -1)
+	moves_left -= 1
+	if _move_is_reactive and moves_left > 0 and team_has_ball(team):
+		# Only upgrades when a move is still left AFTER this one — that
+		# leftover slot is what gets "traded in" for the combo (move + shoot
+		# = 2 actions, same as anyone who already had the ball). Reaching the
+		# ball on your LAST reactive move must NOT also upgrade: you already
+		# spent both actions on movement (move + move), so a shot on top
+		# would be a 3rd action nobody else ever gets — it just ends the turn
+		# normally instead (see the `elif moves_left <= 0` below).
+		#
+		# Auto-begin the chain on the figure that JUST reached the ball (it's
+		# always exactly the piece that made this true — a move can only ever
+		# flip team_has_ball by making `to` newly adjacent, since `from` no
+		# longer holds a piece to count). Without this, the chain was empty
+		# and needed an extra tap just to (re)select the obvious figure
+		# before a pass/shoot tap would register at all — reaching the ball
+		# should let the very next tap play it, not merely permit selecting it.
+		chain = [to]
+		phase = Phase.COMBO
+		_combo_from_reactive = true
+	elif moves_left <= 0:
+		next_turn()
+	return true
+
+
+## Ends Phase.MOVE early, skipping any remaining reactive move(s) this turn —
+## same effect as spending them, just without moving further. Lets a player
+## who's already achieved what they needed (or has nothing useful left to do)
+## hand the turn over instead of being forced to move again. True if it was
+## legal to end now (i.e. actually in Phase.MOVE).
+func end_move_phase() -> bool:
+	if phase != Phase.MOVE:
+		return false
 	next_turn()
 	return true
 

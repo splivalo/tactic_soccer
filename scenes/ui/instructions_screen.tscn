@@ -238,8 +238,8 @@ size_flags_horizontal = 3
 theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
 theme_override_font_sizes/normal_font_size = 34
 bbcode_enabled = true
-text = "[center]Move one player [color=#f7c226]one square[/color].
-You [color=#f7c226]cannot[/color] move onto another player or the ball.[/center]"
+text = "[center]Move one player [color=#f7c226]on empty square[/color].
+Defenders may [color=#f7c226]move twice[/color] or [color=#f7c226]move and shoot.[/color][/center]"
 fit_content = true
 
 [node name="spacer2" type="Control" parent="SafeArea/VBox/CardPanel/PageStage/Page2" unique_id=415569055]
@@ -273,7 +273,6 @@ stretch_mode = 5
 
 [node name="Page3" type="VBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage" unique_id=1669904014]
 unique_name_in_owner = true
-visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -337,6 +336,7 @@ stretch_mode = 5
 
 [node name="Page4" type="VBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage" unique_id=1669904015]
 unique_name_in_owner = true
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0

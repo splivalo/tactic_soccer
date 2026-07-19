@@ -4,6 +4,7 @@
 [ext_resource type="PackedScene" uid="uid://4kfa0myyy5po" path="res://assets/models/stadium.glb" id="2_0xm2m"]
 [ext_resource type="Texture2D" uid="uid://nt1hcd6yrvy2" path="res://assets/textures/DaySkyHDRI010B_2K_HDR.exr" id="2_h2yge"]
 [ext_resource type="PackedScene" uid="uid://c4h7ncd0i3fb6" path="res://scenes/ui/hud.tscn" id="3_hud"]
+[ext_resource type="FontFile" uid="uid://clvktfy0yagfm" path="res://assets/fonts/BebasNeue-Regular.ttf" id="5_lquwl"]
 
 [sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_0xm2m"]
 panorama = ExtResource("2_h2yge")
@@ -32,6 +33,12 @@ emission_energy_multiplier = 10.43
 cull_mode = 2
 emission = Color(1, 1, 1, 1)
 emission_energy_multiplier = 10.43
+
+[sub_resource type="LabelSettings" id="LabelSettings_7mycd"]
+font = ExtResource("5_lquwl")
+font_size = 96
+font_color = Color(0.9019608, 0.12156863, 0.12156863, 1)
+outline_size = 6
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7mycd"]
 albedo_color = Color(0.11372549, 0.24313726, 0.10980392, 1)
@@ -78,6 +85,30 @@ surface_material_override/0 = SubResource("StandardMaterial3D_1bvp3")
 [node name="HUD" type="CanvasLayer" parent="." unique_id=94580436]
 
 [node name="Hud" parent="HUD" unique_id=854996807 instance=ExtResource("3_hud")]
+
+[node name="GoalReplayTag" type="CanvasLayer" parent="." unique_id=880980780]
+layer = 10
+visible = false
+
+[node name="Vignette" type="TextureRect" parent="GoalReplayTag" unique_id=1839868559]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="RLabel" type="Label" parent="GoalReplayTag" unique_id=1398886656]
+offset_left = 28.0
+offset_top = 28.0
+offset_right = 280.0
+offset_bottom = 98.0
+text = "REPLAY"
+label_settings = SubResource("LabelSettings_7mycd")
+
+[node name="FlashRect" type="ColorRect" parent="GoalReplayTag" unique_id=227330013]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
 
 [node name="greenFloor" type="MeshInstance3D" parent="." unique_id=15290192]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.23062247, 0)

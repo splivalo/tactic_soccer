@@ -2,105 +2,116 @@ class_name AIPlayer
 ## Pure decision logic for the Single Player opponent — no nodes, no visuals,
 ## same spirit as MatchState (main.gd executes whatever this decides through
 ## its normal _do_combo/_apply_move/_remove_at, so the AI's moves animate
-## exactly like a human's). Three difficulties, each a progressively less
-## random / more forward-looking GREEDY heuristic — not a search/minimax; a
-## proper look-ahead AI would be a much bigger project than this pass.
+## exactly like a human's).
+##
+## Difficulty is ONE lever, applied uniformly everywhere a decision is made
+## (combo starter, each pass-or-shoot step, move, removal): every legal option
+## is scored and ranked, then the AI's ACTUAL pick is rolled against the rank
+## by difficulty — not "smarter heuristics" per difficulty, the exact same
+## evaluation every time, just a different hit-rate on its own #1 choice:
+##   Hard   = 100% the best move, every time — this is meant to be a real
+##            challenge (like the 2006 original this is a clone of, which was
+##            hard enough to beat that winning against it felt earned).
+##   Medium = 90% best move, 10% second-best.
+##   Easy   = 70% best move, 30% second- or third-best (whichever exist).
+## Still a greedy per-decision evaluator, not a search/minimax — a proper
+## look-ahead AI would be a much bigger project than this pass.
 
-const MAX_AI_PASSES := {"Easy": 0, "Medium": 1, "Hard": 2}
+const MAX_CHAIN_EXTENSIONS := 4 # safety cap on pass-chain length; not a difficulty lever
+
+
+## Ranks `candidates` by descending `score_fn(candidate)` and returns the ONE
+## the AI actually plays, per the difficulty hit-rate documented above. This
+## is the single place difficulty changes AI behaviour — every decision below
+## funnels through it.
+static func _rank_pick(candidates: Array, score_fn: Callable, difficulty: String) -> Variant:
+	if candidates.size() == 1:
+		return candidates[0]
+	var scored := candidates.duplicate()
+	scored.sort_custom(func(a, b): return score_fn.call(a) > score_fn.call(b))
+	var roll := randf()
+	var idx := 0
+	match difficulty:
+		"Hard":
+			idx = 0
+		"Medium":
+			idx = 0 if roll < 0.9 else 1
+		_: # Easy
+			if roll < 0.7:
+				idx = 0
+			else:
+				var lower: Array[int] = []
+				if scored.size() > 1:
+					lower.append(1)
+				if scored.size() > 2:
+					lower.append(2)
+				idx = lower[randi() % lower.size()] if not lower.is_empty() else 0
+	return scored[mini(idx, scored.size() - 1)]
 
 
 ## Builds the chain directly on `state` (via begin/extend, same calls a
 ## human's taps make) and returns the final shoot cell — caller passes that
 ## straight to main.gd's _do_combo(shoot_cell) for the real animation.
+##
+## Each step gathers EVERY legal action available right now — every shoot
+## target (ends the combo) together with every pass target (extends it) — as
+## one ranked list, so "the best move" always means the single
+## highest-scoring option out of ALL of them, not "shoot if a goal's on, else
+## always keep passing."
 static func decide_combo(state: MatchState, difficulty: String) -> Vector2i:
 	var starters := state.combo_starters()
 	if starters.is_empty():
 		return Vector2i(-1, -1)
-	var starter := starters[randi() % starters.size()]
-	if difficulty != "Easy":
-		starter = _closest_to_goal(state, starters)
+	var starter: Vector2i = _rank_pick(starters, func(c): return _advance_score(state, c), difficulty)
 	state.begin(starter)
 
-	var max_passes: int = MAX_AI_PASSES.get(difficulty, 0)
-	for _i in range(max_passes):
-		if difficulty != "Easy" and _best_shoot_target(state) != Vector2i(-1, -1):
-			break # a good shot is already lined up — stop passing, take it
-		var pass_targets := state.combo_pass_targets()
-		if pass_targets.is_empty():
+	for _i in range(MAX_CHAIN_EXTENSIONS):
+		var actions: Array[Dictionary] = []
+		for c in state.combo_shoot_targets():
+			actions.append({"cell": c, "shoot": true})
+		for c in state.combo_pass_targets():
+			actions.append({"cell": c, "shoot": false})
+		if actions.is_empty():
 			break
-		if difficulty == "Easy":
-			if randf() < 0.5:
-				break
-			state.extend(pass_targets[randi() % pass_targets.size()])
-		else:
-			state.extend(_closest_to_goal(state, pass_targets))
+		var chosen: Dictionary = _rank_pick(actions,
+			func(a): return _combo_action_score(state, a["cell"], a["shoot"]), difficulty)
+		if chosen["shoot"]:
+			return chosen["cell"]
+		state.extend(chosen["cell"])
 
+	# Extension cap hit — the rules guarantee a shoot target always exists once
+	# a chain is open, so just take the best of whatever's on offer now.
 	var shoot_targets := state.combo_shoot_targets()
 	if shoot_targets.is_empty():
-		return Vector2i(-1, -1) # shouldn't happen — rules guarantee one exists
-	if difficulty == "Easy":
-		return shoot_targets[randi() % shoot_targets.size()]
-	var best := _best_shoot_target(state)
-	return best if best != Vector2i(-1, -1) else _safe_shoot_target(state, shoot_targets)
+		return Vector2i(-1, -1) # shouldn't happen
+	return _rank_pick(shoot_targets, func(c): return _combo_action_score(state, c, true), difficulty)
 
 
-## Vector2i(-1,-1) if none of the current shoot targets scores right now
-## (a real goal, not offside) — otherwise the scoring cell.
-static func _best_shoot_target(state: MatchState) -> Vector2i:
-	if state.chain.is_empty():
-		return Vector2i(-1, -1)
-	var shooter := state.chain[-1]
-	for cell in state.combo_shoot_targets():
+## Progress-toward-goal only — used to rank starters, where there's nothing
+## to score yet besides "how far upfield is this."
+static func _advance_score(state: MatchState, cell: Vector2i) -> float:
+	return -absi(cell.y - state.opponent_goal_row(state.current))
+
+
+## Scores ONE candidate action at the current chain decision point — either
+## "shoot to `cell` now" (is_shoot=true, ending the combo) or "pass to `cell`"
+## (extending the chain) — on a SHARED scale so shoot and pass options are
+## ranked fairly against each other.
+static func _combo_action_score(state: MatchState, cell: Vector2i, is_shoot: bool) -> float:
+	var score: float = _advance_score(state, cell)
+	if is_shoot:
+		var shooter: Vector2i = state.chain[-1]
 		if state.is_opponent_goal(cell, state.current) and state.in_opponent_half(shooter, state.current) \
 				and not state.is_offside(shooter, state.current):
-			return cell
-	return Vector2i(-1, -1)
-
-
-## Whichever candidate cell ends up CLOSEST to the opponent's goal row —
-## used to pick a starter/pass (advance the chain upfield).
-static func _closest_to_goal(state: MatchState, candidates: Array[Vector2i]) -> Vector2i:
-	var goal_row := state.opponent_goal_row(state.current)
-	var best := candidates[0]
-	var best_dist := 1 << 30
-	for c in candidates:
-		var d := absi(c.y - goal_row)
-		if d < best_dist:
-			best_dist = d
-			best = c
-	return best
-
-
-## Non-Easy shoot fallback when no immediate goal is on offer: "closest to
-## goal" ALONE used to blindly blast the ball to the far end of whatever lane
-## was open. Two distinct ways that goes wrong, both scored here: (1) landing
-## right next to (or among) the opponent's own defenders — an immediate,
-## uncontested combo turn for them; (2) landing so far from EVERY one of the
-## AI's own remaining pieces (a long clear lane lets one shot travel many
-## cells) that the team can't realistically get back to it before the
-## opponent does, even though nothing is guarding it yet. Guarded cells are
-## excluded first (heaviest penalty), then cells far from any teammate are
-## penalized, and only THEN does distance-to-goal break the tie — advancing
-## is worthless if the ball can't be kept. Heaviest of all: a cell that would
-## trip the stalling rule (shooting the ball back next to this team's own last
-## shooter) is avoided outright — eating a yellow -> red -> sending-off for
-## shuffling the ball around is far worse than conceding a little ground. This
-## was the whole "the AI keeps getting cards on Hard" problem: it recycled the
-## ball among its own figures with no idea that was a foul (see _violates_stall).
-static func _safe_shoot_target(state: MatchState, candidates: Array[Vector2i]) -> Vector2i:
-	var goal_row := state.opponent_goal_row(state.current)
-	var best := candidates[0]
-	var best_score := -INF
-	for c in candidates:
-		var stall := 1 if _violates_stall(state, c) else 0
-		var guarded: int = _opponent_adjacent_count(state, c)
-		var support := _nearest_own_distance(state, c)
-		var dist := absi(c.y - goal_row)
-		var score: float = -stall * 100000.0 - guarded * 1000.0 - support * 8.0 - dist
-		if score > best_score:
-			best_score = score
-			best = c
-	return best
+			score += 100000.0 # a real goal outweighs every other consideration
+		# Never worth a card/removal risk unless it's the goal above — see
+		# _violates_stall (this was the "AI keeps getting carded" bug: it used
+		# to recycle the ball among its own figures with no idea that was a foul).
+		if _violates_stall(state, cell):
+			score -= 5000.0
+	score -= _opponent_adjacent_count(state, cell) * 200.0 # don't hand it straight back
+	score -= _nearest_own_distance(state, cell) * 3.0      # keep support close
+	return score
 
 
 ## True if a shot LANDING on `cell` would trip the stalling rule for the team
@@ -139,65 +150,75 @@ static func _nearest_own_distance(state: MatchState, cell: Vector2i) -> int:
 	return best
 
 
-## {"from": Vector2i, "to": Vector2i} — Easy is fully random; Medium mixes
-## random with the "close the distance to the ball" heuristic; Hard always
-## uses it (naturally converges the AI's pieces on the ball over successive
-## MOVE turns, which is what lets them start a combo).
+## {"from": Vector2i, "to": Vector2i} — every legal (from,to) pair across every
+## movable figure is scored and ranked together (see _move_score), same
+## difficulty hit-rate as decide_combo.
 static func decide_move(state: MatchState, difficulty: String) -> Dictionary:
-	var movable: Array[Vector2i] = []
+	var candidates: Array[Dictionary] = []
 	for cell in state.own_cells():
-		if not state.move_targets(cell).is_empty():
-			movable.append(cell)
-	if movable.is_empty():
+		for to in state.move_targets(cell):
+			candidates.append({"from": cell, "to": to})
+	if candidates.is_empty():
 		return {}
-	var use_heuristic := difficulty == "Hard" or (difficulty == "Medium" and randf() < 0.5)
-	if not use_heuristic:
-		var from: Vector2i = movable[randi() % movable.size()]
-		var targets := state.move_targets(from)
-		return {"from": from, "to": targets[randi() % targets.size()]}
-	# Hard only: if a stalling anchor is still live (this team's last clean
-	# shooter hasn't moved since), converge with THAT figure — moving it both
-	# closes on the ball AND clears the anchor (see MatchState.do_move), so the
-	# next combo can shoot freely instead of risking a foul. Falls through to
-	# the normal "closest figure to the ball" search when it can't legally move.
-	var sources := movable
-	if difficulty == "Hard" and state.stall_ref_id[state.current] != -1:
-		var ref_cell: Vector2i = state.stall_ref_cell[state.current]
-		if ref_cell in movable:
-			sources = [ref_cell] as Array[Vector2i]
-	var best_from := Vector2i(-1, -1)
-	var best_to := Vector2i(-1, -1)
-	var best_dist := 1 << 30
-	for from in sources:
-		for to in state.move_targets(from):
-			var d := maxi(absi(to.x - state.ball.x), absi(to.y - state.ball.y))
-			if d < best_dist:
-				best_dist = d
-				best_from = from
-				best_to = to
-	return {"from": best_from, "to": best_to}
+	return _rank_pick(candidates, func(m): return _move_score(state, m), difficulty)
 
 
-## Which of the carded team's own pieces to permanently remove. Easy picks
-## any at random; Medium/Hard avoid sacrificing the goalkeeper when an
-## outfield piece is available, and prefer whichever piece is currently
-## farthest from the ball (least immediately useful to lose).
+## Primarily "does this close the distance to the ball" (so the team can
+## start combos) — plus a bonus for moving whichever figure is the team's
+## live stalling anchor (see MatchState.stall_ref_id): that move both closes
+## on the ball AND clears the anchor (see MatchState.do_move), unblocking free
+## shooting on the team's next combo turn — and a (usually dominant) bonus for
+## stepping into an open shooting lane on the team's OWN goal right now (see
+## _defense_score). Without that last term the AI only ever chased the ball
+## forward and never noticed it was leaving its own net wide open — this was
+## the "conceded in a few moves because nobody defended" problem.
+static func _move_score(state: MatchState, m: Dictionary) -> float:
+	var to: Vector2i = m["to"]
+	var score: float = -maxi(absi(to.x - state.ball.x), absi(to.y - state.ball.y))
+	if state.stall_ref_id[state.current] != -1 and m["from"] == state.stall_ref_cell[state.current]:
+		score += 50.0
+	score += _defense_score(state, to)
+	return score
+
+
+## How much moving to `to` would help defend the goal RIGHT NOW: a bonus for
+## landing ON a CURRENTLY CLEAR straight lane (horizontal/vertical/diagonal —
+## the same lines a shot can travel) between the ball and one of the team's
+## own goal cells — i.e. stepping into the path of a shot that could score
+## THIS INSTANT if left alone. Scaled by 1/distance-to-ball so a block right
+## next to the ball (which also shuts every lane THROUGH that cell, not just
+## this one) outweighs a block far down the same lane. Zero whenever no such
+## open lane exists, so it never distorts ordinary ball-chasing play.
+static func _defense_score(state: MatchState, to: Vector2i) -> float:
+	var best := 0.0
+	for gx in MatchState.GOAL_COLS:
+		var goal_cell := Vector2i(gx, state.own_goal_row(state.current))
+		if not Board.is_straight(state.ball, goal_cell):
+			continue
+		if not Board.path_clear(state.ball, goal_cell, state.pieces):
+			continue # already blocked by someone, or no clean line to begin with
+		if not (to in Board.cells_between(state.ball, goal_cell)):
+			continue
+		var d := maxi(absi(to.x - state.ball.x), absi(to.y - state.ball.y))
+		best = maxf(best, 300.0 / maxf(float(d), 1.0))
+	return best
+
+
+## Which of the carded team's own pieces to permanently remove — every own
+## figure is scored and ranked (see _removal_score), same difficulty hit-rate.
 static func decide_removal(state: MatchState, difficulty: String) -> Vector2i:
 	var candidates := state.own_cells()
 	if candidates.is_empty():
 		return Vector2i(-1, -1)
-	if difficulty == "Easy":
-		return candidates[randi() % candidates.size()]
-	var outfield: Array[Vector2i] = []
-	for c in candidates:
-		if state.pieces[c]["role"] != "gk":
-			outfield.append(c)
-	var pool := outfield if not outfield.is_empty() else candidates
-	var best: Vector2i = pool[0]
-	var best_dist := -1
-	for c in pool:
-		var d := maxi(absi(c.x - state.ball.x), absi(c.y - state.ball.y))
-		if d > best_dist:
-			best_dist = d
-			best = c
-	return best
+	return _rank_pick(candidates, func(c): return _removal_score(state, c), difficulty)
+
+
+## Never the goalkeeper if an outfield figure is available (a heavy penalty,
+## not a hard exclusion — it still gets picked if it's the only figure left),
+## and prefer whichever figure is currently farthest from the ball (least
+## immediately useful to lose).
+static func _removal_score(state: MatchState, cell: Vector2i) -> float:
+	var score: float = maxi(absi(cell.x - state.ball.x), absi(cell.y - state.ball.y))
+	if state.pieces[cell]["role"] == "gk":
+		score -= 10000.0
+	return score

@@ -21,6 +21,23 @@ extends Node3D
 @export var player_scale := 1.0
 ## Correction if the model's "front" isn't already +Z (home faces -Z, away +Z).
 @export var player_facing_offset := 0.0
+## A MOVE now slides like a shot (straight line, any distance to the first
+## obstruction — see MatchState.move_targets), not just one cell, so the jog
+## needs to cover that ground at a believable running pace instead of the old
+## fixed 0.28s tween (which read as a teleport/skate for anything longer than
+## 1 cell). Duration = max(move_min_duration, move_duration_per_cell * cells);
+## the min keeps a 1-cell move feeling exactly like it always did.
+@export var move_duration_per_cell := 0.16
+@export var move_min_duration := 0.28
+## The "jog" clip has no baked forward speed of its own (in-place treadmill
+## cycle — see PlayerRig.jog's doc comment), so distance/urgency has to be
+## sold by the STRIDE RATE instead: a short 1-cell hop plays relaxed, a long
+## cross-pitch run plays with a faster, more urgent cadence. Ramps linearly
+## from jog_speed_scale_min at 1 cell to jog_speed_scale_max at
+## jog_speed_scale_max_cells (and clamps beyond that).
+@export var jog_speed_scale_min := 0.85
+@export var jog_speed_scale_max := 1.35
+@export var jog_speed_scale_max_cells := 8
 ## Kick strength scales with distance ("broj polja"). A 1-cell ball is a soft
 ## tap (power 0); at this many cells or more it's a full-power kick (power 1).
 @export var full_power_cells := 7
@@ -93,32 +110,51 @@ extends Node3D
 const STADIUM_DRESSING := ["arena", "fence", "banner", "seats", "reflectors"]
 
 # --- Goal cinematic ----------------------------------------------------------
-## On a goal, cut to a low side camera by the goal (background blurred) for the
-## final strike + the keeper's dive, like a replay angle, then restore & kick off.
-## The "make the last shot gorgeous" polish comes later; this is the scaffolding.
+## On a goal: an EDIT, not a moving/rotating shot — two STATIC cameras, hard-cut
+## between them, like a broadcast replay. No camera ever rotates or tweens
+## mid-shot; all the energy comes from the ball's own motion crossing a locked
+## frame plus the cut itself. Cam A ("launch") is set once, behind the shooter
+## looking down the shot line; partway through the flight we hard-cut to Cam B
+## ("net"), parked beside the goal mouth watching the ball arrive and hit the
+## net. Both are positioned once per goal from the shot axis (shooter cell ->
+## goal, see _begin_goal_drama's _goal_shot_dir/_goal_side_dir), so the angles
+## read the same regardless of which column/angle the shot came from.
 @export_group("Goal Cinematic")
 @export var enable_goal_cam := true
-@export var goal_cam_hold := 1.8           # seconds to hold on the goal (after impact, normal speed)
-## Camera position each frame = (goal column + side, height, ball's current
-## depth + back) — a side "dolly" that slides along the touchline tracking the
-## ball's depth as it travels, so it starts framing the KICKER (ball hasn't
-## moved yet) and glides to the goal by the time the ball arrives.
-@export var goal_cam_side := 6.5           # offset to the side of the pitch (X) — clamped in
-## _update_goal_cam() to GOAL_CAM_MAX_X so off-center goal columns can't push it
-## into the stands/floodlight towers (seats/walls/reflectors all start ~X 7.0+).
-@export var goal_cam_height := 1.5         # camera height ABOVE THE PITCH SURFACE (not world Y=0) —
-## keep this clear of BOTH the stands (seats mesh spans world Y 0.6-2.2) AND the
-## floodlight towers (reflectors span world Y 2.6-4.0) — total must stay under
-## ~2.6 (this + the ~0.83 base) or it clips straight into a reflector tower.
-@export var goal_cam_back := 2.5           # how far behind the ball (toward its own side) the camera trails —
+@export var goal_cam_hold := 1.8           # seconds to hold on Cam B (after impact, normal speed)
+## Cam A ("launch"): set ONCE at the moment of the strike — behind the shooter
+## along the shot axis (goal_cam_back back, goal_cam_side to the side for an
+## over-the-shoulder angle instead of dead-center-behind), looking toward the
+## goal. Never moves again; the ball racing away IS the motion.
+@export var goal_cam_back := 2.5           # how far behind the shooter, along the shot axis
+@export var goal_cam_side := 1.3           # sideways (over-the-shoulder) offset, perpendicular to the shot axis
+@export var goal_cam_side_sign := 1.0      # flip to -1.0 if the shoulder offset ends up on the awkward side
+## Camera height ABOVE THE PITCH SURFACE (not world Y=0) — keep this clear of
+## BOTH the stands (seats mesh spans world Y 0.6-2.2) AND the floodlight towers
+## (reflectors span world Y 2.6-4.0) — total must stay under ~2.6 (this + the
+## ~0.83 base) or it clips straight into a reflector tower.
+@export var goal_cam_height := 1.5
 @export var goal_cam_fov := 62.0 # wide at the start — the keeper's dive fires the instant the shot is struck, but a tight FOV cropped it out of frame until the camera panned in
 @export_range(0.0, 0.5, 0.01) var goal_cam_blur := 0.12  # background DoF (0 = off)
+## Cam B ("net"): set once, parked to the side of the goal MOUTH at net height,
+## looking back across it — a fixed broadcast-style goal-line angle the ball
+## flies INTO. goal_cam2_depth is measured along the shot axis, negative =
+## pulled back from the goal line into the pitch a bit (avoids sitting inside
+## the net mesh); goal_cam2_side is perpendicular to the axis, same as Cam A's.
+@export var goal_cam2_side := 3.6
+@export var goal_cam2_depth := -3.0
+@export var goal_cam2_height := 1.4
+@export var goal_cam2_fov := 50.0
+## Ball progress (0 = still at the shooter, 1 = at the goal) along the shot
+## axis at which we hard-cut from Cam A to Cam B — cutting partway through the
+## flight, not right at the strike, so Cam A gets to establish before the cut.
+@export_range(0.1, 0.95, 0.01) var goal_cam_cut_progress := 0.6
 ## Time scale WHILE THE BALL IS IN FLIGHT toward goal (1 = no slow-mo). Snaps
 ## back to normal speed the instant the ball reaches the net — the impact,
 ## fall, and keeper reaction all play at normal speed, not in slow motion.
 @export_range(0.15, 1.0, 0.05) var goal_slowmo := 0.28
-## The goal camera tracks the ball and zooms from goal_cam_fov to this FOV as the
-## ball reaches the net — a tightening replay push-in.
+## Cam B slowly pushes in (FOV only, never rotates/moves) from goal_cam2_fov
+## to this tighter FOV once the ball has landed, for a dramatic close finish.
 @export var goal_cam_zoom_fov := 22.0
 ## The scoring shot flies THROUGH the goal line into the net: this deep, at this
 ## height, with this arc — so you see the ball hit the netting, not stop on the line.
@@ -136,6 +172,35 @@ const STADIUM_DRESSING := ["arena", "fence", "banner", "seats", "reflectors"]
 ## freezing in place. goal_cam_hold should comfortably cover drop+roll.
 @export var goal_drop_time := 0.35
 @export var goal_settle_roll := 0.22
+@export_group("")
+
+# --- Goal replay ---------------------------------------------------------------
+## ONE more beat after the cinematic above finishes: a fixed top-down
+## broadcast-style replay of the FULL build-up (every pass in the chain, not
+## just the final strike) in slow motion — fullscreen, HUD hidden, a blinking
+## "R" in the corner. Purely visual: match state is already fully applied
+## (see execute_combo/_do_combo) — this just re-tweens the ball back along its
+## already-recorded path under a second, different, single static camera.
+@export_group("Goal Replay")
+@export var enable_goal_replay := true
+@export_range(0.05, 1.0, 0.05) var replay_slowmo := 0.18
+## Straight down, centred over the pitch. Only the ANGLE (locked, straight
+## down) and FOV are author-set here — the HEIGHT auto-fits every screen from
+## replay_fov + camera_fit_margin, same principle as the main camera's own
+## fit (see _fit_camera): never a fixed guessed distance that ends up
+## cropping the pitch on some aspect ratio.
+@export var replay_fov := 40.0
+@export var replay_hold_after := 0.5 # pause on the settled ball before cutting back
+@export_range(0.5, 4.0, 0.1) var replay_r_blink_hz := 2.0
+## Broadcast-style "cut to replay": a quick white flash, at NORMAL speed
+## (before the slow-mo kicks in), the instant the top-down camera cuts in.
+@export_range(0.0, 0.6, 0.01) var replay_flash_time := 0.15
+## Colour drained from the replay's OWN camera only (a duplicate of the main
+## WorldEnvironment, so lighting/sky stay identical) — 1 = normal colour,
+## 0 = full black & white. Broadcast replays read as "replay" partly from
+## this even before you consciously notice the R/slow-mo.
+@export_range(0.0, 1.0, 0.05) var replay_saturation := 0.35
+@export_range(0.0, 1.0, 0.05) var replay_vignette_strength := 0.55
 @export_group("")
 
 # --- Camera auto-fit ---------------------------------------------------------
@@ -226,16 +291,35 @@ const FIGURE_HEIGHT := 1.6 # a bit over the model's real height (~1.45 @ scale 1
 # The camera transform you tuned in the editor — used as the fit reference.
 var _cam_ref := Transform3D.IDENTITY
 var _cam_ref_set := false
-# Separate cinematic camera used only during goal celebrations.
-var _goal_cam: Camera3D = null
-var _goal_cam_follow := false   # while true, the goal cam tracks the ball + zooms
-var _goal_center := Vector3.ZERO    # goal-mouth point the cam frames
+# Two STATIC cinematic cameras used only during goal celebrations — see the
+# "Goal Cinematic" export group's comment. Neither ever moves/rotates once
+# positioned; _goal_cam_cut_done just gates the one-shot hard cut between them.
+var _goal_cam: Camera3D = null   # Cam A: "launch" — behind the shooter
+var _goal_cam2: Camera3D = null  # Cam B: "net" — beside the goal mouth
+var _goal_cam_follow := false    # true while the flight is live (watching for the A->B cut trigger)
+var _goal_cam_cut_done := false  # true once we've hard-cut from Cam A to Cam B this goal
+var _goal_center := Vector3.ZERO    # goal-mouth point the cams frame
 var _goal_net_point := Vector3.ZERO # where the scoring ball flies into the net
 var _goal_flight_d0 := 1.0           # ball->goal distance at strike start (for zoom)
 var _goal_ground_y := 0.0            # resting height inside the net (for the gravity drop)
 var _goal_out_dir := 1.0             # which way "into the goal" is for this net (+1 or -1 on Z)
 var _goal_cam_base_y := 0.0          # pitch-surface Y the camera height is measured from
+# The shot axis (shooter cell -> goal, flattened to the pitch plane) both cams
+# are built on — see _begin_goal_drama. _goal_side_dir is perpendicular to it
+# (the over-the-shoulder / goal-mouth-side offset direction); _goal_shooter_flat
+# /_flat_dist let the cut-trigger measure the ball's progress along the axis.
+var _goal_shot_dir := Vector3(0, 0, 1)
+var _goal_side_dir := Vector3(1, 0, 0)
+var _goal_shooter_flat := Vector3.ZERO
+var _goal_shot_flat_dist := 1.0
 var _net_mats := {}                  # net node name -> its ShaderMaterial (dent)
+
+# --- Goal replay (see the "Goal Replay" export group) -------------------------
+var _replay_cam: Camera3D = null
+var _replay_tag: CanvasLayer = null      # blinking "R" — separate from _hud, which gets hidden
+var _replay_tag_tween: Tween = null
+var _goal_replay_path: Array = []        # the last goal's full path — see _do_combo
+var _goal_replay_scorer := ""            # the last goal's scoring team — for the GK dive on replay
 
 
 func _ready() -> void:
@@ -247,6 +331,8 @@ func _ready() -> void:
 	if GameFlow.away_country != "":
 		away_country = GameFlow.away_country
 	_hud = get_node_or_null("HUD/Hud")
+	if _hud != null:
+		_hud.end_move_requested.connect(_on_end_move_requested)
 	_turn_timer = Timer.new()
 	_turn_timer.name = "TurnTimer"
 	_turn_timer.one_shot = true
@@ -289,6 +375,9 @@ func _ready() -> void:
 	if enable_goal_cam:
 		_setup_goal_cam()
 		_setup_nets()
+	if enable_goal_replay:
+		_setup_replay_cam()
+		_setup_replay_tag()
 	if spawn_teams:
 		_spawn_teams()
 	if spawn_ball:
@@ -844,9 +933,11 @@ func _commit_combo_target(cell: Vector2i) -> void:
 # it. Checking figures first means the figure always wins when both match.
 # Priority order resolves the one real ambiguity (a teammate who is BOTH a
 # valid starter — adjacent to the ball — AND a valid pass target in a straight
-# line from the chain): starter is checked first and returns immediately, so
-# that cell always means "(re)start the chain here", never "pass here". A tap
-# only reads as a pass once it's confirmed NOT a starter.
+# line from the chain): while a chain is already going, rewind/pass/shoot are
+# checked FIRST — matching _on_motion's drag-to-connect, which only ever
+# considers chain+pass targets, never starters — so that cell means "pass
+# here", not "restart here". Only once none of those match (or the chain was
+# empty to begin with) does a tap fall through to (re)starting at a starter.
 func _combo_tap(screen_pos: Vector2) -> void:
 	if not _state.chain.is_empty():
 		var rewind_cell := _resolve_target(screen_pos, _state.chain, TAP_HIT_RADIUS)
@@ -854,12 +945,6 @@ func _combo_tap(screen_pos: Vector2) -> void:
 			_state.rewind(rewind_cell)
 			_draw_combo()
 			return
-	var starter := _resolve_target(screen_pos, _state.combo_starters(), TAP_HIT_RADIUS)
-	if starter != NO_CELL:
-		if _state.begin(starter):
-			_draw_combo()
-		return
-	if not _state.chain.is_empty():
 		var pass_cell := _resolve_target(screen_pos, _state.combo_pass_targets(), TAP_HIT_RADIUS)
 		if pass_cell != NO_CELL:
 			_state.extend(pass_cell) # tap-to-pass — connects the chain, same as a drag
@@ -868,6 +953,11 @@ func _combo_tap(screen_pos: Vector2) -> void:
 		var shoot_cell := _resolve_target(screen_pos, _state.combo_shoot_targets(), TAP_HIT_RADIUS)
 		if shoot_cell != NO_CELL:
 			_do_combo(shoot_cell) # direct tap-to-shoot still works, no ambiguity
+			return
+	# Empty chain (or a tap that matched none of the above): (re)start here.
+	var starter := _resolve_target(screen_pos, _state.combo_starters(), TAP_HIT_RADIUS)
+	if starter != NO_CELL and _state.begin(starter):
+		_draw_combo()
 
 
 # A combo plays as ONE continuous ball motion through the whole chain — the ball
@@ -890,6 +980,26 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 	print("COMBO -> shoot %s (goal=%s)" % [shoot_cell, res["goal"]])
 	# path = [ball_cell, chain_fig_0, ... chain_fig_n (shooter), shoot_cell]
 	var path: Array = res["path"]
+	if res["goal"]:
+		_goal_replay_path = path.duplicate() # see _play_goal_replay
+		_goal_replay_scorer = res["scorer"]
+	var tween := _play_combo_choreography(path, res, true)
+	await tween.finished
+	await _after_combo(res)
+
+
+# Drives the shared kick+ball choreography for a combo's full path: one
+# continuous ball motion through the whole chain — the ball never stops, each
+# chain figure starts its windup EARLY (in anticipation) so its boot meets the
+# ball exactly as it arrives and strikes it on in one touch. Strength (swing +
+# ball speed) scales with distance; the kicking foot matches the side the ball
+# comes from. Used TWICE for a scoring combo: once for the live action
+# (trigger_goal_cam=true, may hard-cut to the goal cinematic cameras), and
+# again, unmodified, by _play_goal_replay() for the top-down instant replay
+# (trigger_goal_cam=false — same kicks/contacts/arcs/keeper dive, just no
+# camera cut/slow-mo/decluttering, since the replay uses its own fixed camera
+# and shows everyone). Returns the ball's tween; caller awaits .finished.
+func _play_combo_choreography(path: Array, res: Dictionary, trigger_goal_cam: bool) -> Tween:
 	var n := path.size()
 
 	# 1) Per-segment ball travel times; the opening roll gets room for a windup.
@@ -953,9 +1063,13 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 		# their leg at once like a chaotic mob instead of one clean chain.
 		var start: float = clampf(arrive[i] - contact, arrive[i - 1], arrive[i])
 		_schedule_kick(start, from_cell, path[i - 1], to_cell, kind, power, jitter)
-		# Cut to the cinematic angle + slow-mo as the scorer begins the strike.
-		if is_final and res["goal"] and enable_goal_cam:
-			_schedule(start, _begin_goal_drama.bind(to_cell, res["scorer"], from_cell))
+		if is_final and res["goal"]:
+			_schedule(start, _trigger_gk_dive.bind(res["scorer"]))
+			# Cut to the cinematic angle + slow-mo as the scorer begins the strike —
+			# the replay pass (trigger_goal_cam=false) skips this: fixed top-down
+			# camera throughout, no cut, no hidden figures.
+			if trigger_goal_cam and enable_goal_cam:
+				_schedule(start, _begin_goal_drama.bind(to_cell, res["scorer"], from_cell))
 
 	# 4) One uninterrupted ball tween through the whole path. Each segment lofts
 	#    into an arc scaled by its power (short = grounded roll, long = high ball);
@@ -976,8 +1090,7 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 			tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 		else:
 			tw.set_trans(Tween.TRANS_LINEAR)
-	await tween.finished
-	await _after_combo(res)
+	return tween
 
 
 # The point INSIDE the net a scoring ball flies to: past the goal line (outward),
@@ -1124,6 +1237,8 @@ func _after_combo(res: Dictionary) -> void:
 		# Stay busy through the celebration so the torn-down board can't take input.
 		if enable_goal_cam and _goal_cam != null:
 			await _celebrate_goal()
+		if enable_goal_replay:
+			await _play_goal_replay()
 		if res["win"]:
 			print("=== %s WINS THE MATCH ===" % res["scorer"])
 			GameFlow.last_winner = res["scorer"]
@@ -1153,29 +1268,78 @@ func _after_combo(res: Dictionary) -> void:
 
 
 # --- Goal cinematic ----------------------------------------------------------
-# A separate camera we cut to on a goal; the main Camera3D stays as authored.
+# Two separate cameras we hard-cut between on a goal; the main Camera3D stays
+# as authored and untouched.
 func _setup_goal_cam() -> void:
-	_goal_cam = Camera3D.new()
-	_goal_cam.name = "GoalCam"
-	_goal_cam.fov = goal_cam_fov
-	_goal_cam.current = false
+	_goal_cam = _make_goal_camera("GoalCamLaunch", goal_cam_fov)
+	_goal_cam2 = _make_goal_camera("GoalCamNet", goal_cam2_fov)
+
+
+func _make_goal_camera(cam_name: String, fov: float) -> Camera3D:
+	var cam := Camera3D.new()
+	cam.name = cam_name
+	cam.fov = fov
+	cam.current = false
 	if goal_cam_blur > 0.0:
 		var attr := CameraAttributesPractical.new()
 		attr.dof_blur_far_enabled = true
 		attr.dof_blur_amount = goal_cam_blur
-		_goal_cam.attributes = attr
-	add_child(_goal_cam)
+		cam.attributes = attr
+	add_child(cam)
+	return cam
 
 
-# Turns on the cinematic camera. Its POSITION is set every frame from here on
-# by _update_goal_cam (a side dolly tracking the ball's depth), so at this
-# instant — kick just starting, ball still at the kicker — it's already framing
-# the shooter; no separate one-time placement needed.
-func _activate_goal_cam() -> void:
-	if _goal_cam == null:
-		return
+# --- Goal cam: static shot positioning + cut trigger --------------------------
+# How far the ball has travelled from the shooter toward the goal, along the
+# shot axis, as a 0..1 fraction (0 = still at the shooter, 1 = at the goal) —
+# the ONLY thing either camera's transform depends on at runtime is whether
+# this has crossed goal_cam_cut_progress (see _update_goal_cam); neither
+# camera's position/orientation is ever recomputed once set.
+func _goal_shot_progress(ball_pos: Vector3) -> float:
+	var flat_ball := Vector3(ball_pos.x, 0.0, ball_pos.z)
+	var s := (flat_ball - _goal_shooter_flat).dot(_goal_shot_dir)
+	return clampf(s / _goal_shot_flat_dist, 0.0, 1.0)
+
+
+# Cam A ("launch"): behind the SHOOTER's cell along the shot axis, offset to
+# one side for an over-the-shoulder angle, looking toward goal centre. Set
+# once at the strike and never touched again.
+func _place_goal_cam_launch() -> void:
+	var behind := _goal_shooter_flat - _goal_shot_dir * goal_cam_back + _goal_side_dir * goal_cam_side
+	var pos := Vector3(
+		clampf(behind.x, -6.3, 6.3),
+		_goal_cam_base_y + goal_cam_height,
+		clampf(behind.z, -7.5, 7.5))
+	_goal_cam.global_position = pos
+	_goal_cam.look_at(_goal_center, Vector3.UP)
 	_goal_cam.fov = goal_cam_fov
-	_goal_cam.current = true
+	_set_goal_cam_dof(_goal_cam)
+
+
+# Cam B ("net"): beside the goal MOUTH at net height, looking back across it —
+# a fixed broadcast-style angle the ball flies INTO. Set once at the strike
+# (positioned already, just not yet `current`) and never touched again except
+# for the post-impact FOV push-in (see _celebrate_goal).
+func _place_goal_cam_net() -> void:
+	var goal_flat := Vector3(_goal_center.x, 0.0, _goal_center.z)
+	var beside := goal_flat + _goal_shot_dir * goal_cam2_depth + _goal_side_dir * goal_cam2_side
+	var pos := Vector3(
+		clampf(beside.x, -6.3, 6.3),
+		_goal_cam_base_y + goal_cam2_height,
+		clampf(beside.z, -7.5, 7.5))
+	_goal_cam2.global_position = pos
+	_goal_cam2.look_at(_goal_center, Vector3.UP)
+	_goal_cam2.fov = goal_cam2_fov
+	_set_goal_cam_dof(_goal_cam2)
+
+
+# Both shots are static now, so the DoF far-blur distance can be set ONCE from
+# the camera's fixed distance to the goal, instead of recomputed every frame.
+func _set_goal_cam_dof(cam: Camera3D) -> void:
+	if cam.attributes is CameraAttributesPractical:
+		var attr := cam.attributes as CameraAttributesPractical
+		attr.dof_blur_far_distance = cam.global_position.distance_to(_goal_center) + 1.5
+		attr.dof_blur_far_transition = 1.5
 
 
 # Cut to the cinematic angle AND drop into slow motion as the winning strike
@@ -1234,6 +1398,18 @@ func _drop_ball_to_ground() -> void:
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 
+# Send the keeper into the dive AS the shot is struck, not after it's already
+# in the net — so the miss reads as a beaten attempt, not a late reaction.
+# Shared by the live shot and the top-down replay (see _play_combo_choreography) —
+# the dive itself isn't cinematic-camera-specific, only _begin_goal_drama's
+# framing/hiding/slow-mo below is.
+func _trigger_gk_dive(scorer_team: String) -> void:
+	var defender: String = "AwayTeam" if scorer_team == "HomeTeam" else "HomeTeam"
+	var gk := _find_gk(defender)
+	if gk is PlayerRig:
+		(gk as PlayerRig).gk_miss()
+
+
 func _begin_goal_drama(goal_cell: Vector2i, scorer_team: String, shooter_cell: Vector2i) -> void:
 	_goal_out_dir = -1.0 if goal_cell.y * 2 < Board.ROWS else 1.0
 	_goal_center = _cell_world(goal_cell.x, goal_cell.y) + Vector3(0.0, net_hit_height, 0.0)
@@ -1241,83 +1417,73 @@ func _begin_goal_drama(goal_cell: Vector2i, scorer_team: String, shooter_cell: V
 	_goal_ground_y = _ball_world(goal_cell).y
 	_goal_cam_base_y = _cell_world(goal_cell.x, goal_cell.y).y + 0.6
 	_goal_flight_d0 = maxf(_ball.position.distance_to(_goal_center), 0.5)
+	# The shot axis (shooter -> goal, flattened) both cams are built on.
+	var shooter_pos: Vector3 = _cell_world(shooter_cell.x, shooter_cell.y)
+	_goal_shooter_flat = Vector3(shooter_pos.x, 0.0, shooter_pos.z)
+	var goal_flat := Vector3(_goal_center.x, 0.0, _goal_center.z)
+	var flat_to_goal := goal_flat - _goal_shooter_flat
+	_goal_shot_flat_dist = maxf(flat_to_goal.length(), 0.5)
+	_goal_shot_dir = flat_to_goal.normalized() if flat_to_goal.length() > 0.01 else Vector3(0, 0, _goal_out_dir)
+	_goal_side_dir = Vector3(-_goal_shot_dir.z, 0.0, _goal_shot_dir.x) * goal_cam_side_sign
+	# Place both static shots now, THEN hard-cut to Cam A — Cam B sits ready
+	# and armed, waiting for _update_goal_cam to cut to it once the ball
+	# crosses goal_cam_cut_progress.
+	_place_goal_cam_launch()
+	_place_goal_cam_net()
+	_goal_cam.current = true
+	_goal_cam2.current = false
+	_goal_cam_cut_done = false
 	_goal_cam_follow = true
-	_activate_goal_cam()
 	if hide_stadium_dressing_during_play:
 		_set_stadium_dressing_visible(true) # this is the one moment it's worth seeing
 	if goal_slowmo < 1.0:
 		Engine.time_scale = goal_slowmo
-	# Send the keeper into the dive AS the shot is struck, not after it's already
-	# in the net — so the miss reads as a beaten attempt, not a late reaction.
-	var defender: String = "AwayTeam" if scorer_team == "HomeTeam" else "HomeTeam"
-	var gk := _find_gk(defender)
-	if gk is PlayerRig:
-		(gk as PlayerRig).gk_miss()
 	# Declutter the cinematic: hide every figure except the shooter and the
 	# keeper being beaten, so nobody else can stand between the camera and the
 	# action. Happens on the exact frame the camera hard-cuts to the goal cam
 	# (no pan/fade to notice it in), and _build_match() throws every figure
 	# away and respawns fresh ones once the celebration ends, so there's
-	# nothing to un-hide afterward.
+	# nothing to un-hide afterward. (The top-down replay that follows shows
+	# everyone again — see _play_goal_replay.)
 	var shooter: Node3D = _node_at.get(shooter_cell)
+	var gk := _find_gk("AwayTeam" if scorer_team == "HomeTeam" else "HomeTeam")
 	for cell in _node_at:
 		var fig = _node_at[cell]
 		if fig is PlayerRig and fig != shooter and fig != gk:
 			fig.visible = false
 
 
-# Each frame during the scoring flight: the goal cam SLIDES along the touchline
-# tracking the ball's current depth (so it starts on the kicker and glides with
-# the ball to the goal — "kamera klizi i prati loptu"), and zooms in as it nears
-# the net. After impact the ball barely moves in depth, so this naturally holds
-# a close, steady shot through the fall/settle.
-# The look-at target starts ON THE SHOOTER (the ball is still at their feet, so
-# looking at the ball IS looking at the player — full body, not just the boot)
-# and only eases toward the goal center as the shot nears the net, instead of
-# being permanently skewed toward the goal from frame one.
+# Each frame during the scoring flight: NEITHER camera moves — this only
+# watches the ball's progress along the shot axis and, the single time it
+# crosses goal_cam_cut_progress, hard-cuts from Cam A to Cam B (an edit, not a
+# pan). Cam A holds the "launch" framing right up to the cut; Cam B was
+# already parked at the goal mouth the whole time, waiting.
 func _update_goal_cam() -> void:
-	if not _goal_cam_follow or _goal_cam == null or _ball == null:
+	if not _goal_cam_follow or _goal_cam_cut_done or _goal_cam2 == null or _ball == null:
 		return
-	# Hard safety clamp: whatever the goal column or export tuning, never let the
-	# dolly reach the stands/walls/floodlight towers, which all start around
-	# world X/Z ~7.0-7.6 / ~8.6-9.3 (see stadium.glb bounds). Keeping well inside
-	# that means a goal scored from ANY position can't clip into stadium geometry.
-	var cam_x: float = clampf(_goal_center.x + goal_cam_side, -6.3, 6.3)
-	# Stop the dolly AT the goal line — don't keep tracking the ball on into the
-	# net, or the keeper (who stays pinned to the goal) gets left behind out of
-	# frame right as they're diving/reacting, which is the moment that matters.
-	var track_z: float = _ball.position.z
-	if _goal_out_dir > 0.0:
-		track_z = minf(track_z, _goal_center.z)
-	else:
-		track_z = maxf(track_z, _goal_center.z)
-	var cam_z: float = clampf(track_z + _goal_out_dir * goal_cam_back, -7.5, 7.5)
-	_goal_cam.global_position = Vector3(
-		cam_x,
-		_goal_cam_base_y + goal_cam_height,  # measured from the pitch surface, not world 0
-		cam_z)
-	var d := _ball.position.distance_to(_goal_center)
-	var t := clampf(1.0 - d / _goal_flight_d0, 0.0, 1.0)
-	var look_bias := lerpf(0.0, 0.5, t)
-	# Same goal-line clamp on the gaze target as the dolly above — otherwise
-	# the camera would stay put but still keep SWIVELLING to track the ball
-	# into the net, panning the keeper toward the frame edge anyway.
-	var look_ball := Vector3(_ball.position.x, _ball.position.y, track_z)
-	_goal_cam.look_at(look_ball.lerp(_goal_center, look_bias), Vector3.UP)
-	_goal_cam.fov = lerpf(goal_cam_fov, goal_cam_zoom_fov, t)
-	if _goal_cam.attributes is CameraAttributesPractical:
-		var attr := _goal_cam.attributes as CameraAttributesPractical
-		attr.dof_blur_far_distance = _goal_cam.global_position.distance_to(_goal_center) + 1.5
-		attr.dof_blur_far_transition = 1.5
+	if _goal_shot_progress(_ball.position) >= goal_cam_cut_progress:
+		_goal_cam_cut_done = true
+		_goal_cam.current = false
+		_goal_cam2.current = true
 
 
 # The ball has just reached the net: slow-mo ends HERE (impact, fall, and the
 # keeper's reaction all play at normal speed) — only the flight was slow-mo.
-# Hold briefly on the settling ball, then hand the view back.
+# Cam B (already the current camera, or cut to it now if the shot was too
+# short/close to ever cross goal_cam_cut_progress) holds on the settling ball
+# while its FOV slowly pushes in for a dramatic close finish — a lens zoom
+# only, never a position/rotation change — then hands the view back.
 func _celebrate_goal() -> void:
 	Engine.time_scale = 1.0
+	if not _goal_cam_cut_done and _goal_cam2 != null:
+		_goal_cam_cut_done = true
+		_goal_cam.current = false
+		_goal_cam2.current = true
 	_hit_net()  # the ball has just reached the net — bulge it
 	_drop_ball_to_ground()  # ...and gravity takes it from there
+	if _goal_cam2 != null:
+		create_tween().tween_property(_goal_cam2, "fov", goal_cam_zoom_fov, goal_cam_hold) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	await get_tree().create_timer(goal_cam_hold).timeout
 	_restore_camera()
 
@@ -1326,11 +1492,186 @@ func _restore_camera() -> void:
 	_goal_cam_follow = false
 	if _goal_cam != null:
 		_goal_cam.current = false
+	if _goal_cam2 != null:
+		_goal_cam2.current = false
 	var cam := get_node_or_null("Camera3D") as Camera3D
 	if cam != null:
 		cam.current = true
 	if hide_stadium_dressing_during_play:
 		_set_stadium_dressing_visible(false)
+
+
+# --- Goal replay (see the "Goal Replay" export group) -------------------------
+func _setup_replay_cam() -> void:
+	_replay_cam = Camera3D.new()
+	_replay_cam.name = "GoalReplayCam"
+	_replay_cam.fov = replay_fov
+	_replay_cam.current = false
+	# A duplicate of the main WorldEnvironment (same sky/lighting/tonemap),
+	# with only saturation pulled down — Camera3D.environment overrides the
+	# scene's WorldEnvironment for this camera alone, so live gameplay is
+	# untouched and only the replay reads desaturated.
+	var world_env := get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if world_env != null and world_env.environment != null:
+		var env := world_env.environment.duplicate() as Environment
+		env.adjustment_enabled = true
+		env.adjustment_saturation = replay_saturation
+		_replay_cam.environment = env
+	add_child(_replay_cam)
+
+
+# The "R"/REPLAY tag, vignette and flash are real scene nodes (GoalReplayTag/*
+# in main.tscn, a sibling of HUD so they stay visible while HUD gets hidden) —
+# select RLabel in the Scene dock to tune font/colour/position, same as
+# EndMoveButton. The vignette's actual texture is procedural (depends on the
+# tunable replay_vignette_strength export), so it's generated here at runtime,
+# same pattern as BoardFx's tile texture.
+func _setup_replay_tag() -> void:
+	_replay_tag = get_node_or_null("GoalReplayTag")
+	if _replay_tag == null:
+		return
+	var vignette := _replay_tag.get_node_or_null("Vignette") as TextureRect
+	if vignette != null:
+		vignette.texture = _make_vignette_tex(replay_vignette_strength)
+
+
+# Straight down, centred over the pitch — computed from two opposite corner
+# cells (not a hand-tuned position) so it stays centred if the pitch/grid
+# origin ever moves. Never touched again once placed, same as the cinematic's
+# two cams: only the ball moves during the replay.
+## Same distance-only auto-fit as _fit_camera(), just for a LOCKED straight-down
+## angle instead of the editor-tuned one: the whole pitch (+goal frames/nets,
+## same _fit_meshes/_field_corners the main camera fits against) must stay in
+## frame on every screen, never a fixed guessed height that ends up cropping
+## it — that read as "zoomed in" compared to the normal gameplay view.
+func _place_replay_cam() -> void:
+	_replay_cam.fov = replay_fov
+	if _fit_meshes.is_empty():
+		return
+	var center := (_cell_world(0, 0) + _cell_world(Board.COLS - 1, Board.ROWS - 1)) * 0.5
+	var cam_basis := Basis.from_euler(Vector3(deg_to_rad(-90.0), 0.0, 0.0)) # straight down
+	var right := cam_basis.x
+	var up := cam_basis.y
+	var fwd := -cam_basis.z # Godot cameras look down -Z
+	var vp := get_viewport().get_visible_rect().size
+	var aspect := vp.x / maxf(vp.y, 1.0)
+	var t := tan(deg_to_rad(replay_fov) * 0.5)
+	var tan_h: float
+	var tan_v: float
+	if _replay_cam.keep_aspect == Camera3D.KEEP_HEIGHT:
+		tan_v = t
+		tan_h = t * aspect
+	else:
+		tan_h = t
+		tan_v = t / aspect
+	var m := 1.0 + camera_fit_margin
+	var s := 0.0
+	for corner in _field_corners():
+		var v := corner - center
+		var a := v.dot(fwd)
+		s = maxf(s, absf(v.dot(right)) * m / tan_h - a)
+		s = maxf(s, absf(v.dot(up)) * m / tan_v - a)
+	_replay_cam.global_transform = Transform3D(cam_basis, center - fwd * s)
+
+
+func _show_replay_tag(v: bool) -> void:
+	if _replay_tag == null:
+		return
+	_replay_tag.visible = v
+	if _replay_tag_tween != null and _replay_tag_tween.is_valid():
+		_replay_tag_tween.kill()
+	if not v:
+		return
+	var label := _replay_tag.get_node("RLabel") as Label
+	label.modulate.a = 1.0
+	var half := 0.5 / maxf(replay_r_blink_hz, 0.1)
+	# ignore_time_scale: this is a UI overlay, not part of the slow-mo'd 3D
+	# scene — without it, Engine.time_scale (replay_slowmo, as low as 0.05)
+	# stretches each half-cycle so far that the replay is often over before a
+	# single blink completes, reading as "just sitting there dim" rather than
+	# an actual blink.
+	_replay_tag_tween = create_tween().set_loops()
+	_replay_tag_tween.set_ignore_time_scale(true)
+	_replay_tag_tween.tween_property(label, "modulate:a", 0.15, half)
+	_replay_tag_tween.tween_property(label, "modulate:a", 1.0, half)
+
+
+# Radial black-to-transparent gradient (opaque near the corners, clear at
+# centre) — same procedural-Image technique as BoardFx's tile texture, just
+# radial instead of a rounded square. Alpha-blended over everything else on
+# GoalReplayTag, so it darkens the edges without needing a shader/blend mode.
+func _make_vignette_tex(strength: float) -> Texture2D:
+	var s := 128
+	var img := Image.create(s, s, false, Image.FORMAT_RGBA8)
+	var center := Vector2(s, s) * 0.5
+	var max_d := center.length()
+	for y in s:
+		for x in s:
+			var d := Vector2(x, y).distance_to(center) / max_d
+			var a := clampf((d - 0.35) / 0.65, 0.0, 1.0) * strength
+			img.set_pixel(x, y, Color(0.0, 0.0, 0.0, a))
+	return ImageTexture.create_from_image(img)
+
+
+# Broadcast-style "cut to replay": a quick white flash at NORMAL speed (called
+# before Engine.time_scale drops for the slow-mo) as the top-down camera cuts
+# in. Awaited, so the choreography/slow-mo only starts once the flash has
+# actually cleared.
+func _flash_replay_transition() -> void:
+	if _replay_tag == null:
+		return
+	var rect := _replay_tag.get_node_or_null("FlashRect") as ColorRect
+	if rect == null:
+		return
+	rect.modulate.a = 1.0
+	var tw := create_tween()
+	tw.tween_property(rect, "modulate:a", 0.0, replay_flash_time)
+	await tw.finished
+
+
+## ONE more beat after the cinematic: a fixed top-down slow-mo retrace of the
+## FULL build-up (every pass, not just the final strike), fullscreen with the
+## HUD hidden and a blinking "R" — a broadcast instant-replay beat. Purely
+## visual: match state is already fully applied (see execute_combo/_do_combo)
+## — this just re-tweens the ball back along its already-recorded path, this
+## time under the second, separate, single static top-down camera.
+func _play_goal_replay() -> void:
+	if _goal_replay_path.size() < 2 or _replay_cam == null or _ball == null:
+		return
+	# The cinematic (see _begin_goal_drama) hid every figure but the shooter
+	# and keeper to declutter its close shots — the replay shows the WHOLE
+	# build-up from above, so everyone needs to be back on screen for it.
+	for cell in _node_at:
+		_node_at[cell].visible = true
+	if _hud != null:
+		_hud.visible = false
+	_show_replay_tag(true)
+	_place_replay_cam()
+	_replay_cam.current = true
+	await _flash_replay_transition() # normal speed — the cut itself, before slow-mo
+	Engine.time_scale = replay_slowmo
+	# Same choreography as the live shot (kicks, contact timing, ball arcs, the
+	# keeper's dive) — replayed a second time under the fixed top-down camera,
+	# just without the cinematic's own camera cut/hiding (trigger_goal_cam=false).
+	var replay_res := {"goal": true, "scorer": _goal_replay_scorer}
+	var tween := _play_combo_choreography(_goal_replay_path, replay_res, false)
+	await tween.finished
+	# Back to normal speed BEFORE the hold, not after: the keeper's gk_miss
+	# dive is scheduled mid-flight (see _play_combo_choreography) and can
+	# still be mid-animation when the ball tween itself finishes — if the
+	# hold stayed in slow-mo too, its real-world length (and whether the dive
+	# visibly finishes at all) would silently depend on replay_slowmo. This
+	# way replay_hold_after is always a fixed, predictable pause that gives
+	# any tail-end animation time to actually complete before the cut back.
+	Engine.time_scale = 1.0
+	await get_tree().create_timer(replay_hold_after).timeout
+	_replay_cam.current = false
+	var cam := get_node_or_null("Camera3D") as Camera3D
+	if cam != null:
+		cam.current = true
+	_show_replay_tag(false)
+	if _hud != null:
+		_hud.visible = true
 
 
 func _find_gk(team_name: String) -> Node3D:
@@ -1393,12 +1734,20 @@ func _apply_move(from: Vector2i, to: Vector2i) -> void:
 	_node_at[to] = fig
 	print("MOVE: %s -> %s" % [from, to])
 	_move_from = NO_CELL
-	# Turn and jog to the new cell, then settle back into idle on arrival.
+	# Turn and jog to the new cell, then settle back into idle on arrival. A
+	# slide can now cover many cells (see MatchState.move_targets), so the
+	# jog's duration scales with distance — a fixed 0.28s regardless of length
+	# would have made anything past 1 cell read as a skate/teleport. The
+	# stride RATE also ramps with distance (see jog_speed_scale_min/max) since
+	# the clip itself has no baked ground speed to sync duration against.
 	_face_toward(fig, from, to)
+	var move_cells := maxi(absi(to.x - from.x), absi(to.y - from.y))
+	var move_duration := maxf(move_min_duration, move_duration_per_cell * move_cells)
 	if fig is PlayerRig:
-		(fig as PlayerRig).jog()
+		var jog_t := clampf(float(move_cells - 1) / float(maxi(jog_speed_scale_max_cells - 1, 1)), 0.0, 1.0)
+		(fig as PlayerRig).jog(lerpf(jog_speed_scale_min, jog_speed_scale_max, jog_t))
 	var tween := create_tween()
-	tween.tween_property(fig, "position", _cell_world(to.x, to.y), 0.28).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(fig, "position", _cell_world(to.x, to.y), move_duration).set_trans(Tween.TRANS_SINE)
 	if fig is PlayerRig:
 		tween.tween_callback((fig as PlayerRig).idle.bind(false))
 	_refresh_turn_view()
@@ -1412,10 +1761,26 @@ func _refresh_turn_view() -> void:
 	elif _state.phase == MatchState.Phase.REMOVE:
 		_draw_remove()
 	else:
+		# Phase.MOVE, nothing picked up yet — highlight every one of the
+		# current team's figures as tappable (mirrors _draw_combo's
+		# combo_starters highlight). Without this the pitch reads as frozen
+		# whenever a MOVE step follows another MOVE step (moves_left still
+		# > 0 but nothing drawn), and the player can time out never
+		# realizing a figure — or a second reactive move — was still theirs
+		# to take.
 		_fx.clear()
+		for c in _state.own_cells():
+			_fx.add_tile(_cell_world(c.x, c.y), color_tap)
 	print("TURN: %s  phase=%s" % [_state.current, MatchState.Phase.keys()[_state.phase]])
 	_shown_time_left = -1
-	if _state.current != _pool_team:
+	if _state.phase == MatchState.Phase.REMOVE:
+		# No timer here, on purpose: REMOVE is the actual PENALTY for a 3rd
+		# stalling violation, not a normal decision — if it timed out like
+		# every other phase, forfeit() would just cancel pending_removal and
+		# the penalty would vanish. Waiting it out must not be an escape
+		# hatch, so there's simply nothing to wait out.
+		_turn_timer.stop()
+	elif _state.current != _pool_team:
 		# A genuinely new team's turn (next_turn() ran since the last refresh) —
 		# fresh full pool. Same team continuing COMBO -> MOVE/REMOVE instead just
 		# resumes whatever was left of theirs (see _do_combo's snapshot above).
@@ -1424,7 +1789,7 @@ func _refresh_turn_view() -> void:
 	else:
 		_turn_timer.start(maxf(_pool_seconds_left, 0.05))
 	if _hud != null:
-		_hud.update_turn_hint(_state.current, _state.phase)
+		_hud.update_turn_hint(_state.current, _state.phase, "", _state.moves_left)
 	_maybe_ai_turn()
 
 
@@ -1482,6 +1847,16 @@ func _on_turn_timeout() -> void:
 	print("TIME UP: %s forfeits (phase=%s)" % [_state.current, MatchState.Phase.keys()[_state.phase]])
 	_state.forfeit()
 	_refresh_turn_view()
+
+
+## "End Move" button (HUD) — skip any remaining reactive move(s) this turn
+## (see MatchState.moves_left/end_move_phase) instead of being forced to use
+## them. Ignored outside Phase.MOVE or while busy/not the human's turn.
+func _on_end_move_requested() -> void:
+	if _busy or _state == null or _is_ai_turn():
+		return
+	if _state.end_move_phase():
+		_refresh_turn_view()
 
 
 # Highlights every one of the carded team's figures as a removable target.
