@@ -150,11 +150,15 @@ func _initialize() -> void:
 	var res_ok := ms.execute_combo(Vector2i(2, 0))
 	_check(res_ok["ok"] and res_ok["goal"] and not res_ok["offside"], "onside shot into the empty goal scores")
 
-	# Cards (verified against the original 2006 game's decompiled source):
-	# a violation is landing the ball within 1 cell of the figure that took
-	# this team's own last CLEAN shot — regardless of which figure shoots
-	# THIS time — unless that reference figure has since moved. 3 strikes:
-	# 1st=yellow, 2nd=red, 3rd=must remove a figure.
+	# Cards: a violation is landing the ball within 1 cell of the figure that
+	# took this team's own last CLEAN shot — regardless of which figure
+	# shoots THIS time — unless that reference figure has since moved (this
+	# detection is verified against the original 2006 game's decompiled
+	# source). The ESCALATION deliberately does NOT match the original:
+	# 1st = yellow only, 2nd (and every one after) = red card AND an
+	# immediate figure removal in the same breath — matches how a red card
+	# actually works in real football (sent off there and then), not a
+	# separate 3rd-strike step.
 	ms.pieces.clear()
 	var fig_a := Vector2i(3, 5)
 	var fig_b := Vector2i(3, 1)
@@ -185,8 +189,9 @@ func _initialize() -> void:
 	# figure is shooting. This is exactly what the old "same figure" rule missed.
 	ms.ball = Vector2i(3, 2); ms.phase = MatchState.Phase.COMBO; ms.begin(fig_b)
 	var s3 := ms.execute_combo(Vector2i(3, 4))
-	_check(s3["card"] == "yellow" and ms.yellow_card["HomeTeam"] and ms.foul_count["HomeTeam"] == 1,
-		"a different figure landing next to the unmoved reference figure -> yellow card")
+	_check(s3["card"] == "yellow" and ms.yellow_card["HomeTeam"] and ms.foul_count["HomeTeam"] == 1
+			and s3["must_remove"] == "",
+		"1st violation -> yellow card only, no removal")
 	_check(ms.stall_ref_id["HomeTeam"] == -1, "reference clears after a violation (fresh start)")
 
 	# Shot 4 (fig_a): the reference was just cleared, so this is safe again.
@@ -194,20 +199,15 @@ func _initialize() -> void:
 	var s4 := ms.execute_combo(Vector2i(1, 5))
 	_check(s4["card"] == "", "fresh reference after the previous violation cleared it")
 
-	# Shot 5 (fig_b): violates again -> 2nd strike -> red card.
+	# Shot 5 (fig_b): violates again -> 2nd violation -> red card AND an
+	# immediate forced removal, no waiting for a separate 3rd incident.
 	ms.ball = Vector2i(3, 2); ms.phase = MatchState.Phase.COMBO; ms.begin(fig_b)
 	var s5 := ms.execute_combo(Vector2i(3, 4))
 	_check(s5["card"] == "red" and ms.red_card["HomeTeam"] and ms.foul_count["HomeTeam"] == 2,
-		"2nd violation -> red card (no forced removal yet)")
-
-	# One more clean shot, then a 3rd violation -> forced removal.
-	ms.ball = Vector2i(3, 6); ms.phase = MatchState.Phase.COMBO; ms.begin(fig_a)
-	ms.execute_combo(Vector2i(1, 5))
-	ms.ball = Vector2i(3, 2); ms.phase = MatchState.Phase.COMBO; ms.begin(fig_b)
-	var s7 := ms.execute_combo(Vector2i(3, 4))
-	_check(s7["must_remove"] == "HomeTeam" and ms.foul_count["HomeTeam"] == 3, "3rd violation -> must remove a figure")
+		"2nd violation -> red card")
+	_check(s5["must_remove"] == "HomeTeam", "2nd violation ALSO forces an immediate removal")
 	_check(ms.phase == MatchState.Phase.REMOVE and ms.pending_removal == "HomeTeam",
-		"3rd violation forces the carded team to remove a figure")
+		"2nd violation puts the carded team straight into Phase.REMOVE")
 
 	_check(not ms.remove_figure(Vector2i(9, 9)), "remove_figure fails for an empty cell")
 	var removed := ms.remove_figure(fig_b)
@@ -319,14 +319,6 @@ func _initialize() -> void:
 	ms.execute_combo(non_goal_shot)
 	_check(ms.phase == MatchState.Phase.MOVE and ms.moves_left == 1,
 		"mandatory post-combo move gets moves_left = 1, not 2")
-
-	# end_move_phase() skips whatever's left of a reactive move phase early.
-	ms.setup(home2, away2, Vector2i(3, 5), "HomeTeam", 99)
-	ms.current = "AwayTeam"
-	ms.start_turn()
-	_check(ms.moves_left == 2, "fresh reactive phase: moves_left reset to 2")
-	_check(ms.end_move_phase(), "end_move_phase() succeeds during Phase.MOVE")
-	_check(ms.current == "HomeTeam", "end_move_phase() hands the turn over immediately")
 
 	# --- Reaching the ball mid-REACTIVE-move upgrades straight to Phase.COMBO,
 	# same team, no turn hand-off — a leftover move slot isn't wasted.

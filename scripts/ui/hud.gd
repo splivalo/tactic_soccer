@@ -26,12 +26,6 @@ extends Control
 
 @onready var _footer_dot: Panel = %TurnDot
 @onready var _footer_label: Label = %FooterLabel
-@onready var _end_move_button: Button = %EndMoveButton
-
-## Emitted when the player taps "End Move" to skip any remaining reactive
-## move(s) this turn (see MatchState.moves_left/end_move_phase) instead of
-## being forced to use them. main.gd owns _state, so it does the actual call.
-signal end_move_requested
 
 @onready var _home_frame: TextureRect = _home_primary.get_parent().get_node("Frame")
 @onready var _away_frame: TextureRect = _away_primary.get_parent().get_node("Frame")
@@ -66,7 +60,6 @@ func _ready() -> void:
 	_pause_button.pressed.connect(_open_pause_modal)
 	_resume_button.pressed.connect(_close_pause_modal)
 	_exit_button.pressed.connect(_exit_to_menu)
-	_end_move_button.pressed.connect(func(): end_move_requested.emit())
 	_pause_modal.visible = false
 	# TurnDot's fill is recolored per-team (see update_turn_hint); its white
 	# outline must survive that untouched, so it needs its OWN StyleBoxFlat
@@ -196,8 +189,7 @@ func set_footer_text(text: String, dot_color: Color) -> void:
 ## means this is a REACTIVE move (the team doesn't have the ball at all) with
 ## a second one still available after this — worth calling out, since
 ## otherwise nothing on screen explains why the turn didn't just end after one
-## move. The "End Move" button (skip the rest — see MatchState.end_move_phase)
-## only ever makes sense during Phase.MOVE too.
+## move.
 func update_turn_hint(side: String, phase: int, intro: String = "", moves_left: int = 1) -> void:
 	var code: String = _home_name.text if side == "HomeTeam" else _away_name.text
 	var dot_color: Color = _home_color if side == "HomeTeam" else _away_color
@@ -209,7 +201,6 @@ func update_turn_hint(side: String, phase: int, intro: String = "", moves_left: 
 			verb = "move a player (%d left)" % moves_left if moves_left > 1 else "move a player"
 		MatchState.Phase.REMOVE:
 			verb = "remove a player (red card)"
-	_end_move_button.visible = phase == MatchState.Phase.MOVE
 	var hint := "%s: %s" % [code, verb]
 	_footer_label.text = "%s   —   %s" % [intro, hint] if intro != "" else hint
 	_dot_style.bg_color = dot_color

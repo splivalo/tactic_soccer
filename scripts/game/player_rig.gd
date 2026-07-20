@@ -9,6 +9,8 @@ extends Node3D
 ## Fires at the foot-ball contact moment inside a kick (see kick()).
 signal kick_contact
 
+const KICK_SOUND: AudioStream = preload("res://assets/audio/sfx/ball_kick.mp3")
+
 ## The two standing idles. Outfield players randomly get one of these AND a
 ## random phase + speed, so a whole team never breathes in lockstep.
 const IDLE_CLIPS := ["idle", "idle_breath"]
@@ -34,6 +36,9 @@ const STRIKE_CONTACT_OFFSET := Vector3(-0.287865, 0.050565, 0.267526)
 ## Exported so you can still nudge them by eye if it ever looks off.
 @export var pass_contact_time := 0.33
 @export var strike_contact_time := 0.46
+## Loudness of the kick-contact SFX. The source clip is mixed quiet, so this
+## defaults well above 0dB; nudge further if it's still too soft/loud.
+@export_range(-24.0, 24.0, 0.5) var kick_sfx_volume_db := 8.0
 ## Playback speed of the kicks. Passes below 1.0 read as a gentle push-pass
 ## instead of an aggressive strike; the shot stays punchy at ~1.0.
 @export_range(0.4, 1.5, 0.01) var pass_speed := 0.72
@@ -74,6 +79,7 @@ const HIPS_TRACK := "Skeleton3D:mixamorig_Hips"
 @export var turn_speed := 200.0
 
 var _ap: AnimationPlayer
+var _kick_sfx: AudioStreamPlayer
 var _is_gk := false
 var _acting := false  # mid kick/jog — see is_busy()
 # A settle-turn requested by main (face the ball / return to formation).
@@ -138,6 +144,11 @@ func _set_root_motion(on: bool) -> void:
 
 
 func _ready() -> void:
+	_kick_sfx = AudioStreamPlayer.new()
+	_kick_sfx.stream = KICK_SOUND
+	_kick_sfx.bus = &"SFX"
+	_kick_sfx.volume_db = kick_sfx_volume_db
+	add_child(_kick_sfx)
 	_ap = _find_ap(self)
 	if _ap == null:
 		push_warning("PlayerRig on '%s' found no AnimationPlayer." % name)
@@ -233,6 +244,7 @@ func kick(kind: String, power: float = 1.0, left: bool = false, jitter: float = 
 	var contact: float = strike_contact_time if is_strike else pass_contact_time
 	await get_tree().create_timer(maxf(contact - skip, 0.02) / speed).timeout
 	kick_contact.emit()
+	_kick_sfx.play()
 	_fast_forward_follow_through(clip, speed)
 
 

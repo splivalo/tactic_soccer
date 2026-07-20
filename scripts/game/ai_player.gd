@@ -14,8 +14,17 @@ class_name AIPlayer
 ##            hard enough to beat that winning against it felt earned).
 ##   Medium = 90% best move, 10% second-best.
 ##   Easy   = 70% best move, 30% second- or third-best (whichever exist).
-## Still a greedy per-decision evaluator, not a search/minimax — a proper
-## look-ahead AI would be a much bigger project than this pass.
+## Medium/Easy's "best move" is still a greedy per-decision evaluator (one
+## step at a time, see decide_combo's fallback loop). Hard's "best move" is
+## not: decide_combo runs _search_best_combo, a real backtracking search over
+## the WHOLE pass chain (see MAX_CHAIN_EXTENSIONS), so Hard can commit to a
+## pass that doesn't look best right this instant because it sets up a
+## guaranteed goal a couple of touches later — a plain greedy walk would've
+## abandoned that line at the first step. _combo_action_score also checks,
+## for every shot candidate, whether it hands the opponent an immediate
+## scoring line back (see _post_shot_threat_penalty) — this applies to every
+## difficulty, not just Hard, since it's the same "is this actually a good
+## shot" question the greedy walk was already asking, just answered better.
 
 const MAX_CHAIN_EXTENSIONS := 4 # safety cap on pass-chain length; not a difficulty lever
 
@@ -27,8 +36,26 @@ const MAX_CHAIN_EXTENSIONS := 4 # safety cap on pass-chain length; not a difficu
 static func _rank_pick(candidates: Array, score_fn: Callable, difficulty: String) -> Variant:
 	if candidates.size() == 1:
 		return candidates[0]
-	var scored := candidates.duplicate()
-	scored.sort_custom(func(a, b): return score_fn.call(a) > score_fn.call(b))
+	# Score each candidate EXACTLY ONCE up front, then sort by the cached
+	# value — sort_custom's comparator gets called many times per element
+	# (O(n log n) comparisons, most elements involved in several), so calling
+	# score_fn straight from the comparator re-evaluates the SAME candidate
+	# over and over. That was harmless while every score_fn here was a few
+	# arithmetic ops, but once one (decide_move's _move_score on Hard, via
+	# _reach_ball_value -> _search_best_combo) started doing real work
+	# (hundreds of ms), re-scoring it a dozen-plus times during one sort
+	# turned a single AI decision into an 11-SECOND freeze — this is the
+	# actual fix for that, not a micro-optimization.
+	var scores: Array[float] = []
+	for c in candidates:
+		scores.append(score_fn.call(c))
+	var order: Array[int] = []
+	for i in candidates.size():
+		order.append(i)
+	order.sort_custom(func(i, j): return scores[i] > scores[j])
+	var scored: Array = []
+	for i in order:
+		scored.append(candidates[i])
 	var roll := randf()
 	var idx := 0
 	match difficulty:
@@ -62,6 +89,19 @@ static func decide_combo(state: MatchState, difficulty: String) -> Vector2i:
 	var starters := state.combo_starters()
 	if starters.is_empty():
 		return Vector2i(-1, -1)
+
+	if difficulty == "Hard":
+		var best := _search_best_combo(state)
+		if not best.is_empty():
+			state.begin(best["path"][0])
+			for i in range(1, best["path"].size()):
+				state.extend(best["path"][i])
+			return best["shoot_cell"]
+		# Falls through to the greedy walk below only if the search somehow
+		# found nothing to play (shouldn't happen — combo_starters() was
+		# non-empty and the rules guarantee a shoot target once a chain is
+		# open — but better to fall back than return a dead turn).
+
 	var starter: Vector2i = _rank_pick(starters, func(c): return _advance_score(state, c), difficulty)
 	state.begin(starter)
 
@@ -87,6 +127,92 @@ static func decide_combo(state: MatchState, difficulty: String) -> Vector2i:
 	return _rank_pick(shoot_targets, func(c): return _combo_action_score(state, c, true), difficulty)
 
 
+## Caps branching at every fork of the Hard combo search below — both the
+## starter choice and every pass fork get pre-ranked by the cheap heuristic
+## first (_advance_score / _combo_action_score) and only the top few are
+## actually recursed into. Node count grows as roughly BEAM^depth (depth up
+## to MAX_CHAIN_EXTENSIONS+1 = 5), and every SHOOT option at EVERY node gets
+## the full _post_shot_threat_penalty check (a real DFS via
+## team_can_score_next, NOT cheap) — at BEAM=6 that's ~9000 nodes and
+## measured ~350-450ms per decide_combo call on a desktop i9, and a single
+## decide_move call could trigger several of these (see _reach_ball_value),
+## which is what turned into an actual multi-second freeze (see
+## _rank_pick's doc comment for the other half of that bug). At 3, node
+## count drops roughly 25x for a low-tens-of-ms search — this is the mobile
+## target platform (see project overview), so "fast on a desktop" was never
+## actually the bar. A fork that doesn't even rank in the top 3 by the cheap
+## heuristic essentially never wins the full search anyway.
+const COMBO_SEARCH_BEAM := 2
+
+
+## Hard-only (see decide_combo): explores the FULL combo tree via
+## backtracking on one scratch clone — every starter, then at every depth up
+## to MAX_CHAIN_EXTENSIONS every pass fork, each ending in every shoot option
+## — and returns the single best-scoring complete path, not just the
+## locally-best next step (see _search_combo_step). {} if there is nothing to
+## play (shouldn't happen once combo_starters() is non-empty — the caller
+## falls back to the greedy walk in that case).
+## Return shape: {"path": Array[Vector2i], "shoot_cell": Vector2i} — path is
+## the starter followed by every intermediate pass, exactly what the caller
+## needs to replay via begin()/extend() on the real state.
+static func _search_best_combo(state: MatchState) -> Dictionary:
+	var starters := state.combo_starters()
+	if starters.is_empty():
+		return {}
+	var search: MatchState = state.clone_for_query()
+	var best := {"path": [] as Array[Vector2i], "shoot": Vector2i(-1, -1), "value": -INF}
+	starters.sort_custom(func(a, b): return _advance_score(state, a) > _advance_score(state, b))
+	for starter in starters.slice(0, COMBO_SEARCH_BEAM):
+		search.chain = [starter]
+		var result := _search_combo_step(search)
+		if result["value"] > best["value"]:
+			best = result
+	if best["shoot"] == Vector2i(-1, -1):
+		return {}
+	return {"path": best["path"], "shoot_cell": best["shoot"], "value": best["value"]}
+
+
+## One node of the backtracking search: `search.chain` is the path so far.
+## Tries every shoot target (a leaf — ends the chain right here) and, below
+## the extension cap, every pass target (recurses one deeper), and returns
+## the best {"path","shoot","value"} found anywhere under this node.
+## `search.chain` is restored to its value on entry before returning either
+## way (append/pop_back around the recursive call), so the caller's own loop
+## sees a clean chain to try its next sibling from.
+static func _search_combo_step(search: MatchState) -> Dictionary:
+	var best := {"path": search.chain.duplicate(), "shoot": Vector2i(-1, -1), "value": -INF}
+	# Shoot targets are beam-limited too, by the CHEAP _advance_score alone
+	# (no threat check) — a wide-open board can offer 15-20+ shoot cells at a
+	# single node, and _combo_action_score's threat check (_post_shot_threat_
+	# penalty -> team_can_score_next) measured ~1ms EACH, not the "cheap, no
+	# recursion" it looked like on paper — evaluating all of them at every
+	# node was the actual multi-hundred-ms cost (see COMBO_SEARCH_BEAM's doc
+	# comment). Safe to pre-filter this way: a goal cell is the opponent's
+	# goal row, i.e. the maximum possible _advance_score (0, unbeatable), so
+	# it always sorts first and is never at risk of being cut.
+	var shoot_targets := search.combo_shoot_targets()
+	shoot_targets.sort_custom(func(a, b): return _advance_score(search, a) > _advance_score(search, b))
+	for cell in shoot_targets.slice(0, COMBO_SEARCH_BEAM):
+		var v: float = _combo_action_score(search, cell, true)
+		if v > best["value"]:
+			best = {"path": search.chain.duplicate(), "shoot": cell, "value": v}
+	if search.chain.size() - 1 < MAX_CHAIN_EXTENSIONS:
+		# Passes keep the fuller _combo_action_score for pre-ranking (still
+		# cheap — is_shoot=false skips the threat check entirely) rather than
+		# bare _advance_score, so a pass into an opponent-surrounded cell
+		# doesn't out-rank a slightly-less-advanced but safer one before the
+		# beam cut even gets a chance to compare their real recursive values.
+		var pass_targets := search.combo_pass_targets()
+		pass_targets.sort_custom(func(a, b): return _combo_action_score(search, a, false) > _combo_action_score(search, b, false))
+		for cell in pass_targets.slice(0, COMBO_SEARCH_BEAM):
+			search.chain.append(cell)
+			var deeper := _search_combo_step(search)
+			if deeper["value"] > best["value"]:
+				best = deeper
+			search.chain.pop_back()
+	return best
+
+
 ## Progress-toward-goal only — used to rank starters, where there's nothing
 ## to score yet besides "how far upfield is this."
 static func _advance_score(state: MatchState, cell: Vector2i) -> float:
@@ -101,8 +227,9 @@ static func _combo_action_score(state: MatchState, cell: Vector2i, is_shoot: boo
 	var score: float = _advance_score(state, cell)
 	if is_shoot:
 		var shooter: Vector2i = state.chain[-1]
-		if state.is_opponent_goal(cell, state.current) and state.in_opponent_half(shooter, state.current) \
-				and not state.is_offside(shooter, state.current):
+		var is_goal := state.is_opponent_goal(cell, state.current) and state.in_opponent_half(shooter, state.current) \
+				and not state.is_offside(shooter, state.current)
+		if is_goal:
 			score += 100000.0 # a real goal outweighs every other consideration
 		# Never worth a card/removal risk unless it's the goal above (this was
 		# the "AI keeps getting carded" bug: it used to recycle the ball among
@@ -110,9 +237,43 @@ static func _combo_action_score(state: MatchState, cell: Vector2i, is_shoot: boo
 		# MatchState.would_violate_stall.
 		if state.would_violate_stall(cell):
 			score -= 5000.0
+		if not is_goal:
+			score -= _post_shot_threat_penalty(state, cell)
 	score -= _opponent_adjacent_count(state, cell) * 200.0 # don't hand it straight back
-	score -= _nearest_own_distance(state, cell) * 3.0      # keep support close
+	# Keep support close — but as a MILD tie-breaker, not a dominant term: at
+	# the old weight (3.0), this alone outweighed _advance_score's 1-point-
+	# per-cell reward on almost every real advance (a shot 3 cells further
+	# upfield typically lands ~3 cells farther from the rest of a clustered
+	# team too), so the AI always "won" by nudging the ball forward by the
+	# absolute minimum and stopping — the concrete, reproducible bug behind
+	# a human just spamming End Move seeing the AI shoot the same 1-cell hop
+	# forever. At 0.5 a real multi-cell advance DECISIVELY outscores staying
+	# tight to support (a straight tie at 1.0 still left the outcome to
+	# whichever cell happened to sort first) — still loses outright to
+	# _opponent_adjacent_count's 200-point hit, so it won't walk into real
+	# danger just to gain ground.
+	score -= _nearest_own_distance(state, cell) * 0.5
 	return score
+
+
+## How exposed a shot landing on `cell` leaves the team: previews the ball
+## there (a shot only moves the ball, never a piece, so nothing else needs
+## touching) and asks whether the OPPONENT could then score on THEIR very
+## next turn — the same deep existence check (team_can_score_next) that
+## decide_move's _defense_score already uses to keep a team from wandering
+## out of position. Without this a shot that "advances the ball" but hands
+## the opponent a free reply scored no worse than a genuinely safe one — this
+## was the concrete gap that let a human beat Hard in a handful of turns: the
+## AI happily walked into shots a defender never has to work for, then found
+## nothing in its OWN mandatory move able to fix the exposure it had just
+## created. Flat penalty (exposed vs. safe is the real question here, not a
+## matter of degree) — skipped entirely for an actual goal, see the caller.
+static func _post_shot_threat_penalty(state: MatchState, cell: Vector2i) -> float:
+	var saved_ball := state.ball
+	state.ball = cell
+	var exposed := team_can_score_next(state, state.opponent(state.current))
+	state.ball = saved_ball
+	return 8000.0 if exposed else 0.0
 
 
 ## How many of the OPPONENT's pieces sit Chebyshev-adjacent to `cell` — i.e.
@@ -148,6 +309,16 @@ static func _nearest_own_distance(state: MatchState, cell: Vector2i) -> int:
 ## reposition by that measure wouldn't win rank_pick over a safe one anyway.
 const MAX_DEFENSE_CHECKS := 16
 
+## Cap on how many _reach_ball_value calls within ONE decide_move actually run
+## the expensive _search_best_combo lookahead (see there — measured ~50-450ms
+## EACH on a busy board), regardless of how many of the top candidates happen
+## to reach the ball. `top` is already sorted by _move_base_score (closest to
+## the ball first), so the ones that matter most are evaluated first; capping
+## here bounds a single decide_move call's worst case instead of letting it
+## scale with however many reach-adjacency options the position happens to
+## have (this was the other half of the reported multi-second freeze).
+const MAX_REACH_BALL_SEARCHES := 3
+
 ## {"from": Vector2i, "to": Vector2i} — every legal (from,to) pair across every
 ## movable figure is scored and ranked together (see _move_score), same
 ## difficulty hit-rate as decide_combo.
@@ -160,7 +331,11 @@ static func decide_move(state: MatchState, difficulty: String) -> Dictionary:
 		return {}
 	candidates.sort_custom(func(a, b): return _move_base_score(state, a) > _move_base_score(state, b))
 	var top: Array[Dictionary] = candidates.slice(0, MAX_DEFENSE_CHECKS)
-	return _rank_pick(top, func(m): return _move_score(state, m), difficulty)
+	# Single-element array as a mutable counter shared across every _move_score
+	# call below (closures can't cleanly mutate a captured int) — see
+	# MAX_REACH_BALL_SEARCHES.
+	var reach_budget := [MAX_REACH_BALL_SEARCHES]
+	return _rank_pick(top, func(m): return _move_score(state, m, difficulty, reach_budget), difficulty)
 
 
 ## Primarily "does this close the distance to the ball" (so the team can
@@ -182,9 +357,44 @@ static func _move_base_score(state: MatchState, m: Dictionary) -> float:
 ## opponent OFF the scoreboard next turn (see _defense_score). Without that
 ## term the AI only ever chased the ball forward and never noticed it was
 ## leaving its own net wide open — this was the "conceded in a few moves
-## because nobody defended" problem.
-static func _move_score(state: MatchState, m: Dictionary) -> float:
-	return _move_base_score(state, m) + _defense_score(state, m)
+## because nobody defended" problem. Hard additionally gets _reach_ball_value
+## folded in whenever `m` is a reactive move that actually reaches the ball
+## (see there) — not just "did we get to the ball" but "is THIS the reach
+## point that sets up the strongest reply", using the same chain search
+## decide_combo uses on Hard.
+static func _move_score(state: MatchState, m: Dictionary, difficulty: String, reach_budget: Array) -> float:
+	var score := _move_base_score(state, m) + _defense_score(state, m)
+	if difficulty == "Hard":
+		score += _reach_ball_value(state, m, reach_budget)
+	return score
+
+
+## Non-zero only when `m` is a REACTIVE move (see MatchState._move_is_reactive)
+## that isn't the last one this phase (state.moves_left > 1, pre-decrement —
+## see MatchState.do_move's upgrade condition) AND actually lands adjacent to
+## the ball — i.e. exactly the case where do_move upgrades the rest of this
+## turn straight into a real combo. When multiple candidates all reach
+## adjacency (several pieces/paths could win the ball back), a flat "reached
+## it" bonus can't tell them apart; this runs the SAME backtracking search
+## decide_combo's Hard path uses (_search_best_combo) on the hypothetical
+## resulting position so Hard picks whichever reach point actually leads
+## somewhere, not just any of them.
+static func _reach_ball_value(state: MatchState, m: Dictionary, reach_budget: Array) -> float:
+	if not state._move_is_reactive or state.moves_left <= 1:
+		return 0.0
+	var to: Vector2i = m["to"]
+	if maxi(absi(to.x - state.ball.x), absi(to.y - state.ball.y)) != 1:
+		return 0.0
+	if reach_budget[0] <= 0:
+		return 0.0
+	reach_budget[0] -= 1
+	var sim: MatchState = state.clone_for_query()
+	sim.pieces.erase(m["from"])
+	sim.pieces[to] = state.pieces[m["from"]]
+	sim.phase = MatchState.Phase.COMBO
+	sim.chain = []
+	var search := _search_best_combo(sim)
+	return search["value"] if not search.is_empty() else 0.0
 
 
 ## How much move `m` helps keep the opponent OFF the scoreboard next turn:

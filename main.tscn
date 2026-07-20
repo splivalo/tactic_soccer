@@ -78,16 +78,16 @@ fov = 66.6
 
 [node name="stadium" parent="." unique_id=658270329 instance=ExtResource("2_0xm2m")]
 
-[node name="arena" parent="stadium" index="1" unique_id=831205437]
+[node name="arena" parent="stadium" index="1" unique_id=1805899129]
 surface_material_override/0 = SubResource("StandardMaterial3D_lquwl")
 
-[node name="reflectors" parent="stadium" index="8" unique_id=1649725520]
+[node name="reflectors" parent="stadium" index="8" unique_id=838278922]
 surface_material_override/1 = SubResource("StandardMaterial3D_reflectors")
 
-[node name="goal2_net" parent="stadium" index="9" unique_id=38387077]
+[node name="goal2_net" parent="stadium" index="9" unique_id=960074723]
 surface_material_override/0 = SubResource("StandardMaterial3D_h2yge")
 
-[node name="goal1_net" parent="stadium" index="10" unique_id=2145557116]
+[node name="goal1_net" parent="stadium" index="10" unique_id=1600029497]
 surface_material_override/0 = SubResource("StandardMaterial3D_1bvp3")
 
 [node name="HUD" type="CanvasLayer" parent="." unique_id=94580436]

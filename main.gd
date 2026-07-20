@@ -357,8 +357,6 @@ func _ready() -> void:
 	if GameFlow.away_country != "":
 		away_country = GameFlow.away_country
 	_hud = get_node_or_null("HUD/Hud")
-	if _hud != null:
-		_hud.end_move_requested.connect(_on_end_move_requested)
 	_turn_timer = Timer.new()
 	_turn_timer.name = "TurnTimer"
 	_turn_timer.one_shot = true
@@ -656,10 +654,13 @@ func _start_placement() -> void:
 
 ## Every cell the CURRENT placement slot's role may legally go on — the
 ## keeper only the 3 goal cells on the player's own goal line, field players
-## any empty, non-goal cell on the player's own half. Mirrors the same
+## any empty, non-goal cell on the player's own half, EXCLUDING the kickoff
+## ball cell itself (_kickoff_cell — the GK goal line never overlaps it, so
+## only the field-player branch needs the check). Mirrors the same
 ## confinement rules MatchState already enforces during play (own_goal_row /
 ## is_goal_cell / Board.half_of_row), so a placed team is never in a spot the
-## rules would forbid moving them to later.
+## rules would forbid moving them to later, and never spawns literally on top
+## of the ball at kickoff (see _kickoff_cell/_build_match).
 func _placement_valid_cells(role: String) -> Array[Vector2i]:
 	var team := GameFlow.player_side
 	var out: Array[Vector2i] = []
@@ -671,12 +672,13 @@ func _placement_valid_cells(role: String) -> Array[Vector2i]:
 				out.append(cell)
 		return out
 	var own_half := 1 if team == "HomeTeam" else -1
+	var ball_cell := _kickoff_cell(team)
 	for row in range(Board.ROWS):
 		if Board.half_of_row(row) != own_half:
 			continue
 		for col in range(Board.COLS):
 			var cell := Vector2i(col, row)
-			if _node_at.has(cell) or _state.is_goal_cell(cell):
+			if _node_at.has(cell) or _state.is_goal_cell(cell) or cell == ball_cell:
 				continue
 			out.append(cell)
 	return out
@@ -970,17 +972,26 @@ func _commit_combo_target(cell: Vector2i) -> void:
 # it. Checking figures first means the figure always wins when both match.
 # Priority order resolves the one real ambiguity (a teammate who is BOTH a
 # valid starter — adjacent to the ball — AND a valid pass target in a straight
-# line from the chain): while a chain is already going, rewind/pass/shoot are
-# checked FIRST — matching _on_motion's drag-to-connect, which only ever
-# considers chain+pass targets, never starters — so that cell means "pass
-# here", not "restart here". Only once none of those match (or the chain was
-# empty to begin with) does a tap fall through to (re)starting at a starter.
+# line from the chain): a tap on a valid STARTER always (re)starts the chain
+# there, even if that same cell would also read as a pass target from the
+# current chain — switching who you're playing through wins over extending
+# the existing pick. Rewind is checked first regardless (tapping something
+# ALREADY in the chain truncates back to it, same as ever — that's a
+# different, well-established gesture, not this ambiguity). Only once none
+# of rewind/starter/pass/shoot match does... well, they cover every legal
+# tap between them; this ordering just decides which ONE wins when a cell
+# qualifies as more than one.
 func _combo_tap(screen_pos: Vector2) -> void:
 	if not _state.chain.is_empty():
 		var rewind_cell := _resolve_target(screen_pos, _state.chain, TAP_HIT_RADIUS)
 		if rewind_cell != NO_CELL:
 			_state.rewind(rewind_cell)
 			_draw_combo()
+			return
+		var restart_cell := _resolve_target(screen_pos, _state.combo_starters(), TAP_HIT_RADIUS)
+		if restart_cell != NO_CELL:
+			if _state.begin(restart_cell):
+				_draw_combo()
 			return
 		var pass_cell := _resolve_target(screen_pos, _state.combo_pass_targets(), TAP_HIT_RADIUS)
 		if pass_cell != NO_CELL:
@@ -1559,8 +1570,8 @@ func _setup_replay_cam() -> void:
 
 # The "R"/REPLAY tag, vignette and flash are real scene nodes (GoalReplayTag/*
 # in main.tscn, a sibling of HUD so they stay visible while HUD gets hidden) —
-# select RLabel in the Scene dock to tune font/colour/position, same as
-# EndMoveButton. The vignette's actual texture is procedural (depends on the
+# select RLabel in the Scene dock to tune font/colour/position. The
+# vignette's actual texture is procedural (depends on the
 # tunable replay_vignette_strength export), so it's generated here at runtime,
 # same pattern as BoardFx's tile texture.
 func _setup_replay_tag() -> void:
@@ -1895,14 +1906,6 @@ func _on_turn_timeout() -> void:
 	_refresh_turn_view()
 
 
-## "End Move" button (HUD) — skip any remaining reactive move(s) this turn
-## (see MatchState.moves_left/end_move_phase) instead of being forced to use
-## them. Ignored outside Phase.MOVE or while busy/not the human's turn.
-func _on_end_move_requested() -> void:
-	if _busy or _state == null or _is_ai_turn():
-		return
-	if _state.end_move_phase():
-		_refresh_turn_view()
 
 
 # Highlights every one of the carded team's figures as a removable target.

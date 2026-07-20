@@ -29,7 +29,7 @@ var _next_id: int = 0
 # all (see start_turn/team_has_ball below): enough to physically bring a
 # SECOND figure in (or the same one via two hops, an "L") within one reaction
 # window, so a numbers/reach disadvantage is actually recoverable instead of
-# permanently unreachable — see do_move() and end_move_phase().
+# permanently unreachable — see do_move().
 var moves_left: int = 1
 # True only for a REACTIVE move phase (you didn't have the ball at all — see
 # start_turn); false for the mandatory 1-move tidy-up right after your own
@@ -49,14 +49,18 @@ var _move_is_reactive: bool = false
 var _combo_from_reactive: bool = false
 
 # --- cards / stalling ----------------------------------------------------------
-# Verified against the original 2006 game's decompiled source. Holding the
-# ball among your own figures is always legal — the violation is shooting the
-# ball back within 1 cell of the figure that took your team's own LAST
-# (clean) shot — i.e. "giving it back to the same guy" — regardless of which
-# figure takes the new shot. The reference is cleared (no violation possible)
-# if that figure has since been moved. 3 violations in a row: 1st = yellow,
-# 2nd = red, 3rd = must remove a figure. Persist for the whole match
-# (partija) — only setup() clears cards/foul_count, not reset().
+# WHEN a violation happens is verified against the original 2006 game's
+# decompiled source: holding the ball among your own figures is always
+# legal — the violation is shooting the ball back within 1 cell of the
+# figure that took your team's own LAST (clean) shot — i.e. "giving it back
+# to the same guy" — regardless of which figure takes the new shot. The
+# reference is cleared (no violation possible) if that figure has since been
+# moved. The ESCALATION deliberately does NOT match the original: 1st =
+# yellow only; 2nd, and every one after, = red card AND an immediate figure
+# removal in the same breath (matches real football — a red card sends the
+# player off there and then, not on some separate later incident). Persist
+# for the whole match (partija) — only setup() clears cards/foul_count, not
+# reset().
 var yellow_card: Dictionary = {"HomeTeam": false, "AwayTeam": false}
 var red_card: Dictionary = {"HomeTeam": false, "AwayTeam": false}
 var foul_count: Dictionary = {"HomeTeam": 0, "AwayTeam": 0}
@@ -115,11 +119,13 @@ func next_turn() -> void:
 
 
 ## A lightweight scratch copy for hypothetical "what if" queries (AI defense
-## lookahead — see AIPlayer.team_can_score_next). Copies only what the
-## combo/move query functions actually read: pieces, ball, current team,
-## chain and phase. Cards/score/timers/moves_left are irrelevant to those
-## pure queries and deliberately NOT copied — mutate the clone freely, the
-## real state is never touched.
+## lookahead — see AIPlayer.team_can_score_next — and AIPlayer's Hard combo
+## search, see AIPlayer._search_best_combo). Copies what the combo/move query
+## functions actually read: pieces, ball, current team, chain, phase, and the
+## stalling reference (needed for would_violate_stall to answer correctly
+## inside a search clone instead of always seeing a fresh/empty reference).
+## Score/cards/timers/moves_left are still NOT copied — no query function
+## reads them — so mutate the clone freely, the real state is never touched.
 func clone_for_query() -> MatchState:
 	var c := MatchState.new()
 	c.pieces = pieces.duplicate(true)
@@ -127,6 +133,8 @@ func clone_for_query() -> MatchState:
 	c.current = current
 	c.phase = phase
 	c.chain = chain.duplicate()
+	c.stall_ref_id = stall_ref_id.duplicate()
+	c.stall_ref_cell = stall_ref_cell.duplicate()
 	return c
 
 
@@ -311,16 +319,21 @@ func execute_combo(shoot_cell: Vector2i) -> Dictionary:
 	# regardless of which figure takes THIS shot. No violation if that
 	# reference figure has since moved (stall_ref_id would already be -1;
 	# see do_move()). Holding the ball among your own figures is otherwise
-	# always fine. 3 strikes: 1st = yellow, 2nd = red, 3rd = remove a figure.
+	# always fine. 1st = yellow (a warning only). 2nd AND EVERY violation
+	# after that = red card AND an immediate figure removal in the same
+	# breath — matches how a red card actually works in real football (the
+	# player is sent off there and then, not on some LATER third incident).
+	# foul_count persists for the whole match (only setup() clears it, not
+	# reset() at kickoff — see the field's own doc comment), so a team that
+	# keeps fouling after its first red keeps losing figures each time.
 	if would_violate_stall(shoot_cell):
 		foul_count[current] += 1
 		if foul_count[current] == 1:
 			yellow_card[current] = true
 			res["card"] = "yellow"
-		elif foul_count[current] == 2:
+		else:
 			red_card[current] = true
 			res["card"] = "red"
-		else:
 			res["must_remove"] = current
 		stall_ref_id[current] = -1
 		stall_ref_cell[current] = Vector2i(-1, -1)
@@ -460,18 +473,6 @@ func do_move(from: Vector2i, to: Vector2i) -> bool:
 		_combo_from_reactive = true
 	elif moves_left <= 0:
 		next_turn()
-	return true
-
-
-## Ends Phase.MOVE early, skipping any remaining reactive move(s) this turn —
-## same effect as spending them, just without moving further. Lets a player
-## who's already achieved what they needed (or has nothing useful left to do)
-## hand the turn over instead of being forced to move again. True if it was
-## legal to end now (i.e. actually in Phase.MOVE).
-func end_move_phase() -> bool:
-	if phase != Phase.MOVE:
-		return false
-	next_turn()
 	return true
 
 

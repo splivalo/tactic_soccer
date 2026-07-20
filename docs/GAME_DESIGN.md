@@ -45,15 +45,17 @@ tko trenutno ima loptu:
   uzalud. **Ali** ako se lopta dosegne tek **drugim (zadnjim)** reaktivnim potezom, NEMA
   nadogradnje — red se normalno završava (potez + potez = već 2 akcije potrošene, treći bonus-šut
   se nikad ne dodjeljuje). Vidi `MatchState.do_move`/`execute_combo`, `_combo_from_reactive`.
-- Tijekom `Phase.MOVE` postoji i "End Move" gumb (HUD) za dragovoljni odustanak od preostalih
-  reaktivnih poteza.
+- **Nema dragovoljnog odustanka od reaktivnih poteza** (2026-07-20, svjesno maknuto — postojao je
+  "End Move" gumb, ali korisnik je odlučio da mora ostati dosljedno "tjeramo dinamiku, ne dopuštamo
+  zadržavanje igre" isto kao i kod combo faze gdje si prisiljen odigrati loptu ako je imaš). Oba
+  reaktivna poteza uvijek moraju biti odigrana.
 
 **Preuzimanje lopte / posjed:** tim "ima" loptu čim je JEDNA njegova figurica susjedna lopti
 (Chebyshev 1) — bez obzira koliko je protivničkih figurica isto tako blizu. (Isprobano pa **ukinuto**
 pravilo "nadjačavanja" — tim koji ju je upravo dosegnuo reaktivnim potezom morao bi imati pravo
 igrati loptom bez obzira koliko protivnika stoji uz nju, jer ionako nije njihov red.)
 **Gol:** samo s protivničke polovice. **Zaleđe:** ako su sve protivničke terenske figurice (golman isključen) strogo iza napadača — nema gola. Ako protivnik nema više nijednu terensku figuricu, zaleđe se ne može dogoditi.
-**Kartoni (zadržavanje/vrtnja lopte):** prekršaj je kad novi šut sleti unutar 1 polja (Chebyshev) od figurice koja je odigrala tvoj tim posljednji **čisti** (neprekršajni) šut — bez obzira koja figurica sad puca. Referenca se briše ako se ta figurica u međuvremenu pomakne, ili nakon svakog prekršaja. Samo držati loptu među svojim figuricama je uvijek legalno; kažnjava se doslovno vraćanje istom šutu na isto mjesto. 1. prekršaj = žuti karton, 2. = crveni, 3. = obavezno uklanjanje jedne figurice (`Phase.REMOVE`, timer se tijekom te faze zaustavlja — istek vremena ne smije poništiti kaznu). Kartoni traju cijelu partiju. Pravilo je potvrđeno dekompilacijom izvornog koda originalne igre iz 2006. (vidi `docs/CHANGELOG.md`, 2026-07-09) — ranije verzije ("ista figurica dva puta zaredom", "isto polje kao zadnji put") su odbačene jer su ili prestroge ili propuštaju rupu s naizmjeničnim figuricama.
+**Kartoni (zadržavanje/vrtnja lopte):** prekršaj je kad novi šut sleti unutar 1 polja (Chebyshev) od figurice koja je odigrala tvoj tim posljednji **čisti** (neprekršajni) šut — bez obzira koja figurica sad puca. Referenca se briše ako se ta figurica u međuvremenu pomakne, ili nakon svakog prekršaja. Samo držati loptu među svojim figuricama je uvijek legalno; kažnjava se doslovno vraćanje istom šutu na isto mjesto. **Kad** se prekršaj dogodi potvrđeno je dekompilacijom izvornog koda originalne igre iz 2006. (vidi `docs/CHANGELOG.md`, 2026-07-09) — ranije verzije ("ista figurica dva puta zaredom", "isto polje kao zadnji put") su odbačene jer su ili prestroge ili propuštaju rupu s naizmjeničnim figuricama. **Eskalacija je svjesno promijenjena od originala** (2026-07-19, na korisnikov zahtjev): 1. prekršaj = samo žuti karton (upozorenje, bez posljedice), 2. i svaki sljedeći = crveni karton **I odmah obavezno uklanjanje figurice u istom potezu** (`Phase.REMOVE`, timer se tijekom te faze zaustavlja — istek vremena ne smije poništiti kaznu) — više nema odvojenog "3. prekršaj" koraka; crveni karton sad radi kao u pravom nogometu (igrač odmah ispada), ne kao najava da treći dolazi. Kartoni traju cijelu partiju (`foul_count` se NE resetira na kickoff, samo na `setup()`) — pazi, ovo znači da tim s jednim žutim ranije u partiji gubi figuricu na SVAKI sljedeći prekršaj do kraja partije, oštrija ekonomija nego stari sustav.
 
 ## 4. Tehnička arhitektura
 Odvajamo **logiku** od **prikaza**:
@@ -106,7 +108,11 @@ Node `Pitch` mora se poklapati s logičkom mrežom 7×10 (detalji u `assets/mode
 - ⚠️ Pri ručnom upisu `Transform3D(...)` u `.tscn`: Godot zapisuje bazis TRANSPONIRANO (vidi `docs/CHANGELOG.md`, 2026-07-08) — ne upisuj `basis.x, basis.y, basis.z` redom bez transponiranja, ili koristi editor/Transform dijalog umjesto ručnog upisa.
 
 ## 8. Zvuk (`assets/audio/`)
-- `sfx/`: dodavanje, šut, gol, zvižduk, karton, preuzimanje lopte.
+- `sfx/`: dodavanje, šut, gol, zvižduk, karton, preuzimanje lopte. **Implementirano za sad samo
+  šut** (`assets/audio/sfx/ball_kick.mp3`, `PlayerRig._kick_sfx`/`KICK_SOUND`, `SFX` bus iz
+  `bus_layout.tres`) — svira točno na `kick_contact` signalu (isti frame kad noga dotakne loptu),
+  glasnoća tunirana preko `@export kick_sfx_volume_db` na PlayerRig. Ostatak (pass/gol/zvižduk/
+  karton/preuzimanje) su i dalje samo placeholderi u planu, zvuk nije ožičen.
 - `music/`: menu, slavlje nakon gola.
 
 ## 9. Prezentacija / meta
@@ -115,10 +121,8 @@ Node `Pitch` mora se poklapati s logičkom mrežom 7×10 (detalji u `assets/mode
 - Brojevi na dresu: `assets/textures/numbers/`.
 - **HUD** (`scenes/ui/hud.tscn`): grbovi, skor, kartoni, timer, footer (tko je na potezu).
   Veliki, jasno vidljivi banner za žuti/crveni karton i zaleđe (`play_announcement`) — footer tekst
-  sam nije bio dovoljno uočljiv. "End Move" gumb (dragovoljni odustanak od preostalih reaktivnih
-  poteza) premješten dolje desno preko terena, veliki, autor ga tunira u editoru. Timer po redu
-  (`turn_time_limit`, dijele ga COMBO+MOVE/REMOVE istog reda) staje tijekom `Phase.REMOVE` (nema
-  isteka — inače bi istek poništio kaznu za treći prekršaj).
+  sam nije bio dovoljno uočljiv. Timer po redu (`turn_time_limit`, dijele ga COMBO+MOVE/REMOVE istog
+  reda) staje tijekom `Phase.REMOVE` (nema isteka — inače bi istek poništio kaznu za prekršaj).
 - **Oznaka vlastitog tima** (`scripts/game/player_rig.gd`, `OwnTeamTileGlow` u `player_rigged.tscn`):
   tihi, nisko-alfa zaobljeni kvadrat pod nogama SAMO igračevih vlastitih figura, boju/alfu/veličinu
   tunira autor u editoru na baziranoj sceni. `top_level=true` da se ne rotira s figuricom.
@@ -138,14 +142,32 @@ Node `Pitch` mora se poklapati s logičkom mrežom 7×10 (detalji u `assets/mode
   crvenog kartona): sve kandidate boduje jedna scoring funkcija, poredaju se po rangu, pa
   `_rank_pick` bira NASUMIČNO po vjerojatnosti ovisno o težini — ne odvojena heuristika po vrsti
   odluke.
-- **Težine = vjerojatnost odabira najboljeg (rang #1) poteza**, ne drugačija logika: Easy ~70%,
-  Medium ~90%, Hard 100% (uvijek najbolji). Ostatak vremena Easy/Medium padnu na rang #2/#3.
-- Combo bodovanje: pravi gol vrijedi najviše, teški minus za nepotreban prekršaj zadržavanja i za
-  ostavljanje lopte blizu protivničkih figura, mali bonus za blizinu vlastitih figura (mogućnost
-  daljnjeg dodavanja).
+- **Težine = vjerojatnost odabira najboljeg (rang #1) poteza** za Medium/Easy: ~90%/~70% top rang,
+  ostatak padne na rang #2/#3, ista evaluacija kao Hard, samo lošija stopa pogotka.
+  **Hard je od 2026-07-19 kvalitativno druga priča** (korisnik se žalio da ga pobjeđuje u par
+  poteza): `decide_combo` na Hard ne hoda pohlepno korak-po-korak nego pravom backtracking
+  pretragom cijelog combo stabla (`_search_best_combo`/`_search_combo_step`, beam-limited na
+  `COMBO_SEARCH_BEAM=2` po grani zbog performansi — vidi ispod) — može odabrati dodavanje koje
+  odmah ne izgleda najbolje jer priprema siguran gol 2-3 dodira kasnije. Isto tako `decide_move`
+  na Hard, kad reaktivni potez dosegne loptu, pokreće ISTU pretragu (`_reach_ball_value`) da odabere
+  KOJI dohvat vodi do najjačeg napada, ne samo bilo koji.
+- Combo bodovanje: pravi gol vrijedi najviše, teški minus za nepotreban prekršaj zadržavanja, minus
+  za ostavljanje lopte blizu protivničkih figura, MALI bonus za blizinu vlastitih figura (namjerno
+  spušten s 3.0 na 0.5× jačine napredovanja prema golu 2026-07-19 — na starijoj težini ta "ostani
+  blizu podrške" kazna je gotovo uvijek nadjačala nagradu za stvaran napredak, pa je AI gurao loptu
+  minimalno i stao umjesto da stvarno napreduje/čisti loptu iz obrane). Svaki kandidat za šut ISTO
+  provjerava (`_post_shot_threat_penalty`) ostavlja li protivniku odmah otvorenu priliku za uzvratni
+  gol — ovo vrijedi za SVE težine, ne samo Hard.
 - **Obrana**: `_defense_score` nagrađuje ulazak na trenutno otvorenu ravnu liniju šuta prema
   vlastitom golu (`Board.is_straight`/`path_clear`/`cells_between`) — AI ne samo juri loptu, nego i
   brani gol kad je na potezu za pomicanje.
+- **Performanse (mobitel je cilj, ne desktop)**: `_rank_pick` je nekad zvao funkciju bodovanja
+  VIŠE PUTA po kandidatu tijekom sortiranja (bezazleno dok je bodovanje bilo jeftino, ali otkad
+  `_reach_ball_value` unutra pokreće punu pretragu, jedna AI odluka je znala potrajati i 11 SEKUNDI)
+  — sad se svaki bod računa točno jednom prije sortiranja. Dodatno: ciljevi šuta unutar pretrage su
+  i sami beam-limited prije skupe provjere prijetnje, i `decide_move` ima tvrdi strop
+  (`MAX_REACH_BALL_SEARCHES=3`) koliko kandidata uopće smije pokrenuti tu skupu pretragu po pozivu.
+  Rezultat: `decide_combo` ~75ms, `decide_move` ~150-400ms na desktopu (bilo 350-450ms / 11000ms).
 - AI izvršava odluke kroz ISTE funkcije koje bi tap odigrao (`_do_combo`/`_apply_move`/`_remove_at`
   u `main.gd`), pa se animira identično čovjeku; kratka umjetna "razmišljam" pauza
   (`AI_THINK_TIME`) prije poteza da ne djeluje trenutačno/robotski.
