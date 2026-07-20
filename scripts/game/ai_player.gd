@@ -231,6 +231,21 @@ static func _combo_action_score(state: MatchState, cell: Vector2i, is_shoot: boo
 				and not state.is_offside(shooter, state.current)
 		if is_goal:
 			score += 100000.0 # a real goal outweighs every other consideration
+		# An own goal was NEVER explicitly penalized before — it only read as
+		# "bad" through the incidental _advance_score term (your own goal is
+		# about as far as possible from the OPPONENT's goal row). That's not
+		# reliable: every other term below (_opponent_adjacent_count,
+		# _post_shot_threat_penalty, would_violate_stall) can rack up bigger
+		# penalties on forward options when the team is under real pressure
+		# (surrounded, no safe advance), which could let conceding an actual
+		# goal outscore a merely-risky one — a human reported exactly this on
+		# Easy: the AI autogol'd rather than take a contested forward shot.
+		# Own-goal cells stay legal shoot targets (see MatchState.combo_shoot_
+		# targets' own comment — "a deliberate/accidental autogol" is real
+		# rules-legal), so this can't be an outright ban, just make it
+		# properly the worst possible outcome short of a genuine dead end.
+		if state.is_own_goal_cell(cell, state.current):
+			score -= 200000.0
 		# Never worth a card/removal risk unless it's the goal above (this was
 		# the "AI keeps getting carded" bug: it used to recycle the ball among
 		# its own figures with no idea that was a foul) — see

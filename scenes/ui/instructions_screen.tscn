@@ -237,8 +237,8 @@ size_flags_horizontal = 3
 theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
 theme_override_font_sizes/normal_font_size = 34
 bbcode_enabled = true
-text = "[center]Move one player [color=#f7c226]on empty square[/color].
-Defenders [color=#f7c226]move twice[/color] or [color=#f7c226]move and shoot.[/color]"
+text = "[center][color=#f7c226]Attack:[/color] after kick, move one player.
+[color=#f7c226]Defend:[/color] move twice or move and shoot.[/center]"
 fit_content = true
 
 [node name="spacer2" type="Control" parent="SafeArea/VBox/CardPanel/PageStage/Page2" unique_id=415569055]

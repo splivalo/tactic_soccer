@@ -117,7 +117,15 @@ func _test_full_ai_vs_ai_match() -> void:
 		var ms := MatchState.new()
 		ms.setup(Formations.home(), Formations.away(), Vector2i(3, 8), "HomeTeam", 2)
 		var turns := 0
-		var max_turns := 600 # Hard-vs-Hard currently needs ~396 (deterministic, see above) — headroom for future tuning
+		# 1500: Easy/Medium roll randomness each decision (see _rank_pick) so
+		# their match length varies run to run — 600 was tight enough to
+		# occasionally time out at 1:1 after the own-goal scoring fix (see
+		# AIPlayer._combo_action_score's is_own_goal_cell penalty) removed one
+		# of the "free" ways a match used to end early (an accidental autogol
+		# padding the score same as a real goal). Real goals only now, so
+		# matches genuinely take longer — this is a smoke test for "the loop
+		# terminates cleanly", not a speed guarantee, hence the generous cap.
+		var max_turns := 1500
 		while ms.score["HomeTeam"] < 2 and ms.score["AwayTeam"] < 2 and turns < max_turns:
 			turns += 1
 			match ms.phase:
