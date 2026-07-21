@@ -39,6 +39,8 @@ var last_score: Dictionary = {"HomeTeam": 0, "AwayTeam": 0}
 
 
 func goto(screen: int) -> void:
+	if screen == Screen.MATCH:
+		_fade_out_music()
 	get_tree().call_deferred("change_scene_to_file", SCENE_PATHS[screen])
 
 
@@ -49,3 +51,73 @@ func reset_selection() -> void:
 	player_formation = []
 	single_player = false
 	ai_difficulty = "Medium"
+
+
+# --- Global UI tap SFX ---------------------------------------------------------
+# One sound, everywhere: rather than wiring every screen's buttons by hand
+# (and forgetting the next one), this autoload hooks EVERY BaseButton
+# (Button, CheckBox, OptionButton, ...) the instant it enters ANY scene, for
+# the whole app's lifetime — since GameFlow itself is one of the very first
+# nodes alive (autoload), this is already listening before the splash
+# screen's own buttons ever exist. Deliberately does NOT cover in-match
+# board taps (selecting a figure/cell) — those go through main.gd's own
+# raw touch/mouse handling (_on_press/_on_release), never a Button node, so
+# they're untouched here; this is menu/UI chrome only, as asked for.
+const TAP_SOUND: AudioStream = preload("res://assets/audio/sfx/tap.mp3")
+@export_range(-24.0, 24.0, 0.5) var tap_sfx_volume_db := 0.0
+
+var _tap_sfx: AudioStreamPlayer = null
+
+
+# --- Menu background music ------------------------------------------------------
+# Plays continuously from the moment the app launches (splash) through the
+# WHOLE pre-match menu flow (main menu, team select, difficulty, instructions,
+# options — every screen goto() can route to except MATCH) — lives on this
+# autoload, not on splash_screen.gd, specifically so it survives
+# change_scene_to_file() without cutting out and restarting at every screen
+# change. Fades out and stops the moment the real match starts (see goto()) —
+# continuous menu music playing under an actual match felt wrong to carry
+# over unasked, so this stops there; nothing plays in its place yet.
+const INTRO_MUSIC := preload("res://assets/audio/music/intro.mp3")
+@export_range(-24.0, 24.0, 0.5) var music_volume_db := 0.0
+
+var _music: AudioStreamPlayer = null
+
+
+func _ready() -> void:
+	_tap_sfx = AudioStreamPlayer.new()
+	_tap_sfx.bus = &"SFX"
+	add_child(_tap_sfx)
+	get_tree().node_added.connect(_on_node_added)
+
+	_music = AudioStreamPlayer.new()
+	_music.bus = &"Music"
+	_music.stream = INTRO_MUSIC
+	# Mutate the loop flag through the PLAYER's stream (a plain var), not the
+	# preloaded INTRO_MUSIC const directly — GDScript's static checker treats
+	# a property write through a const reference as an error even though the
+	# underlying Resource itself isn't actually immutable.
+	if _music.stream is AudioStreamMP3:
+		(_music.stream as AudioStreamMP3).loop = true
+	_music.volume_db = music_volume_db
+	add_child(_music)
+	_music.play()
+
+
+func _on_node_added(node: Node) -> void:
+	if node is BaseButton:
+		(node as BaseButton).pressed.connect(_play_tap)
+
+
+func _play_tap() -> void:
+	_tap_sfx.stream = TAP_SOUND
+	_tap_sfx.volume_db = tap_sfx_volume_db
+	_tap_sfx.play()
+
+
+func _fade_out_music() -> void:
+	if _music == null or not _music.playing:
+		return
+	var tw := create_tween()
+	tw.tween_property(_music, "volume_db", -80.0, 0.4)
+	tw.tween_callback(_music.stop)

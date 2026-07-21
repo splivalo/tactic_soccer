@@ -78,6 +78,23 @@ extends Node3D
 ## clock. Runs out with no move made = forfeit. Keeps ticking in real time even
 ## behind the pause modal, so pausing can't be used to stall the clock.
 @export var turn_time_limit := 30.0
+## Loudness of the countdown tick (assets/audio/sfx/timer.mp3) — one play per
+## whole-second tick while the HUD's big center-pitch countdown is showing
+## (see hud.gd's TIMER_URGENT_AT / _update_turn_timer_display below). Same
+## tuning knob pattern as goal_sfx_volume_db/kick_sfx_volume_db.
+@export_range(-24.0, 24.0, 0.5) var timer_tick_volume_db := 0.0
+## Loudness of the referee whistle (assets/audio/sfx/whistle.mp3), played on
+## a yellow or red card (see _after_combo's card branches below) — same
+## tuning knob pattern as the other Match SFX volumes.
+@export_range(-24.0, 24.0, 0.5) var whistle_sfx_volume_db := 0.0
+## Loudness of board-tap feedback (assets/audio/sfx/field_tap.mp3) — see
+## FIELD_TAP_SOUND / _move_click. Boosted like kick_sfx_volume_db (the
+## source clip reads very quiet at 0dB, near-inaudible per a real playtest)
+## — Godot doesn't expose a way to measure a stream's actual loudness from
+## GDScript (AudioStreamPlayback.mix() isn't scriptable for MP3 playback),
+## so this is an estimate; pulled back from the original 14dB guess (that
+## read as too loud in practice) — nudge further if it's still off.
+@export_range(-24.0, 24.0, 0.5) var field_tap_volume_db := 5.0
 
 # --- Path debug --------------------------------------------------------------
 ## Green markers = every cell the piece on `reach_from_cell` could shoot the
@@ -181,6 +198,11 @@ const STADIUM_DRESSING := ["arena", "fence", "banner", "seats", "reflectors"]
 ## freezing in place. goal_cam_hold should comfortably cover drop+roll.
 @export var goal_drop_time := 0.35
 @export var goal_settle_roll := 0.22
+## Loudness of the goal SFX (assets/audio/sfx/goal.mp3), played the instant
+## the ball reaches the net (see _celebrate_goal) — same tuning knob pattern
+## as PlayerRig's kick_sfx_volume_db, so both can be balanced against each
+## other by ear once there's more than one sound in the game.
+@export_range(-24.0, 24.0, 0.5) var goal_sfx_volume_db := 0.0
 @export_group("")
 
 # --- Goal replay ---------------------------------------------------------------
@@ -389,6 +411,9 @@ func _ready() -> void:
 	_fx_effects.trail_emission = fx_trail_emission
 	_fx_effects.trail_rim = fx_trail_rim
 	add_child(_fx_effects)
+	_setup_match_sfx()
+	_setup_crowd_ambience()
+	_setup_running_sfx()
 	if fix_banner:
 		_fix_banner()
 	if hide_stadium_dressing_during_play:
@@ -631,6 +656,152 @@ func _ball_world(cell: Vector2i) -> Vector3:
 	return _cell_world(cell.x, cell.y) + Vector3(0, BALL_RADIUS * ball_scale, 0)
 
 
+# --- Match SFX -----------------------------------------------------------------
+# One-shot sounds tied to match events (not to a specific player/position —
+# those live on PlayerRig instead, see its _kick_sfx). ONE shared player,
+# stream swapped per event — these essentially never overlap in practice
+# (the rare exception: a shot that's both a card-triggering violation AND a
+# goal would fire the whistle then immediately cut it off with the goal
+# sound, since the card branch in _after_combo runs first and is awaited
+# before the goal branch — acceptable, not worth a second player over).
+# Add more here as more sounds arrive — const + an @export_range volume_db
+# is the pattern (see goal_sfx_volume_db in the "Goal Cinematic" group,
+# timer_tick_volume_db/whistle_sfx_volume_db near turn_time_limit).
+const GOAL_SOUND: AudioStream = preload("res://assets/audio/sfx/goal.mp3")
+const TICK_SOUND: AudioStream = preload("res://assets/audio/sfx/timer.mp3")
+const WHISTLE_SOUND: AudioStream = preload("res://assets/audio/sfx/whistle.mp3")
+## Board-tap feedback (picking up a figure / confirming a move destination —
+## see _move_click) — the pitch equivalent of GameFlow's menu tap.mp3, kept
+## separate/renamed from the deliberately quieter crowd loop below so board
+## feedback stays clearly audible over the ambience.
+const FIELD_TAP_SOUND: AudioStream = preload("res://assets/audio/sfx/field_tap.mp3")
+## Combo-starter selection (tapping a figure next to the ball to begin
+## building a chain — "taking possession"/see _combo_tap's begin() calls).
+## Deliberately reuses GameFlow's own tap.mp3 (menu button click) rather than
+## FIELD_TAP_SOUND, at the user's request — a separate const/volume here
+## (not a call into GameFlow) so it can be tuned independently and matches
+## this file's existing const+export_range pattern.
+const SELECT_SOUND: AudioStream = preload("res://assets/audio/sfx/tap.mp3")
+@export_range(-24.0, 24.0, 0.5) var select_sfx_volume_db := 5.0 # matches field_tap_volume_db/running_sfx_volume_db
+var _match_sfx: AudioStreamPlayer = null
+
+
+func _setup_match_sfx() -> void:
+	_match_sfx = AudioStreamPlayer.new()
+	_match_sfx.bus = &"SFX"
+	add_child(_match_sfx)
+
+
+func _play_sfx(stream: AudioStream, volume_db: float) -> void:
+	if _match_sfx == null or stream == null:
+		return
+	_match_sfx.stream = stream
+	_match_sfx.volume_db = volume_db
+	_match_sfx.play()
+
+
+## Crowd ambience: loops continuously for as long as the match scene is
+## alive (started here in _ready(), never explicitly stopped — it's freed
+## along with everything else in this scene the moment GameFlow.goto()
+## swaps to WIN_SCREEN/LOSE_SCREEN). On the "Music" bus, not "SFX" —
+## deliberately: it's continuous background atmosphere, the same ROLE
+## GameFlow's menu intro.mp3 plays before the match starts, not a discrete
+## event cue like the sounds above. Keeping it on a separate bus also means
+## it has its OWN independent volume, so kick/whistle/tick (SFX) can stay
+## clearly louder/more prominent without the crowd's level being coupled to
+## theirs on a shared slider — crowd_volume_db defaults quieter than the
+## other SFX for exactly that reason. Started at -6dB (quieter than the
+## foreground SFX on principle) but a real playtest found it near-inaudible
+## at that level — same "source clip reads quiet" issue as field_tap_volume_
+## db above — so boosted to +4dB net; still meant to sit under kick/whistle/
+## tick, just not silent under them. Adjust by ear from here.
+const CROWD_SOUND: AudioStream = preload("res://assets/audio/sfx/crowd.mp3")
+@export_range(-24.0, 24.0, 0.5) var crowd_volume_db := 4.0
+var _crowd: AudioStreamPlayer = null
+
+
+func _setup_crowd_ambience() -> void:
+	_crowd = AudioStreamPlayer.new()
+	_crowd.bus = &"Music"
+	_crowd.stream = CROWD_SOUND
+	if _crowd.stream is AudioStreamMP3:
+		(_crowd.stream as AudioStreamMP3).loop = true
+	_crowd.volume_db = crowd_volume_db
+	add_child(_crowd)
+	_crowd.play()
+
+
+## Footstep run sound: a short 2-step clip, played ONCE PER CELL the move
+## covers (not trimmed/stretched — the old approach here tried to trim ONE
+## long 8-step clip down by distance, replaced per the user's own new,
+## shorter source file) — repetitions are spaced evenly across the move's
+## actual jog duration (see _apply_move's move_duration) so a longer slide
+## reads as continuous running instead of every footstep bunching up at the
+## start. Re-triggering .play() on the same player for each rep is fine even
+## if an interval ends up shorter than the clip itself — it just restarts
+## the clip, same as any rapid one-shot SFX retrigger elsewhere in this file.
+## TEMPORARILY pointed at field_tap.mp3, not running.mp3 — testing whether
+## the repeat-a-short-clip-per-cell APPROACH itself feels right using a clip
+## already confirmed short/clean-sounding, before hunting down a dedicated
+## footstep sound. Swap back to running.mp3 (or a new short single-step
+## clip) once the direction's confirmed.
+const RUNNING_SOUND: AudioStream = preload("res://assets/audio/sfx/field_tap.mp3")
+## Same clip as field_tap right now (see RUNNING_SOUND above). Matches
+## field_tap_volume_db/select_sfx_volume_db — all three set equal at the
+## user's request.
+@export_range(-24.0, 24.0, 0.5) var running_sfx_volume_db := 5.0
+var _running_sfx: AudioStreamPlayer = null
+
+
+func _setup_running_sfx() -> void:
+	_running_sfx = AudioStreamPlayer.new()
+	_running_sfx.bus = &"SFX"
+	_running_sfx.stream = RUNNING_SOUND
+	add_child(_running_sfx)
+
+
+## `cells` = how many cells this move covers, `move_duration` = the jog
+## tween's own duration (see _apply_move) — one full play of the clip per
+## cell, spaced across that time. NOT perfectly even, and NOT identical every
+## time — dead-even spacing plus the exact same clip on every repeat read as
+## a metronome/robot instead of footsteps (reported after the first version
+## of this), so both the gap AND the pitch/volume of each repeat get a small
+## random jitter, the standard fix for a looped/repeated one-shot SFX
+## sounding mechanical. Each step keeps its OWN evenly-spaced "slot"
+## (interval * i) and only jitters WITHIN half a slot either way, then gets
+## hard-clamped to [0, move_duration] — an earlier version accumulated the
+## jitter step over step, which could drift the total past move_duration
+## and fire footsteps audibly AFTER the figure had already stopped moving
+## (reported as "steps run late"); this can't drift since every step's
+## timing is computed from its own fixed slot, never the previous step's
+## jittered result.
+@export_range(0.0, 0.5, 0.05) var running_step_jitter := 0.25
+func _play_running_sound(cells: int, move_duration: float) -> void:
+	if _running_sfx == null or _running_sfx.stream == null or cells <= 0:
+		return
+	var interval := move_duration / float(cells)
+	for i in range(cells):
+		var slot := interval * i
+		var jitter := interval * running_step_jitter * randf_range(-0.5, 0.5)
+		var delay := clampf(slot + jitter, 0.0, move_duration)
+		if delay <= 0.0:
+			_trigger_running_step()
+		else:
+			var timer := get_tree().create_timer(delay)
+			timer.timeout.connect(_trigger_running_step)
+
+
+func _trigger_running_step() -> void:
+	if _running_sfx == null:
+		return
+	# No pitch jitter — a short percussive clip pitch-shifted at all came out
+	# harsh/tinny ("pištavo"), worse than the robotic sameness it was meant
+	# to fix. Timing jitter (running_step_jitter) alone stays.
+	_running_sfx.pitch_scale = 1.0
+	_running_sfx.volume_db = running_sfx_volume_db + randf_range(-1.5, 1.0)
+	_running_sfx.play()
+
+
 # --- Pre-match placement (formation setup) ------------------------------------
 # Runs INSIDE the match scene (reusing its already-fitted camera/stadium/HUD)
 # instead of a separate screen, so a later "searching for opponent" step can
@@ -700,6 +871,7 @@ func _placement_tap(screen_pos: Vector2) -> void:
 	var cell := _resolve_target(screen_pos, _placement_valid_cells(role), TAP_HIT_RADIUS)
 	if cell == NO_CELL:
 		return
+	_play_sfx(SELECT_SOUND, select_sfx_volume_db)
 	_place_piece(cell, role)
 
 
@@ -991,6 +1163,7 @@ func _combo_tap(screen_pos: Vector2) -> void:
 		var restart_cell := _resolve_target(screen_pos, _state.combo_starters(), TAP_HIT_RADIUS)
 		if restart_cell != NO_CELL:
 			if _state.begin(restart_cell):
+				_play_sfx(SELECT_SOUND, select_sfx_volume_db)
 				_draw_combo()
 			return
 		var pass_cell := _resolve_target(screen_pos, _state.combo_pass_targets(), TAP_HIT_RADIUS)
@@ -1005,6 +1178,7 @@ func _combo_tap(screen_pos: Vector2) -> void:
 	# Empty chain (or a tap that matched none of the above): (re)start here.
 	var starter := _resolve_target(screen_pos, _state.combo_starters(), TAP_HIT_RADIUS)
 	if starter != NO_CELL and _state.begin(starter):
+		_play_sfx(SELECT_SOUND, select_sfx_volume_db)
 		_draw_combo()
 
 
@@ -1228,6 +1402,10 @@ func _update_turn_timer_display() -> void:
 	if seconds_left != _shown_time_left:
 		_shown_time_left = seconds_left
 		_hud.update_timer(seconds_left)
+		# Same "urgent" window as the HUD's big center-pitch countdown (see
+		# hud.gd's TIMER_URGENT_AT) — one tick per second while it's showing.
+		if seconds_left > 0 and seconds_left <= _hud.TIMER_URGENT_AT:
+			_play_sfx(TICK_SOUND, timer_tick_volume_db)
 
 
 
@@ -1266,22 +1444,29 @@ func _after_combo(res: Dictionary) -> void:
 	if res["offside"]:
 		print("OFFSIDE — goal not given")
 		_show_offside(res["offside_shooter"], res["offside_line_row"])
+		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
 		if _hud != null:
 			await _hud.play_announcement("offside")
 	# yellow (1st) -> red (2nd) -> forced sending-off (3rd, card=="" +
 	# must_remove) — the last two both read as a "red" dismissal to the player.
 	if res["card"] == "yellow":
 		print("YELLOW CARD: %s (same figure shot twice in a row)" % _state.current)
+		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
 		if _hud != null:
 			await _hud.play_announcement("yellow")
 	elif res["card"] == "red" or res["must_remove"] != "":
 		print("RED CARD: %s" % _state.current)
+		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
 		if _hud != null:
 			await _hud.play_announcement("red")
 	if res["goal"]:
 		print("%s %s  ->  Home %d : %d Away"
 			% ["AUTOGOL!" if res.get("own_goal", false) else "GOAL!", res["scorer"],
 				_state.score["HomeTeam"], _state.score["AwayTeam"]])
+		# Independent of enable_goal_cam — a goal should always be audible,
+		# even with the cinematic camera off. Fired here, once, rather than
+		# inside _celebrate_goal() (only called when the cam is enabled).
+		_play_sfx(GOAL_SOUND, goal_sfx_volume_db)
 		# Stay busy through the celebration so the torn-down board can't take input.
 		if enable_goal_cam and _goal_cam != null:
 			await _celebrate_goal()
@@ -1759,15 +1944,18 @@ func _move_click(screen_pos: Vector2) -> void:
 		if fig_cell != NO_CELL:
 			_move_from = fig_cell
 			_draw_move(fig_cell)
+			_play_sfx(FIELD_TAP_SOUND, field_tap_volume_db)
 		return
 	var fig_hit := _resolve_target(screen_pos, _state.own_cells(), TAP_HIT_RADIUS)
 	if fig_hit != NO_CELL:
 		if fig_hit != _move_from:
 			_move_from = fig_hit # reselect a different figure
 			_draw_move(fig_hit)
+			_play_sfx(FIELD_TAP_SOUND, field_tap_volume_db)
 		return # tapping the already-selected figure again is a harmless no-op
 	var dest := _resolve_target(screen_pos, _state.move_targets(_move_from), TAP_HIT_RADIUS)
 	if dest != NO_CELL:
+		_play_sfx(FIELD_TAP_SOUND, field_tap_volume_db)
 		_apply_move(_move_from, dest)
 		return
 	_move_from = NO_CELL # cancel selection
@@ -1777,6 +1965,21 @@ func _move_click(screen_pos: Vector2) -> void:
 func _apply_move(from: Vector2i, to: Vector2i) -> void:
 	if not _state.do_move(from, to): # also advances the turn
 		return
+	# Same reason _do_combo snapshots+stops here: do_move() may have already
+	# flipped _state.current to the OTHER team (a reactive move that used up
+	# moves_left, or a mandatory tidy-up move ending the turn) — if left
+	# running, the OLD team's countdown keeps ticking, unmanaged, for the
+	# whole slide animation below and could even fire _on_turn_timeout() for
+	# the wrong team mid-animation. And when do_move() DIDN'T change teams
+	# (still mid reactive-move-pair), _refresh_turn_view()'s "same team
+	# continuing" branch needs an accurate _pool_seconds_left to resume from
+	# — without this snapshot it was reading whatever _do_combo (a DIFFERENT
+	# action) last left there, sometimes its 0.0 default, handing the next
+	# decision only a ~0.05s timer instead of the real time left. This was
+	# the concrete "next player gets the previous player's last few seconds"
+	# bug a human reported.
+	_pool_seconds_left = _turn_timer.time_left
+	_turn_timer.stop()
 	var fig: Node3D = _node_at[from]
 	_node_at.erase(from)
 	_node_at[to] = fig
@@ -1798,6 +2001,7 @@ func _apply_move(from: Vector2i, to: Vector2i) -> void:
 	_face_toward(fig, from, to)
 	var move_cells := maxi(absi(to.x - from.x), absi(to.y - from.y))
 	var move_duration := maxf(move_min_duration, move_duration_per_cell * move_cells)
+	_play_running_sound(move_cells, move_duration)
 	if fig is PlayerRig:
 		var jog_t := clampf(float(move_cells - 1) / float(maxi(jog_speed_scale_max_cells - 1, 1)), 0.0, 1.0)
 		(fig as PlayerRig).jog(lerpf(jog_speed_scale_min, jog_speed_scale_max, jog_t))
