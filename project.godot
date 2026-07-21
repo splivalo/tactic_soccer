@@ -10,10 +10,10 @@ config_version=5
 
 [application]
 
-config/name="football"
+config/name="Tactic Soccer"
 run/main_scene="res://scenes/ui/splash_screen.tscn"
 config/features=PackedStringArray("4.6", "Mobile")
-config/icon="res://icon.svg"
+config/icon="uid://rba44sv58yfx"
 
 [audio]
 
