@@ -150,69 +150,48 @@ func _initialize() -> void:
 	var res_ok := ms.execute_combo(Vector2i(2, 0))
 	_check(res_ok["ok"] and res_ok["goal"] and not res_ok["offside"], "onside shot into the empty goal scores")
 
-	# Cards: a violation is landing the ball within 1 cell of the figure that
-	# took this team's own last CLEAN shot — regardless of which figure
-	# shoots THIS time — unless that reference figure has since moved (this
-	# detection is verified against the original 2006 game's decompiled
-	# source). The ESCALATION deliberately does NOT match the original:
-	# 1st = yellow only, 2nd (and every one after) = red card AND an
-	# immediate figure removal in the same breath — matches how a red card
-	# actually works in real football (sent off there and then), not a
-	# separate 3rd-strike step.
-	ms.pieces.clear()
-	var fig_a := Vector2i(3, 5)
-	var fig_b := Vector2i(3, 1)
-	ms.pieces[fig_a] = {"team": "HomeTeam", "role": "field", "id": 7}
-	ms.pieces[fig_b] = {"team": "HomeTeam", "role": "field", "id": 8}
-	ms.current = "HomeTeam"
-	ms.stall_ref_id["HomeTeam"] = -1
-	ms.stall_ref_cell["HomeTeam"] = Vector2i(-1, -1)
-	ms.yellow_card["HomeTeam"] = false
-	ms.red_card["HomeTeam"] = false
-	ms.foul_count["HomeTeam"] = 0
+	# Cards: a violation is a contested 50-50 — a reactive move that reaches
+	# the ball lands in the ONE cell directly opposite an opponent figure,
+	# straight through the ball, on any of 4 axes (see is_contested_recovery).
+	# 1st = yellow only, and the foul earns no reward: no upgrade into a
+	# combo, same as a real foul never earning the ball. 2nd (and every one
+	# after) = red card AND an immediate figure removal in the same breath —
+	# matches how a red card actually works in real football (sent off there
+	# and then), not a separate 3rd-strike step.
+	var recoverer := {"cell": Vector2i(2, 8), "role": "field"}
+	var contester := {"cell": Vector2i(4, 5), "role": "field"}
+	ms.setup([recoverer], [contester], Vector2i(3, 5), "HomeTeam", 99)
+	_check(ms.is_contested_recovery(Vector2i(2, 5), "HomeTeam"),
+		"geometry sanity: landing at (2,5) puts the ball directly between HomeTeam and the AwayTeam figure at (4,5)")
+	_check(not ms.is_contested_recovery(Vector2i(2, 6), "HomeTeam"),
+		"geometry sanity: (2,6) is adjacent to the ball but NOT opposite anyone through it — no duel")
+	_check(ms.phase == MatchState.Phase.MOVE and ms.moves_left == 2,
+		"setup: AwayTeam already holds the ball (piece at 4,5), so HomeTeam starts this turn reacting")
 
-	# Shot 1 (fig_a): first ever shot -> just sets the reference, no violation possible yet.
-	ms.ball = Vector2i(3, 6); ms.phase = MatchState.Phase.COMBO; ms.begin(fig_a)
-	var s1 := ms.execute_combo(Vector2i(1, 5))
-	_check(s1["card"] == "" and ms.stall_ref_id["HomeTeam"] == 7 and ms.stall_ref_cell["HomeTeam"] == fig_a,
-		"first shot just records the reference figure (fig_a)")
+	# 1st violation: HomeTeam's only reactive move slides straight into the
+	# contested cell.
+	var moved1 := ms.do_move(Vector2i(2, 8), Vector2i(2, 5))
+	_check(moved1, "the move itself is still legal even though it's a contested recovery")
+	_check(ms.last_move_card == "yellow" and ms.yellow_card["HomeTeam"] and ms.foul_count["HomeTeam"] == 1,
+		"1st contested recovery -> yellow card only")
+	_check(ms.phase == MatchState.Phase.MOVE and ms.chain.is_empty() and ms.current == "HomeTeam",
+		"a carded recovery does NOT upgrade into a combo — the foul earns no reward, still HomeTeam's turn")
+	_check(ms.pending_removal == "", "a yellow alone never forces a removal")
 
-	# Shot 2 (fig_a again): lands FAR from the reference (its own, unmoved
-	# cell) -> safe. This is the exact scenario the user flagged: don't
-	# punish the same figure shooting again if it's not actually repeating.
-	ms.ball = Vector2i(3, 6); ms.phase = MatchState.Phase.COMBO; ms.begin(fig_a)
-	var s2 := ms.execute_combo(Vector2i(3, 2))
-	_check(s2["card"] == "", "same figure, far landing cell -> not a violation")
-
-	# Shot 3 (fig_b, a DIFFERENT figure): lands next to the reference figure
-	# (fig_a, which hasn't moved) -> violation, even though a different
-	# figure is shooting. This is exactly what the old "same figure" rule missed.
-	ms.ball = Vector2i(3, 2); ms.phase = MatchState.Phase.COMBO; ms.begin(fig_b)
-	var s3 := ms.execute_combo(Vector2i(3, 4))
-	_check(s3["card"] == "yellow" and ms.yellow_card["HomeTeam"] and ms.foul_count["HomeTeam"] == 1
-			and s3["must_remove"] == "",
-		"1st violation -> yellow card only, no removal")
-	_check(ms.stall_ref_id["HomeTeam"] == -1, "reference clears after a violation (fresh start)")
-
-	# Shot 4 (fig_a): the reference was just cleared, so this is safe again.
-	ms.ball = Vector2i(3, 6); ms.phase = MatchState.Phase.COMBO; ms.begin(fig_a)
-	var s4 := ms.execute_combo(Vector2i(1, 5))
-	_check(s4["card"] == "", "fresh reference after the previous violation cleared it")
-
-	# Shot 5 (fig_b): violates again -> 2nd violation -> red card AND an
-	# immediate forced removal, no waiting for a separate 3rd incident.
-	ms.ball = Vector2i(3, 2); ms.phase = MatchState.Phase.COMBO; ms.begin(fig_b)
-	var s5 := ms.execute_combo(Vector2i(3, 4))
-	_check(s5["card"] == "red" and ms.red_card["HomeTeam"] and ms.foul_count["HomeTeam"] == 2,
+	# 2nd violation (fresh kickoff via reset(), so foul_count carries over —
+	# only setup() clears it): the same contested recovery now escalates.
+	ms.reset([recoverer], [contester], Vector2i(3, 5), "HomeTeam")
+	var moved2 := ms.do_move(Vector2i(2, 8), Vector2i(2, 5))
+	_check(moved2, "2nd contested recovery is also a legal move")
+	_check(ms.last_move_card == "red" and ms.red_card["HomeTeam"] and ms.foul_count["HomeTeam"] == 2,
 		"2nd violation -> red card")
-	_check(s5["must_remove"] == "HomeTeam", "2nd violation ALSO forces an immediate removal")
 	_check(ms.phase == MatchState.Phase.REMOVE and ms.pending_removal == "HomeTeam",
 		"2nd violation puts the carded team straight into Phase.REMOVE")
 
 	_check(not ms.remove_figure(Vector2i(9, 9)), "remove_figure fails for an empty cell")
-	var removed := ms.remove_figure(fig_b)
+	var removed := ms.remove_figure(Vector2i(2, 5))
 	_check(removed, "remove_figure succeeds for the carded team's own figure")
-	_check(not ms.pieces.has(fig_b), "removed figure is gone from pieces")
+	_check(not ms.pieces.has(Vector2i(2, 5)), "removed figure is gone from pieces")
 	_check(ms.pending_removal == "", "pending_removal is cleared after removal")
 	_check(ms.current == "AwayTeam", "removal spends the turn (hands it to the opponent)")
 
@@ -225,17 +204,6 @@ func _initialize() -> void:
 	_check(ms.current == ms.opponent(before_forfeit), "forfeit() hands the turn to the opponent")
 	_check(ms.pending_removal == "", "forfeit() clears a pending forced removal")
 	_check(ms.chain.is_empty(), "forfeit() leaves no dangling chain")
-
-	# Moving the reference figure clears it (matches the tutorial text: "this
-	# counts only when the previous figure has not been moved in the meantime").
-	ms.pieces.clear()
-	ms.pieces[fig_a] = {"team": "HomeTeam", "role": "field", "id": 7}
-	ms.current = "HomeTeam"
-	ms.stall_ref_id["HomeTeam"] = 7
-	ms.stall_ref_cell["HomeTeam"] = fig_a
-	ms.phase = MatchState.Phase.MOVE
-	_check(ms.do_move(fig_a, Vector2i(4, 5)), "move the reference figure")
-	_check(ms.stall_ref_id["HomeTeam"] == -1, "moving the reference figure clears the stalling reference")
 
 	# MatchState.own_cells()
 	ms.pieces.clear()

@@ -13,7 +13,7 @@ config_version=5
 config/name="Tactic Soccer"
 run/main_scene="res://scenes/ui/splash_screen.tscn"
 config/features=PackedStringArray("4.6", "Mobile")
-config/icon="uid://rba44sv58yfx"
+config/icon="uid://dhcjhonjcf81y"
 
 [audio]
 

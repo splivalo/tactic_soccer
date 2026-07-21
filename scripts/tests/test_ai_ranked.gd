@@ -17,7 +17,7 @@ func _check(cond: bool, label: String) -> void:
 func _initialize() -> void:
 	_test_rank_pick_determinism()
 	_test_rank_pick_statistics()
-	_test_no_unnecessary_stall_card_on_hard()
+	_test_avoids_unnecessary_contested_recovery_on_hard()
 	_test_ai_defends_open_lane()
 	_test_full_ai_vs_ai_match()
 	print("\n%s (%d failures)" % ["PASS" if _fail == 0 else "FAIL", _fail])
@@ -56,23 +56,27 @@ func _test_rank_pick_statistics() -> void:
 	_check(hits0 + hits_low == trials, "Easy's remaining picks land on rank#2/#3 only")
 
 
-# --- Regression: AI must never trip the stalling foul unnecessarily on Hard ---
-func _test_no_unnecessary_stall_card_on_hard() -> void:
-	var ms := MatchState.new()
-	ms.setup(Formations.home(), Formations.away(), Vector2i(3, 8), "HomeTeam", 99)
-	# Force a live stalling anchor at the kickoff mid (3,7), matching a real
-	# clean-shot scenario, then let Hard decide 30 combos in a row (rebuilding
-	# a fresh kickoff each time) and confirm it never plays into it when a
-	# non-violating option exists.
-	var violations := 0
-	for _i in range(30):
-		ms.reset(Formations.home(), Formations.away(), Vector2i(3, 8), "HomeTeam")
-		ms.stall_ref_id["HomeTeam"] = ms.pieces[Vector2i(3, 7)]["id"]
-		ms.stall_ref_cell["HomeTeam"] = Vector2i(3, 7)
-		var shoot := AIPlayer.decide_combo(ms, "Hard")
-		if shoot != Vector2i(-1, -1) and ms.would_violate_stall(shoot):
-			violations += 1
-	_check(violations == 0, "Hard never trips the stalling foul when a safe option exists (%d/30 violations)" % violations)
+# --- Regression: AI must never walk into an unnecessary contested 50-50 on Hard ---
+func _test_avoids_unnecessary_contested_recovery_on_hard() -> void:
+	# HomeTeam has 2 ways to react and reach the ball: (2,8)->(2,5) lands
+	# directly opposite the AwayTeam figure at (4,5) through the ball (a
+	# contested 50-50 — see MatchState.is_contested_recovery), while
+	# (3,3)->(3,4) reaches the SAME adjacency just as well with no duel at
+	# all. A team should never risk the card when a safe reach exists.
+	var home := [
+		{"cell": Vector2i(2, 8), "role": "field"},
+		{"cell": Vector2i(3, 3), "role": "field"},
+	]
+	var away := [{"cell": Vector2i(4, 5), "role": "field"}]
+	var risky_landings := 0
+	for _i in range(20):
+		var ms := MatchState.new()
+		ms.setup(home, away, Vector2i(3, 5), "HomeTeam", 99)
+		var decision := AIPlayer.decide_move(ms, "Hard")
+		if decision.has("to") and ms.is_contested_recovery(decision["to"], "HomeTeam"):
+			risky_landings += 1
+	_check(risky_landings == 0,
+		"Hard never picks a contested-50-50 landing cell when a safe reach-the-ball option exists (%d/20 risky)" % risky_landings)
 
 
 # --- Regression: AI must step into an open shooting lane on its own goal ------

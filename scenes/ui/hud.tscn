@@ -516,42 +516,51 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0, 0, 0, 0.75)
 
-[node name="Center" type="CenterContainer" parent="PauseModal" unique_id=1959970941]
+[node name="SafeArea" type="MarginContainer" parent="PauseModal" unique_id=1959970941]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_constants/margin_left = 120
+theme_override_constants/margin_top = 120
+theme_override_constants/margin_right = 120
+theme_override_constants/margin_bottom = 120
 
-[node name="Panel" type="PanelContainer" parent="PauseModal/Center" unique_id=1292855481]
+[node name="VCenter" type="VBoxContainer" parent="PauseModal/SafeArea" unique_id=1417431669]
 layout_mode = 2
+alignment = 1
+
+[node name="Panel" type="PanelContainer" parent="PauseModal/SafeArea/VCenter" unique_id=1292855481]
+layout_mode = 2
+size_flags_horizontal = 3
 theme_type_variation = &"Card"
 
-[node name="Margin" type="MarginContainer" parent="PauseModal/Center/Panel" unique_id=1327125666]
+[node name="Margin" type="MarginContainer" parent="PauseModal/SafeArea/VCenter/Panel" unique_id=1327125666]
 layout_mode = 2
 theme_override_constants/margin_left = 60
 theme_override_constants/margin_top = 50
 theme_override_constants/margin_right = 60
 theme_override_constants/margin_bottom = 50
 
-[node name="VBox" type="VBoxContainer" parent="PauseModal/Center/Panel/Margin" unique_id=1663768482]
+[node name="VBox" type="VBoxContainer" parent="PauseModal/SafeArea/VCenter/Panel/Margin" unique_id=1663768482]
 layout_mode = 2
 theme_override_constants/separation = 30
 
-[node name="Title" type="Label" parent="PauseModal/Center/Panel/Margin/VBox" unique_id=331093844]
+[node name="Title" type="Label" parent="PauseModal/SafeArea/VCenter/Panel/Margin/VBox" unique_id=331093844]
 layout_mode = 2
 theme_override_font_sizes/font_size = 64
 text = "Paused"
 horizontal_alignment = 1
 
-[node name="ResumeButton" type="Button" parent="PauseModal/Center/Panel/Margin/VBox" unique_id=1417431668]
+[node name="ResumeButton" type="Button" parent="PauseModal/SafeArea/VCenter/Panel/Margin/VBox" unique_id=1417431668]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 130)
 layout_mode = 2
 text = "Resume"
 
-[node name="ExitButton" type="Button" parent="PauseModal/Center/Panel/Margin/VBox" unique_id=1465114351]
+[node name="ExitButton" type="Button" parent="PauseModal/SafeArea/VCenter/Panel/Margin/VBox" unique_id=1465114351]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 130)
 layout_mode = 2

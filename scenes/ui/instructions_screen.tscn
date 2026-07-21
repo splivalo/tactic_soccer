@@ -141,7 +141,6 @@ layout_mode = 2
 
 [node name="Page1" type="VBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage" unique_id=1669904012]
 unique_name_in_owner = true
-visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -190,7 +189,9 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
 
 [node name="FrameMargin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page1/FramePanel" unique_id=2063487734]
 layout_mode = 2
+theme_override_constants/margin_left = 40
 theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 40
 theme_override_constants/margin_bottom = 40
 
 [node name="DiagramAspect" type="AspectRatioContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page1/FramePanel/FrameMargin" unique_id=191098546]
@@ -208,6 +209,7 @@ stretch_mode = 5
 
 [node name="Page2" type="VBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage" unique_id=1669904013]
 unique_name_in_owner = true
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -254,7 +256,9 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
 
 [node name="FrameMargin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page2/FramePanel" unique_id=567780597]
 layout_mode = 2
+theme_override_constants/margin_left = 40
 theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 40
 theme_override_constants/margin_bottom = 40
 
 [node name="DiagramAspect" type="AspectRatioContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page2/FramePanel/FrameMargin" unique_id=1266708261]
@@ -318,7 +322,9 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
 
 [node name="FrameMargin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page3/FramePanel" unique_id=1805149294]
 layout_mode = 2
+theme_override_constants/margin_left = 40
 theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 40
 theme_override_constants/margin_bottom = 40
 
 [node name="DiagramAspect" type="AspectRatioContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page3/FramePanel/FrameMargin" unique_id=735905611]
@@ -546,8 +552,8 @@ size_flags_vertical = 4
 theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
 theme_override_font_sizes/normal_font_size = 27
 bbcode_enabled = true
-text = "[color=#f7c226]STALLING → YELLOW CARD[/color]
-Passing back to your last shooter is stalling."
+text = "[color=#f7c226]50-50 DUEL → YELLOW CARD[/color]
+An opponent opposite the ball risks a foul."
 fit_content = true
 
 [node name="Rule5" type="PanelContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList" unique_id=2067834490]

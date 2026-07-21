@@ -34,8 +34,9 @@ func set_vibration_enabled(on: bool) -> void:
 	_save()
 
 
-## Short haptic buzz, gated on the user's preference. Nothing calls this yet
-## (no goal/card haptics wired up) — ready for whenever that's added.
+## Short haptic buzz, gated on the user's preference. Called from main.gd
+## alongside the same moments that already play the whistle/goal SFX (goal,
+## offside, yellow/red card) — see there for the actual durations used.
 func vibrate(duration_ms: int = 40) -> void:
 	if vibration_enabled:
 		Input.vibrate_handheld(duration_ms)

@@ -316,12 +316,13 @@ const FIGURE_HEIGHT := 1.6 # a bit over the model's real height (~1.45 @ scale 1
 @export var color_trail := Color(0.45, 0.9, 1.0, 0.95) # energy trail
 @export var color_remove := Color(1.0, 0.15, 0.15, 0.95) # figure removable after a red card
 @export var color_offside := Color(1.0, 0.85, 0.1, 0.95) # offside line + flagged figure
-## Shoot target that WOULD trip the stalling foul (MatchState.would_violate_stall)
-## if tapped — close to the HUD's yellow-card colour on purpose, so the meaning
-## reads instantly ("yellow" tile = yellow-card risk) without a legend. Pushed
-## a bit more toward pure yellow (less gold/brown) than the HUD's exact shade
-## so it stays clearly distinct from color_chain's orange as a glowing tile.
-@export var color_stall_warning := Color(1.0, 0.92, 0.1, 0.95)
+## Move target that WOULD be a contested 50-50 recovery (MatchState.
+## is_contested_recovery) if tapped — close to the HUD's yellow-card colour on
+## purpose, so the meaning reads instantly ("yellow" tile = yellow-card risk)
+## without a legend. Pushed a bit more toward pure yellow (less gold/brown)
+## than the HUD's exact shade so it stays clearly distinct from color_chain's
+## orange as a glowing tile.
+@export var color_card_warning := Color(1.0, 0.92, 0.1, 0.95)
 @export_range(0.2, 5.0, 0.1) var offside_flash_seconds := 1.8
 
 @export_group("Board FX Tuning")
@@ -1445,20 +1446,12 @@ func _after_combo(res: Dictionary) -> void:
 		print("OFFSIDE — goal not given")
 		_show_offside(res["offside_shooter"], res["offside_line_row"])
 		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
+		Settings.vibrate()
 		if _hud != null:
 			await _hud.play_announcement("offside")
-	# yellow (1st) -> red (2nd) -> forced sending-off (3rd, card=="" +
-	# must_remove) — the last two both read as a "red" dismissal to the player.
-	if res["card"] == "yellow":
-		print("YELLOW CARD: %s (same figure shot twice in a row)" % _state.current)
-		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
-		if _hud != null:
-			await _hud.play_announcement("yellow")
-	elif res["card"] == "red" or res["must_remove"] != "":
-		print("RED CARD: %s" % _state.current)
-		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
-		if _hud != null:
-			await _hud.play_announcement("red")
+	# Cards never come from a shot anymore — see MatchState.is_contested_
+	# recovery/_apply_move's handling of MatchState.last_move_card — so
+	# there's nothing to check here.
 	if res["goal"]:
 		print("%s %s  ->  Home %d : %d Away"
 			% ["AUTOGOL!" if res.get("own_goal", false) else "GOAL!", res["scorer"],
@@ -1467,6 +1460,7 @@ func _after_combo(res: Dictionary) -> void:
 		# even with the cinematic camera off. Fired here, once, rather than
 		# inside _celebrate_goal() (only called when the cam is enabled).
 		_play_sfx(GOAL_SOUND, goal_sfx_volume_db)
+		Settings.vibrate(120) # longer/stronger than a card buzz — a goal is the biggest moment in the match
 		# Stay busy through the celebration so the torn-down board can't take input.
 		if enable_goal_cam and _goal_cam != null:
 			await _celebrate_goal()
@@ -2010,6 +2004,24 @@ func _apply_move(from: Vector2i, to: Vector2i) -> void:
 	if fig is PlayerRig:
 		tween.tween_callback((fig as PlayerRig).idle.bind(false))
 	await tween.finished
+	# A contested 50-50 recovery (see MatchState.is_contested_recovery) cards
+	# the team that just moved — do_move() leaves the verdict in last_move_card
+	# rather than returning it, since do_move() otherwise just returns bool.
+	# Reuses the exact same yellow/red banner + whistle a shot-based card used
+	# to trigger. current still refers to the carded team here: do_move() only
+	# calls next_turn() on a CLEAN reactive move, never on a carded one.
+	if _state.last_move_card == "yellow":
+		print("YELLOW CARD: %s (lost a contested 50-50 recovery)" % _state.current)
+		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
+		Settings.vibrate()
+		if _hud != null:
+			await _hud.play_announcement("yellow")
+	elif _state.last_move_card == "red":
+		print("RED CARD: %s (lost a contested 50-50 recovery)" % _state.current)
+		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
+		Settings.vibrate(90) # a notch stronger than yellow — matches the higher severity
+		if _hud != null:
+			await _hud.play_announcement("red")
 	_busy = false
 	_refresh_turn_view()
 
@@ -2143,15 +2155,11 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 	for c in _state.combo_pass_targets():
 		_fx.add_tile(_cell_world(c.x, c.y), color_tap) # blue = next pass
 	for c in _state.combo_shoot_targets():
-		# green = shoot cell; yellow = would trip the stalling foul (see
-		# MatchState.would_violate_stall) — same colour as the HUD's yellow
-		# card, so the risk reads instantly without needing a legend.
-		var shoot_col := color_stall_warning if _state.would_violate_stall(c) else color_shoot
-		_fx.add_tile(_cell_world(c.x, c.y), shoot_col)
+		_fx.add_tile(_cell_world(c.x, c.y), color_shoot)
 	if preview != NO_CELL:
 		var col := color_chain
 		if preview in _state.combo_shoot_targets():
-			col = color_stall_warning if _state.would_violate_stall(preview) else color_shoot
+			col = color_shoot
 		elif preview in _state.combo_pass_targets():
 			col = color_tap
 		_fx.add_tile(_cell_world(preview.x, preview.y), col.lightened(0.35), fx_tile_size * 1.1)
@@ -2161,12 +2169,20 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 func _draw_move(from: Vector2i, preview: Vector2i = NO_CELL) -> void:
 	_fx.clear()
 	_fx.add_tile(_cell_world(from.x, from.y), color_select)
+	# A contested-50-50 risk (see MatchState.is_contested_recovery) only
+	# actually exists when this move could upgrade into a combo at all — the
+	# same reactive/moves_left gate do_move() checks before it ever evaluates
+	# the risk — so cells outside that window never light up yellow even if
+	# they'd geometrically qualify.
+	var risky: bool = _state._move_is_reactive and _state.moves_left > 1
 	for c in _state.move_targets(from):
-		_fx.add_tile(_cell_world(c.x, c.y), color_move)
+		var col := color_card_warning if (risky and _state.is_contested_recovery(c, _state.current)) else color_move
+		_fx.add_tile(_cell_world(c.x, c.y), col)
 	if preview != NO_CELL:
 		var pts := PackedVector3Array([_cell_world(from.x, from.y), _cell_world(preview.x, preview.y)])
 		_fx.set_trail(pts, color_trail)
-		_fx.add_tile(_cell_world(preview.x, preview.y), color_move.lightened(0.35), fx_tile_size * 1.1)
+		var preview_col := color_card_warning if (risky and _state.is_contested_recovery(preview, _state.current)) else color_move
+		_fx.add_tile(_cell_world(preview.x, preview.y), preview_col.lightened(0.35), fx_tile_size * 1.1)
 
 
 func _clear_markers() -> void:

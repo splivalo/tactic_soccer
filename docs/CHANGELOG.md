@@ -402,3 +402,64 @@ nema javni `.text` na isti način). Verificirano headless na STVARNO
 instanciranom gumbu iz `main_menu.tscn`: native `font_color` providan,
 overlay Label postoji s ispravnim tekstom, `LabelSettings` ima točan
 font_size/color/outline/shadow. `test_match.gd` i dalje 54/54.
+
+## 2026-07-21 — Karton: zadržavanje lopte zamijenjeno kontestiranim 50-50 duelom
+
+**Zašto.** Stari okidač (šut sleti unutar 1 polja od figurice koja je odigrala
+zadnji čisti šut tvog tima) postao je gotovo mrtvo pravilo otkad postoje
+reaktivni potezi i "2 akcije po redu": tim praktički više nikad ne stigne
+stvarno zadržavati loptu. Headless simulacija punih AI-vs-AI partija
+(`scripts/tools/probe_stall_trigger_rate.gd`, Easy/Medium/Hard, 5 partija
+svaka) potvrdila je da se stari prekršaj okinuo u samo **0.55%** šutova
+(9/1622). Istovremeno, samo PREUZIMANJE lopte (reaktivni potez koji dosegne
+loptu) nije nosilo nikakav rizik — korisnikova primjedba da bi to bilo
+prirodnije mjesto za kartone. Više varijanti izmjereno prije odluke
+(`scripts/tools/probe_opposite_ball_risk.gd`, `probe_outnumbered_risk.gd`,
+`probe_tackle_risk.gd`): "bilo koji protivnik susjedan" = 53% (prečesto),
+"outnumbered" = 42.8% (isto prečesto, matematički ekvivalentno), "ball
+directly between me and opponent kroz bilo koju od 4 osi" = 9.0% (dobra
+stopa), samo okomita os = 2.7% (prerijetko za učenje). Korisnik potvrdio
+("da") implementaciju: makni staro, uvedi "kontestirani 50-50" (bilo koja od
+4 osi), reciklirati postojeće žuti/crveni indikatore i eskalaciju.
+
+**Novo pravilo.** `MatchState.is_contested_recovery(cell, team)` — reaktivni
+potez koji doseže loptu je prekršaj ako sleti TOČNO nasuprot protivničkoj
+figurici preko lopte (bilo koja od 4 osi kroz centar: okomito, vodoravno,
+obje dijagonale). Provjerava se SAMO u točnom prozoru gdje bi potez inače
+nadogradio red u combo (`do_move`, `_move_is_reactive and moves_left > 0`) —
+zadnji reaktivni potez i obavezni post-combo pomak nikad ne mogu okinuti
+karton, isto kao i prije. **Nagrada se oduzima**: čak i žuti karton
+poništava nadogradnju u combo tog poteza (potez se potroši kao običan pomak,
+bez šuta/dodavanja) — pravi faul nikad ne donosi prednost onome tko ga je
+napravio. Eskalacija nepromijenjena (1. = žuti, 2.+ = crveni + odmah
+uklanjanje figure).
+
+**Uklonjeno.** `would_violate_stall`, `stall_ref_id`/`stall_ref_cell`, cijeli
+stalling-blok u `execute_combo()` — šutovi više NIKAD ne mogu izazvati
+karton, `execute_combo()`-ov povratni `Dictionary` više nema `card`/
+`must_remove` ključeve. Novi `MatchState.last_move_card` (postavlja ga
+`do_move()`, čisti se na početku svakog poziva) je jedini put kartona sad —
+`main.gd`-ov `_apply_move` ga čita nakon animacije i pušta ISTI žuti/crveni
+banner + zvižduk koji je prije čitao `execute_combo()`-ov `res["card"]`.
+
+**AI.** `ai_player.gd`: `_combo_action_score` više ne kažnjava
+`would_violate_stall` (šut to više ne može izazvati). Nova
+`_contested_recovery_penalty` u `_move_score` teško kažnjava (-3000) reaktivni
+potez koji bi sletio u kontestiranu ćeliju kad postoji sigurnija alternativa
+koja jednako dobro dohvaća loptu — regresijski test
+`test_ai_ranked.gd:_test_avoids_unnecessary_contested_recovery_on_hard`
+potvrđuje 0/20 rizičnih odabira na Hard.
+
+**UI.** Board FX: `color_stall_warning` preimenovan u `color_card_warning` i
+premješten s highlighta shoot-targeta (`_draw_combo`) na highlight
+move-targeta (`_draw_move`) — žuto svijetli SAMO ona ćelija pomaka koja bi
+stvarno bila kontestirani duel, i samo dok je taj rizik uopće na snazi
+(reaktivna faza, još ima poteza). Instructions ekran (Page4, Rule4) ažuriran:
+"CONTESTED 50-50 → YELLOW CARD" umjesto "STALLING → YELLOW CARD".
+
+**Testovi.** `test_match.gd`: stari stalling-test zamijenjen novim koji
+provjerava geometriju (`is_contested_recovery` pozitivno/negativno),
+1./2. prekršaj (žuti/crveni), da karton NE nadograđuje u combo, i da
+`remove_figure`/`forfeit` i dalje rade isto. `test_autogol.gd`: maknut
+zastarjeli test "autogol ne smije izazvati stalling karton" (šut više ne
+može izazvati bilo kakav karton, provjera je postala besmislena).

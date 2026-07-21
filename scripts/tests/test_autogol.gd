@@ -60,26 +60,6 @@ func _initialize() -> void:
 	_check2(res2["goal"] and res2["own_goal"] and res2["scorer"] == "AwayTeam" and ms.score["AwayTeam"] == 1,
 		"shooting the wrong corner concedes (AwayTeam scores)")
 
-	print("\n--- an own goal must NOT also trigger a stalling card ---")
-	# No team ever "stalls" by conceding — piling a card on top of a goal
-	# already lost would just be a double penalty for something that was
-	# never a cynical time-wasting tactic. See MatchState.would_violate_stall.
-	ms.pieces = {Vector2i(3, 6): {"team": "HomeTeam", "role": "field", "id": 99}}
-	ms.ball = Vector2i(3, 5)
-	ms.current = "HomeTeam"
-	ms.phase = MatchState.Phase.COMBO
-	ms.score = {"HomeTeam": 0, "AwayTeam": 0}
-	ms.foul_count["HomeTeam"] = 0
-	ms.stall_ref_id["HomeTeam"] = 99
-	ms.stall_ref_cell["HomeTeam"] = Vector2i(3, 8) # Chebyshev-1 from the own-goal cell (3,9)
-	ms.begin(Vector2i(3, 6))
-	var res3 := ms.execute_combo(Vector2i(3, 9)) # own goal, ALSO next to the live stalling reference
-	print("shoot into own goal next to stall ref: goal=%s own_goal=%s card=%s foul_count=%d"
-		% [res3["goal"], res3["own_goal"], res3["card"], ms.foul_count["HomeTeam"]])
-	_check2(res3["goal"] and res3["own_goal"], "shot into own goal (3,9) still concedes as normal")
-	_check2(res3["card"] == "", "...but does NOT also trigger a stalling card, even though it's next to the reference")
-	_check2(ms.foul_count["HomeTeam"] == 0, "foul_count stays unchanged — an own goal never counts as a violation")
-
 	quit()
 
 

@@ -30,6 +30,16 @@ func _ready() -> void:
 	_prev_button.pressed.connect(func(): _go_to_page(_page - 1, -1))
 	_next_button.pressed.connect(func(): _go_to_page(_page + 1, 1))
 	_card_panel.gui_input.connect(_on_card_gui_input)
+	# Wait for layout (and, on real devices, the SystemFont resources — those
+	# resolve to the OS's actual font and can load a frame or two late on
+	# Android, unlike the editor where it's already cached) to settle before
+	# measuring. Skipping this reads each RichTextLabel's minimum height
+	# against a not-yet-final font, which under-reserves room on a real phone
+	# even though it looked fine in the editor — the concrete bug behind a
+	# user having to fight a RichTextLabel's own tiny internal scrollbar
+	# (mouse-only, not touch-drag-friendly) instead of the page just fitting.
+	await get_tree().process_frame
+	await get_tree().process_frame
 	# PageStage (a plain Control) doesn't propagate its children's minimum size
 	# upward the way CardPanel (a Container) used to when pages were its direct
 	# children — without this, CardPanel is only as tall as the VBox's generic

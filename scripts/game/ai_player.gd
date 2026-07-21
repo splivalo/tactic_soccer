@@ -235,9 +235,9 @@ static func _combo_action_score(state: MatchState, cell: Vector2i, is_shoot: boo
 		# "bad" through the incidental _advance_score term (your own goal is
 		# about as far as possible from the OPPONENT's goal row). That's not
 		# reliable: every other term below (_opponent_adjacent_count,
-		# _post_shot_threat_penalty, would_violate_stall) can rack up bigger
-		# penalties on forward options when the team is under real pressure
-		# (surrounded, no safe advance), which could let conceding an actual
+		# _post_shot_threat_penalty) can rack up bigger penalties on forward
+		# options when the team is under real pressure (surrounded, no safe
+		# advance), which could let conceding an actual
 		# goal outscore a merely-risky one — a human reported exactly this on
 		# Easy: the AI autogol'd rather than take a contested forward shot.
 		# Own-goal cells stay legal shoot targets (see MatchState.combo_shoot_
@@ -246,12 +246,6 @@ static func _combo_action_score(state: MatchState, cell: Vector2i, is_shoot: boo
 		# properly the worst possible outcome short of a genuine dead end.
 		if state.is_own_goal_cell(cell, state.current):
 			score -= 200000.0
-		# Never worth a card/removal risk unless it's the goal above (this was
-		# the "AI keeps getting carded" bug: it used to recycle the ball among
-		# its own figures with no idea that was a foul) — see
-		# MatchState.would_violate_stall.
-		if state.would_violate_stall(cell):
-			score -= 5000.0
 		if not is_goal:
 			score -= _post_shot_threat_penalty(state, cell)
 	score -= _opponent_adjacent_count(state, cell) * 200.0 # don't hand it straight back
@@ -354,31 +348,42 @@ static func decide_move(state: MatchState, difficulty: String) -> Dictionary:
 
 
 ## Primarily "does this close the distance to the ball" (so the team can
-## start combos) — plus a bonus for moving whichever figure is the team's
-## live stalling anchor (see MatchState.stall_ref_id): that move both closes
-## on the ball AND clears the anchor (see MatchState.do_move), unblocking free
-## shooting on the team's next combo turn. Cheap — used both as decide_move's
-## final score's base AND, on its own, to pre-filter candidates before the
-## expensive defense lookahead (see MAX_DEFENSE_CHECKS).
+## start combos). Cheap — used both as decide_move's final score's base AND,
+## on its own, to pre-filter candidates before the expensive defense
+## lookahead (see MAX_DEFENSE_CHECKS).
 static func _move_base_score(state: MatchState, m: Dictionary) -> float:
 	var to: Vector2i = m["to"]
-	var score: float = -maxi(absi(to.x - state.ball.x), absi(to.y - state.ball.y))
-	if state.stall_ref_id[state.current] != -1 and m["from"] == state.stall_ref_cell[state.current]:
-		score += 50.0
-	return score
+	return -maxi(absi(to.x - state.ball.x), absi(to.y - state.ball.y))
+
+
+## Non-zero (a heavy penalty) only when `m` is a reactive move that would
+## reach the ball in a contested 50-50 spot (see MatchState.is_contested_
+## recovery) — landing there gets carded AND throws away the upgrade into a
+## combo (see MatchState.do_move), so it's a pure loss compared to any other
+## candidate that reaches the ball cleanly. Same reactive/moves_left guard as
+## _reach_ball_value, since that's exactly the window do_move actually checks
+## this in.
+static func _contested_recovery_penalty(state: MatchState, m: Dictionary) -> float:
+	if not state._move_is_reactive or state.moves_left <= 1:
+		return 0.0
+	var to: Vector2i = m["to"]
+	if maxi(absi(to.x - state.ball.x), absi(to.y - state.ball.y)) != 1:
+		return 0.0
+	return 3000.0 if state.is_contested_recovery(to, state.current) else 0.0
 
 
 ## _move_base_score plus a (usually dominant) bonus for a move that keeps the
-## opponent OFF the scoreboard next turn (see _defense_score). Without that
-## term the AI only ever chased the ball forward and never noticed it was
-## leaving its own net wide open — this was the "conceded in a few moves
-## because nobody defended" problem. Hard additionally gets _reach_ball_value
-## folded in whenever `m` is a reactive move that actually reaches the ball
-## (see there) — not just "did we get to the ball" but "is THIS the reach
-## point that sets up the strongest reply", using the same chain search
+## opponent OFF the scoreboard next turn (see _defense_score), minus the
+## contested-recovery penalty above. Without the defense term the AI only
+## ever chased the ball forward and never noticed it was leaving its own net
+## wide open — this was the "conceded in a few moves because nobody
+## defended" problem. Hard additionally gets _reach_ball_value folded in
+## whenever `m` is a reactive move that actually reaches the ball (see
+## there) — not just "did we get to the ball" but "is THIS the reach point
+## that sets up the strongest reply", using the same chain search
 ## decide_combo uses on Hard.
 static func _move_score(state: MatchState, m: Dictionary, difficulty: String, reach_budget: Array) -> float:
-	var score := _move_base_score(state, m) + _defense_score(state, m)
+	var score := _move_base_score(state, m) + _defense_score(state, m) - _contested_recovery_penalty(state, m)
 	if difficulty == "Hard":
 		score += _reach_ball_value(state, m, reach_budget)
 	return score

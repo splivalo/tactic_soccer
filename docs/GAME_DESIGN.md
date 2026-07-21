@@ -55,7 +55,7 @@ tko trenutno ima loptu:
 pravilo "nadjačavanja" — tim koji ju je upravo dosegnuo reaktivnim potezom morao bi imati pravo
 igrati loptom bez obzira koliko protivnika stoji uz nju, jer ionako nije njihov red.)
 **Gol:** samo s protivničke polovice. **Zaleđe:** ako su sve protivničke terenske figurice (golman isključen) strogo iza napadača — nema gola. Ako protivnik nema više nijednu terensku figuricu, zaleđe se ne može dogoditi.
-**Kartoni (zadržavanje/vrtnja lopte):** prekršaj je kad novi šut sleti unutar 1 polja (Chebyshev) od figurice koja je odigrala tvoj tim posljednji **čisti** (neprekršajni) šut — bez obzira koja figurica sad puca. Referenca se briše ako se ta figurica u međuvremenu pomakne, ili nakon svakog prekršaja. Samo držati loptu među svojim figuricama je uvijek legalno; kažnjava se doslovno vraćanje istom šutu na isto mjesto. **Kad** se prekršaj dogodi potvrđeno je dekompilacijom izvornog koda originalne igre iz 2006. (vidi `docs/CHANGELOG.md`, 2026-07-09) — ranije verzije ("ista figurica dva puta zaredom", "isto polje kao zadnji put") su odbačene jer su ili prestroge ili propuštaju rupu s naizmjeničnim figuricama. **Eskalacija je svjesno promijenjena od originala** (2026-07-19, na korisnikov zahtjev): 1. prekršaj = samo žuti karton (upozorenje, bez posljedice), 2. i svaki sljedeći = crveni karton **I odmah obavezno uklanjanje figurice u istom potezu** (`Phase.REMOVE`, timer se tijekom te faze zaustavlja — istek vremena ne smije poništiti kaznu) — više nema odvojenog "3. prekršaj" koraka; crveni karton sad radi kao u pravom nogometu (igrač odmah ispada), ne kao najava da treći dolazi. Kartoni traju cijelu partiju (`foul_count` se NE resetira na kickoff, samo na `setup()`) — pazi, ovo znači da tim s jednim žutim ranije u partiji gubi figuricu na SVAKI sljedeći prekršaj do kraja partije, oštrija ekonomija nego stari sustav.
+**Kartoni (kontestirani 50-50 duel):** prekršaj VIŠE NIJE zadržavanje/vrtnja lopte — taj okidač je **uklonjen** (2026-07-21, vidi `docs/CHANGELOG.md`). Umjesto toga: kad reaktivni potez (tim koji NIJE imao loptu) doseže loptu i pritom sleti u ćeliju koja je **točno nasuprot** protivničkoj figurici preko lopte (bilo koja od 4 osi kroz centar — okomito, vodoravno, obje dijagonale — vidi `MatchState.is_contested_recovery`), to je "izgubljen duel za loptu": prekršaj. Razlog promjene: s uvedenim reaktivnim potezima i pravilom "2 akcije po redu", tim praktički više nikad nije mogao stvarno zadržavati loptu (izmjereno empirijski ~0.5% šutova u AI-vs-AI partijama) dok samo preuzimanje lopte nije nosilo nikakav rizik — pa je stari okidač postao gotovo mrtvo pravilo, a novi unosi stvaran, čitljiv rizik točno tamo gdje ga i treba biti (borba za loptu, ne mirno posjedovanje). Nagrada za prekršaj se **oduzima**: čak i žuti karton poništava nadogradnju u combo tog poteza (potez se potroši kao običan pomak, bez šuta) — kao u pravom nogometu, faul nikad ne donosi prednost onome tko ga je napravio. Eskalacija ostaje ista kao i prije (namjerno odstupa od originala iz 2006., 2026-07-19): 1. prekršaj = samo žuti karton, 2. i svaki sljedeći = crveni karton **I odmah obavezno uklanjanje figurice u istom potezu** (`Phase.REMOVE`, timer se tijekom te faze zaustavlja). Kartoni traju cijelu partiju (`foul_count` se NE resetira na kickoff, samo na `setup()`).
 
 ## 4. Tehnička arhitektura
 Odvajamo **logiku** od **prikaza**:
@@ -151,16 +151,20 @@ Node `Pitch` mora se poklapati s logičkom mrežom 7×10 (detalji u `assets/mode
   odmah ne izgleda najbolje jer priprema siguran gol 2-3 dodira kasnije. Isto tako `decide_move`
   na Hard, kad reaktivni potez dosegne loptu, pokreće ISTU pretragu (`_reach_ball_value`) da odabere
   KOJI dohvat vodi do najjačeg napada, ne samo bilo koji.
-- Combo bodovanje: pravi gol vrijedi najviše, teški minus za nepotreban prekršaj zadržavanja, minus
-  za ostavljanje lopte blizu protivničkih figura, MALI bonus za blizinu vlastitih figura (namjerno
-  spušten s 3.0 na 0.5× jačine napredovanja prema golu 2026-07-19 — na starijoj težini ta "ostani
-  blizu podrške" kazna je gotovo uvijek nadjačala nagradu za stvaran napredak, pa je AI gurao loptu
-  minimalno i stao umjesto da stvarno napreduje/čisti loptu iz obrane). Svaki kandidat za šut ISTO
-  provjerava (`_post_shot_threat_penalty`) ostavlja li protivniku odmah otvorenu priliku za uzvratni
-  gol — ovo vrijedi za SVE težine, ne samo Hard.
+- Combo bodovanje: pravi gol vrijedi najviše, minus za ostavljanje lopte blizu protivničkih figura,
+  MALI bonus za blizinu vlastitih figura (namjerno spušten s 3.0 na 0.5× jačine napredovanja prema
+  golu 2026-07-19 — na starijoj težini ta "ostani blizu podrške" kazna je gotovo uvijek nadjačala
+  nagradu za stvaran napredak, pa je AI gurao loptu minimalno i stao umjesto da stvarno
+  napreduje/čisti loptu iz obrane). Svaki kandidat za šut ISTO provjerava
+  (`_post_shot_threat_penalty`) ostavlja li protivniku odmah otvorenu priliku za uzvratni gol — ovo
+  vrijedi za SVE težine, ne samo Hard. Šutovi više ne mogu izazvati karton (vidi §3) pa nema kazne
+  za to u combo bodovanju.
 - **Obrana**: `_defense_score` nagrađuje ulazak na trenutno otvorenu ravnu liniju šuta prema
   vlastitom golu (`Board.is_straight`/`path_clear`/`cells_between`) — AI ne samo juri loptu, nego i
-  brani gol kad je na potezu za pomicanje.
+  brani gol kad je na potezu za pomicanje. Pomak-bodovanje (`_move_score`) ISTO teško kažnjava
+  (`_contested_recovery_penalty`) reaktivni potez koji bi sletio u kontestiranu 50-50 ćeliju (vidi
+  §3) kad postoji sigurnija alternativa koja jednako tako dohvaća loptu — AI nikad namjerno ne
+  riskira karton bez razloga.
 - **Performanse (mobitel je cilj, ne desktop)**: `_rank_pick` je nekad zvao funkciju bodovanja
   VIŠE PUTA po kandidatu tijekom sortiranja (bezazleno dok je bodovanje bilo jeftino, ali otkad
   `_reach_ball_value` unutra pokreće punu pretragu, jedna AI odluka je znala potrajati i 11 SEKUNDI)

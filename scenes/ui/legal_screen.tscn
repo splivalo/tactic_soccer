@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://daengm2t3060i"]
 
 [ext_resource type="Script" uid="uid://bvsd6ro4qv3wc" path="res://scripts/ui/legal_screen.gd" id="1_legal_screen"]
+[ext_resource type="Script" path="res://scripts/ui/touch_scroll_body.gd" id="4_touch_scroll"]
 [ext_resource type="Theme" uid="uid://3sfso1by5eio" path="res://my_theme.tres" id="2_theme"]
 [ext_resource type="Texture2D" uid="uid://n6yamn4iu4fv" path="res://assets/textures/ui/choose_team_bkg.png" id="3_s4pyx"]
 
@@ -91,6 +92,7 @@ theme_override_constants/margin_bottom = 30
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+script = ExtResource("4_touch_scroll")
 theme_override_fonts/normal_font = SubResource("SystemFont_body")
 theme_override_font_sizes/normal_font_size = 32
 bbcode_enabled = true
