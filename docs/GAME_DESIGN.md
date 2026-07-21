@@ -24,7 +24,34 @@
 ## 3. Tijek poteza (sažetak — puna pravila u rules/)
 1. **Dodavanje / povezivanje** — lopta se kreće SAMO ravno (horizontalno/vertikalno/dijagonalno),
    1–∞ polja, bez krivudanja. Neograničen broj povezivanja dok postoji ravna putanja između figurica.
-   Golman smije sudjelovati ako je na putanji (pazi na autogol — vidi pravila).
+   Golman smije sudjelovati ako je na putanji. **Ali** (potvrđeno originalnim pravilima, `rules/
+   igra_pravila.md` — "dodavanje golmanu... AUTOGOL" ako golman nije poravnat s pravcem dodavanja)
+   kad lopta STIGNE golmanu preko dodavanja (nije ondje bila na početku lanca — npr. golman već drži
+   loptu ravno s kickoffa/obrane), to MORA biti kraj lanca: iz te ćelije se više ne smije dalje
+   dodavati, jedino ispucati (`combo_pass_targets` vraća prazno čim `chain[-1]` sjedne na tvoje
+   vlastito gol-polje, a lanac nije ondje i počeo — 2026-07-21). Golmana se ne smije koristiti kao
+   usputna postaja za odbijanje lopte dalje kroz vlastiti gol drugoj figurici. **Drugi dio istog
+   pravila** (2026-07-21, isti dan — korisnik usporedio s originalnom PC verzijom): dodavanje se
+   NIKAD ne nudi kao opcija (u bilo kojem smjeru) ako bi ravna putanja prvo prošla kroz PRAZNO
+   vlastito gol-polje prije nego stigne do figure — ni izvana ka golmanu koji nije poravnat, ni
+   golman prema van pored praznog susjednog gol-polja (`MatchState._pass_from`). Ovo NIJE bodovani
+   događaj (nema "uvijek autogol"), samo je opcija jednostavno nedostupna — točno kako doslovno piše
+   u `rules/igra_pravila.md` ("NE MOŽE SUDJELOVATI"). **Treći dio, radi konzistentnosti** (isti dan
+   — korisnik primijetio da bi bilo nelogično dopustiti ŠUT bočno kroz gol-liniju dok je dodavanje u
+   istom smjeru zabranjeno, "mrežica" bi trebala jednako blokirati oboje): `MatchState._shoot_from`
+   isto tako prekida putanju čim doda prazno gol-polje kao metu — to polje OSTAJE legalna (kažnjiva
+   za vlastiti gol, pogodak za protivnički) meta za ispucavanje, samo se putanja više ne nastavlja
+   DALJE preko njega do polja iza. **Četvrti dio** (isti dan — igrač isto tako ne smije pucati kroz
+   BILO KOJU mrežicu bočno, ne samo vlastitu): i `_pass_from` i `_shoot_from` sad provjeravaju
+   `is_goal_cell()` (bilo koji gol, ne `is_own_goal_cell()`) — mreža protivničkog gola blokira
+   jednako kao i vlastita. Ne kvari normalno zabijanje: gol-polje se i dalje doda kao meta PRIJE
+   prekida putanje, samo dalje ništa iza njega na istoj liniji. **Peti dio, strože** (isti dan —
+   korisnik: igrač ne smije moći pucati KROZ mrežicu bočno i time dati bilo koji gol, ni svoj ni
+   protivnički): vodoravna (bočna) zraka duž gol-linije sad NIKAD ne može ući u gol-polje uopće —
+   ni sletjeti na njega, ni dodati figuri koja tamo stoji (npr. golmanu) — bez obzira je li prazno,
+   zauzeto, vlastito ili protivničko: stativa fizički blokira ulazak sa strane. Samo okomit ili
+   dijagonalan pristup (stvarno iz terena) i dalje normalno ulazi u gol-polje (i dalje boduje/autogol
+   kao i prije) — pravilo pogađa isključivo vodoravni (bočni) smjer. Vidi `MatchState._is_lateral`.
 2. **Ispucavanje** — zadnja figurica MORA ispucati loptu (h/v/d), staje gdje želi, ne na zauzeto polje.
 3. **Pomicanje** — igrač pomakne jednu bilo koju figuricu **neograničeno daleko u ravnoj liniji**
    (h/v/d), dok ne udari u prvu prepreku (drugu figuricu, loptu, ili rub terena) — ista gramatika

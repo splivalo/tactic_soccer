@@ -463,3 +463,114 @@ provjerava geometriju (`is_contested_recovery` pozitivno/negativno),
 `remove_figure`/`forfeit` i dalje rade isto. `test_autogol.gd`: maknut
 zastarjeli test "autogol ne smije izazvati stalling karton" (šut više ne
 može izazvati bilo kakav karton, provjera je postala besmislena).
+
+## 2026-07-21 — Bug: lopta se mogla "odbiti" kroz golmana drugoj figurici
+
+**Prijavio korisnik** (uz screenshot iz stvarne partije): dodavanje kroz
+golmana, koji stoji na sredini gola, dalje figurici s druge strane gola —
+lanac je to dopuštao bez ikakve kazne, iako je golman sjedio TOČNO na
+vlastitom gol-polju usput. Provjereno protiv `rules/igra_pravila.md`
+("dodavanje golmanu iz npr LIJEVOG kornera... ukoliko [golman] nije [ondje],
+već je na DESNOJ ili SREDIŠNJOJ [poziciji], ne može sudjelovati u dodavanju
+jer bi primio AUTOGOL") + dvije referentne slike iz originala
+(`dodavanje_golmanu_moguce.jpg` / `_autogol.jpg`, uspoređene piksel-po-piksel
+da se nađe točna razlika: golmanova pozicija unutar gola, poravnata ili ne s
+pravcem dodavanja). Zaključak: pravilo generalizirano — gol-polje smije biti
+SAMO krajnja postaja lanca (golman primi pa mora ispucati), nikad usputna
+stanica za odbijanje lopte dalje drugoj figurici kroz vlastiti gol.
+
+**Popravak.** `MatchState.combo_pass_targets()`: čim `chain[-1]` sjedne na
+jedno od vlastitih gol-polja (uvijek samo golman — terenske figure ondje
+uopće ne smiju stati, vidi `move_targets`), više se ne nudi nijedan pass
+target — jedina legalna nastavka je ispucavanje. Namjerno NE vrijedi kad
+lanac ondje i POČINJE (`chain.size() == 1`, npr. golman već drži loptu s
+kickoffa ili obrane) — to normalno dodavanje van mora ostati legalno.
+Verificirano headless probeom prije i poslije popravka (lanac kroz golmana
+dalje figurici je sad `extend() == false`; golman koji već ima loptu i dalje
+slobodno dodaje van). Regresijski test dodan u `test_match.gd` (oba
+scenarija: blokirano prosljeđivanje KROZ golmana, dopušteno dodavanje IZ
+golmana). Sva 3 test suite-a (`test_match.gd` 85 provjera, `test_autogol.gd`,
+`test_ai_ranked.gd` uklj. pune AI-vs-AI partije) prolaze bez regresije.
+
+**Isti dan, nastavak: dodavanje preko praznog gol-polja uopće ne smije biti
+ponuđeno.** Gornji popravak pokriva samo "stigao do golmana pa dalje" slučaj.
+Korisnik je zatim postavio precizniji scenarij (figura sa strane, u razini
+gola, pokušava dodati golmanu koji NIJE poravnat — lopta bi morala "proći
+kroz" prazno gol-polje da ga uopće dosegne) i tražio da to ISTO bude
+autogol. Prvi prijedlog (extend() bi trebao odmah "skorati" autogol) je
+razmotren pa **odbačen** nakon što je korisnik usporedio s originalnom PC
+verzijom igre: original jednostavno NE NUDI tu opciju dodavanja (nema
+"bodovanog" ishoda) — točno kako doslovno piše u `rules/igra_pravila.md`
+("NE MOŽE SUDJELOVATI u dodavanju", ne "dobit će gol ako pokuša"), potvrđeno
+i naslovom referentne slike ("DODAVANJE GOLMANU - NEMOGUĆE / AUTOGOL" —
+"nemoguće" je glavni opis, "autogol" je samo objašnjenje zašto).
+
+**Popravak.** `MatchState._pass_from()`: ray-walk sad prekida (bez dodavanja
+mete) čim naiđe na PRAZNO vlastito gol-polje prije nego stigne do bilo koje
+figure — vrijedi simetrično u OBA smjera (dodavanje golmanu izvana KROZ
+susjedno prazno gol-polje, i golman koji pokušava odigrati loptu van kroz
+susjedno prazno gol-polje), budući da `_pass_from` radi identično bez obzira
+polazi li zraka od golmana ili prema njemu. `combo_shoot_targets()`
+(ispucavanje) namjerno NIJE dirano — to prazno gol-polje ostaje dostupno kao
+šut-meta, i dalje jednako opasno (autogol) ako ga netko namjerno/slučajno
+odabere. Radi zajedno s prijašnjim popravkom bez sukoba (dva različita
+scenarija: "već sam kod golmana, kud dalje" vs. "još nisam ni stigao do
+njega"). Testovi prošireni u `test_match.gd` (blokirano dodavanje preko
+praznog gol-polja u oba smjera + potvrda da poravnati/izravni pravci i dalje
+rade normalno). Sva 3 test suite-a i dalje prolaze bez regresije.
+
+**Isti dan, treći nastavak: ista blokada za ŠUT, ne samo dodavanje.**
+Korisnik primijetio nedosljednost — dodavanje bočno kroz gol-liniju je sad
+blokirano, ali ispucavanje istim putem i dalje potpuno normalno prolazi
+pored/preko praznog gol-polja do ćelija iza njega. Njegovo obrazloženje:
+"mrežica" bi trebala jednako blokirati oboje, logično je da lopta ne može
+proći kroz gol ni šutom ni dodavanjem. Odlučeno: simetrična restrikcija.
+
+**Popravak.** `MatchState._shoot_from()`: putanja se prekida ODMAH NAKON što
+doda prazno vlastito gol-polje kao metu — to polje ostaje legalna (i dalje
+kažnjiva, autogol) meta za ispucavanje, baš kao i prije, samo se putanja više
+ne nastavlja dalje do polja IZA njega na istoj liniji. Verificirano probeom:
+figura sa strane šuta prema (4,9) [prvo prazno gol-polje] — i dalje ponuđeno,
+i dalje autogol ako se odabere; (2,9)/(1,9)/(0,9) [dalje niz istu liniju,
+iza gola] više se NE nude. Test dodan u `test_match.gd`. Sva 3 test suite-a
+(uklj. pune AI-vs-AI partije) i dalje prolaze bez regresije.
+
+**Isti dan, četvrti nastavak: blokada vrijedi za BILO koju mrežicu, ne samo
+vlastitu.** Korisnik: igrač isto tako ne bi smio moći pucati kroz mrežicu
+bočno — logika "mreža blokira lateralno" nema razloga vrijediti samo za
+vlastiti gol, mreža je mreža bilo čija.
+
+**Popravak.** `MatchState._pass_from()` i `_shoot_from()`: provjera promijenjena
+s `is_own_goal_cell(c, current)` na `is_goal_cell(c)` (bilo koji gol,
+neovisno o timu). Normalno zabijanje ostaje netaknuto — gol-polje se doda kao
+meta PRIJE prekida putanje, pa gađanje protivničkog gola i dalje radi
+identično (samo se putanja ne nastavlja dalje preko njega ako je gol-polje
+usred neke duže bočne linije). Verificirano probeom (šut koji sleti na
+protivničko gol-polje i dalje boduje normalno; ništa dalje niz istu liniju
+iza protivničkog gola se ne nudi) + test dodan u `test_match.gd`. Sva 3 test
+suite-a (uklj. pune AI-vs-AI partije) i dalje prolaze bez regresije.
+
+**Isti dan, peti (i posljednji) nastavak: bočni ulazak u gol-polje MORA biti
+potpuno nemoguć, ne samo "bez nastavka dalje".** Prijašnji popravak je i
+dalje dopuštao da vodoravna zraka SLETI na prvo gol-polje (autogol ili gol,
+ovisno čije) — samo dalji nastavak preko njega je bio blokiran. Korisnik je
+eksplicitno tražio da to bude POTPUNO nemoguće: igrač ne smije moći dati NI
+autogol NI gol pucanjem/dodavanjem bočno kroz mrežicu — stativa fizički
+blokira ulazak sa strane, bez obzira stoji li tko na tom polju ili ne.
+
+**Popravak.** Nova `MatchState._is_lateral(dir)` — true za čisto vodoravan
+smjer (`dir.y == 0`), jedina orijentacija koja uopće može putovati DUŽ
+gol-linije umjesto stvarno UPASTI u nju iz terena. `_pass_from` i
+`_shoot_from`: čim zraka u vodoravnom smjeru naiđe na BILO koje gol-polje
+(vlastito ili protivničko, prazno ili zauzeto — npr. golman), staje ODMAH
+BEZ da ga uopće doda kao metu ili provjeri tko tamo stoji — taj kut ulaska
+jednostavno nije fizički moguć. Okomit/dijagonalan pristup (stvarno iz
+terena) i dalje radi identično kao prije (doda pa eventualno stane, gol/
+autogol i dalje broji). Verificirano probeom (bočni pokušaj šuta/dodavanja u
+gol-polje s golmanom ILI prazno — oboje `false`; okomit pristup — i dalje
+`true`, i dalje autogol). Testovi u `test_match.gd` prepravljeni da
+odražavaju strože pravilo (prijašnja 5 provjera koje su očekivale da bočni
+šut SLIJEĆE na prvo gol-polje zamijenjene provjerama da NIJEDNO gol-polje
+nije dohvatljivo bočno, plus zadržana provjera da okomit pristup i dalje
+radi). Sva 3 test suite-a (uklj. pune AI-vs-AI partije) prolaze bez
+regresije.

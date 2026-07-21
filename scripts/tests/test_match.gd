@@ -205,6 +205,129 @@ func _initialize() -> void:
 	_check(ms.pending_removal == "", "forfeit() clears a pending forced removal")
 	_check(ms.chain.is_empty(), "forfeit() leaves no dangling chain")
 
+	# Passing THROUGH your own goalkeeper to a teammate further along must be
+	# illegal (rules/igra_pravila.md's "misaligned keeper -> AUTOGOL" rule,
+	# generalized): once the ball has been PASSED (not started there) onto a
+	# figure standing on one of your own goal cells, that must be the end of
+	# the chain — the only legal continuation is the shot itself.
+	ms.pieces.clear()
+	var top_fig := Vector2i(3, 5)
+	var gk_cell := Vector2i(3, 9)   # centre of HomeTeam's own goal (row 9)
+	var far_fig := Vector2i(6, 9)   # another figure further along the goal line
+	ms.pieces[top_fig] = {"team": "HomeTeam", "role": "field", "id": 10}
+	ms.pieces[gk_cell] = {"team": "HomeTeam", "role": "gk", "id": 11}
+	ms.pieces[far_fig] = {"team": "HomeTeam", "role": "field", "id": 12}
+	ms.ball = Vector2i(3, 6)
+	ms.current = "HomeTeam"
+	ms.phase = MatchState.Phase.COMBO
+	ms.begin(top_fig)
+	_check(gk_cell in ms.combo_pass_targets(), "setup: the keeper (centre of goal) is a normal, legal pass target")
+	ms.extend(gk_cell)
+	_check(ms.chain == [top_fig, gk_cell], "chain now sits with the keeper on his own goal cell")
+	_check(ms.combo_pass_targets().is_empty(),
+		"no further pass is offered once the ball reaches a figure on your own goal cell (%s)" % [ms.combo_pass_targets()])
+	_check(not ms.extend(far_fig), "extend() past the keeper to a further teammate is rejected")
+	_check(ms.chain == [top_fig, gk_cell], "chain is unchanged after the rejected extend")
+	var gk_shoot_targets := ms.combo_shoot_targets()
+	_check(Vector2i(3, 8) in gk_shoot_targets, "the keeper can still shoot normally (e.g. straight up the field) from his own cell")
+	_check(not (Vector2i(4, 9) in gk_shoot_targets),
+		"...but NOT sideways into the adjacent goal cell — a goalpost blocks that entry angle entirely (%s)" % [gk_shoot_targets])
+
+	# A pass is never offered (either direction) if its straight path crosses
+	# one of your OWN empty goal cells first — matches the original rules
+	# (rules/igra_pravila.md: "NE MOŽE SUDJELOVATI", not a scored event, just
+	# unavailable) taken literally: a figure standing wide on the goal-line
+	# row can't reach a MISALIGNED keeper by rolling the ball sideways past
+	# an empty slot — this is the exact scenario from the user's screenshot.
+	var side_fig := Vector2i(6, 9) # same row as goal, outside it, PAST an empty goal cell from centre
+	ms.pieces.clear()
+	ms.pieces[gk_cell] = {"team": "HomeTeam", "role": "gk", "id": 11} # centre of goal, (3,9)
+	ms.pieces[side_fig] = {"team": "HomeTeam", "role": "field", "id": 12}
+	ms.ball = Vector2i(6, 8) # adjacent to side_fig, straight above it
+	ms.current = "HomeTeam"
+	ms.phase = MatchState.Phase.COMBO
+	ms.begin(side_fig)
+	var sideways_targets := ms.combo_pass_targets()
+	_check(not (gk_cell in sideways_targets),
+		"keeper at centre (3,9) is NOT reachable straight across the goal line from (6,9) — the ray crosses an empty goal cell (4,9) first (%s)" % [sideways_targets])
+
+	# But the SAME keeper is reachable normally from directly in front of him
+	# (vertical, no other goal cell crossed) — being on the goal row doesn't
+	# make him unreachable in general, only via a path that detours through
+	# another empty slot in his own goal first.
+	ms.pieces.clear()
+	ms.pieces[top_fig] = {"team": "HomeTeam", "role": "field", "id": 10}
+	ms.pieces[gk_cell] = {"team": "HomeTeam", "role": "gk", "id": 11}
+	ms.ball = Vector2i(3, 6)
+	ms.current = "HomeTeam"
+	ms.phase = MatchState.Phase.COMBO
+	ms.begin(top_fig)
+	_check(gk_cell in ms.combo_pass_targets(), "the keeper straight ahead (no crossing) is still a normal, legal pass target")
+
+	# ...and the SAME rule blocks the keeper from rolling it back OUT the
+	# other way, even on his very first move of the turn (already holding
+	# the ball, e.g. right off a kickoff/save) — matches "niti on njemu"
+	# (nor can he [pass] to him) from the user's report. A direction that
+	# does NOT cross another goal cell (straight up the field) stays normal.
+	var up_field := Vector2i(3, 5)
+	ms.pieces.clear()
+	ms.pieces[gk_cell] = {"team": "HomeTeam", "role": "gk", "id": 11}
+	ms.pieces[far_fig] = {"team": "HomeTeam", "role": "field", "id": 12}  # (6,9), past an empty goal cell
+	ms.pieces[up_field] = {"team": "HomeTeam", "role": "field", "id": 13} # (3,5), straight up, nothing crossed
+	ms.ball = Vector2i(3, 8)
+	ms.current = "HomeTeam"
+	ms.phase = MatchState.Phase.COMBO
+	ms.begin(gk_cell)
+	_check(ms.chain == [gk_cell], "setup: chain starts AT the keeper (he already has the ball)")
+	var out_targets := ms.combo_pass_targets()
+	_check(not (far_fig in out_targets),
+		"keeper rolling it OUT sideways through an empty goal cell is blocked, even on his own first move (%s)" % [out_targets])
+	_check(up_field in out_targets, "...but passing straight up the field (no goal cell crossed) stays completely normal")
+	_check(ms.extend(up_field), "...and extend() succeeds for the safe direction")
+
+	# A goalpost blocks the ball entering a goal cell from the SIDE entirely —
+	# a purely horizontal ray along the goal row can never reach ANY goal
+	# cell at all (no autogol, no goal either), whether it's empty, occupied
+	# by the keeper, your own net or the opponent's — that entry angle just
+	# isn't physically possible. Only a vertical/diagonal approach (actually
+	# coming in from the field) can ever land the ball in a goal cell.
+	ms.pieces.clear()
+	ms.pieces[side_fig] = {"team": "HomeTeam", "role": "field", "id": 12} # (6,9), same row as goal, outside it
+	ms.ball = Vector2i(6, 8)
+	ms.current = "HomeTeam"
+	ms.phase = MatchState.Phase.COMBO
+	ms.begin(side_fig)
+	var shoot_targets := ms.combo_shoot_targets()
+	_check(not (Vector2i(4, 9) in shoot_targets) and not (Vector2i(2, 9) in shoot_targets),
+		"no own-goal cell along the row is reachable sideways at all, not even the nearest one (%s)" % [shoot_targets])
+	_check(not ms.execute_combo(Vector2i(4, 9))["ok"], "attempting to shoot there is simply illegal — not even an own goal")
+
+	# Same for the OPPONENT's goal row: a lateral approach can't score either.
+	ms.pieces.clear()
+	ms.pieces[Vector2i(6, 0)] = {"team": "HomeTeam", "role": "field", "id": 13} # opponent's goal row, outside it
+	ms.ball = Vector2i(6, 1)
+	ms.current = "HomeTeam"
+	ms.phase = MatchState.Phase.COMBO
+	ms.score = {"HomeTeam": 0, "AwayTeam": 0}
+	ms.begin(Vector2i(6, 0))
+	var opp_shoot_targets := ms.combo_shoot_targets()
+	_check(not (Vector2i(4, 0) in opp_shoot_targets) and not (Vector2i(2, 0) in opp_shoot_targets),
+		"no opponent goal cell along the row is reachable sideways either (%s)" % [opp_shoot_targets])
+	_check(not ms.execute_combo(Vector2i(4, 0))["ok"], "attempting to shoot there doesn't score — not a legal shot at all")
+
+	# But a genuine (vertical/diagonal) approach into a goal cell must still
+	# work exactly as before — this rule only blocks the SIDEWAYS angle.
+	ms.pieces.clear()
+	ms.pieces[Vector2i(3, 5)] = {"team": "HomeTeam", "role": "field", "id": 14}
+	ms.ball = Vector2i(3, 6)
+	ms.current = "HomeTeam"
+	ms.phase = MatchState.Phase.COMBO
+	ms.score = {"HomeTeam": 0, "AwayTeam": 0}
+	ms.begin(Vector2i(3, 5))
+	_check(Vector2i(3, 9) in ms.combo_shoot_targets(), "straight down the field into the goal (vertical, not sideways) is still a legal target")
+	var vert_res := ms.execute_combo(Vector2i(3, 9))
+	_check(vert_res["goal"] and vert_res["own_goal"], "...and still a real own goal, exactly as before")
+
 	# MatchState.own_cells()
 	ms.pieces.clear()
 	ms.pieces[Vector2i(1, 1)] = {"team": "HomeTeam", "role": "field", "id": 0}

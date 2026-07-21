@@ -198,33 +198,84 @@ func combo_starters() -> Array[Vector2i]:
 	return out
 
 
-# First figure on each ray from `cell`: a teammate not already in the chain = pass.
+# True if `dir` is a pure horizontal step (dy == 0) — the only orientation
+# that can ever travel ALONG a goal row instead of into it from the field
+# side. A goalpost blocks the ball entering (or leaving) a goal cell from
+# the side no matter what's standing there — see _pass_from/_shoot_from.
+func _is_lateral(dir: Vector2i) -> bool:
+	return dir.y == 0
+
+
+# First figure on each ray from `cell`: a teammate not already in the chain =
+# pass. A goal cell — EITHER net, your own or the opponent's — is a hard
+# wall for a horizontal (sideways) ray: the goalpost blocks the ball
+# entering or leaving it from the side at all, whoever/whatever is standing
+# there, so it's never even checked for a piece along that orientation. For
+# any OTHER ray (vertical/diagonal — actually approaching from the field),
+# it still works as before: reaching a further empty goal cell blocks
+# anything beyond it (passing through a goal-mouth is never offered as an
+# option, matching rules/igra_pravila.md's "NE MOŽE SUDJELOVATI" — simply
+# unavailable, not a scored event).
 func _pass_from(cell: Vector2i) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for dir in Board.DIRS:
 		var c: Vector2i = cell + dir
+		var lateral := _is_lateral(dir)
 		while Board.in_bounds(c):
+			if is_goal_cell(c) and lateral:
+				break
 			if pieces.has(c):
 				if pieces[c]["team"] == current and not (c in chain):
 					out.append(c)
+				break
+			if is_goal_cell(c):
 				break
 			c += dir
 	return out
 
 
-# Empty cells along each ray from `cell` = shoot/land targets.
+# Empty cells along each ray from `cell` = shoot/land targets. A goal cell is
+# a hard wall for a horizontal (sideways) ray — the goalpost blocks a shot
+# entering it from the side, so it's never offered as a landing spot that
+# way at all (no autogol, no goal, either net — that entry angle simply
+# isn't physically possible). For any OTHER ray (actually approaching from
+# the field) it's still offered as a landing spot exactly as before (own-
+# goal cells stay legal — a deliberate/accidental autogol is real rules-
+# legal; an opponent goal cell is still a real scoring shot, subject to the
+# usual opponent-half/offside checks) — it just can't sail THROUGH a
+# goal-mouth to land somewhere further along the same line.
 func _shoot_from(cell: Vector2i) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for dir in Board.DIRS:
 		var c: Vector2i = cell + dir
+		var lateral := _is_lateral(dir)
 		while Board.in_bounds(c) and not pieces.has(c):
+			if is_goal_cell(c) and lateral:
+				break
 			out.append(c)
+			if is_goal_cell(c):
+				break
 			c += dir
 	return out
 
 
+## Once the ball has been PASSED (not started there) onto one of your own
+## goal cells — only ever the goalkeeper; outfield figures can never stand
+## there, see move_targets — it may not be relayed any further: the only
+## legal continuation from there is the shot itself (execute_combo). This is
+## the "misaligned keeper" danger from the original rules (rules/igra_
+## pravila.md, "dodavanje golmanu... AUTOGOL") generalized — the goal line is
+## never a safe waypoint to bounce the ball through to a teammate further
+## along, only a place the keeper can receive and then clear FROM. Doesn't
+## apply when the chain STARTS there (chain.size() == 1): that's the
+## goalkeeper already holding the ball (straight off a kickoff or a save)
+## safely distributing it out, which must stay legal.
 func combo_pass_targets() -> Array[Vector2i]:
-	return _pass_from(chain[-1]) if not chain.is_empty() else [] as Array[Vector2i]
+	if chain.is_empty():
+		return [] as Array[Vector2i]
+	if chain.size() > 1 and is_own_goal_cell(chain[-1], current):
+		return [] as Array[Vector2i]
+	return _pass_from(chain[-1])
 
 
 ## Empty cells the last chain figure could shoot to. Excludes the ball's own
