@@ -41,6 +41,10 @@ var last_score: Dictionary = {"HomeTeam": 0, "AwayTeam": 0}
 func goto(screen: int) -> void:
 	if screen == Screen.MATCH:
 		_fade_out_music()
+	elif screen == Screen.WIN_SCREEN:
+		_play_result_sfx(WIN_SOUND)
+	elif screen == Screen.LOSE_SCREEN:
+		_play_result_sfx(LOSE_SOUND)
 	get_tree().call_deferred("change_scene_to_file", SCENE_PATHS[screen])
 
 
@@ -84,6 +88,22 @@ const INTRO_MUSIC := preload("res://assets/audio/music/intro.mp3")
 var _music: AudioStreamPlayer = null
 
 
+# --- Match result stings ---------------------------------------------------------
+# Short win/lose musical cues, played once, right when goto() routes to the
+# corresponding screen. main.gd already resolves perspective before calling
+# goto() (WIN_SCREEN only happens when GameFlow.player_side is the actual
+# scorer — see main.gd's _after_combo), so no perspective logic needed here.
+# "Music" bus, not "SFX" — these are melodic stings like intro/crowd, not a
+# gameplay feedback cue. A dedicated one-shot player: not _music (owns the
+# continuous intro/crowd loop, would get clobbered mid-loop), not _tap_sfx
+# (a much more frequent, unrelated trigger).
+const WIN_SOUND: AudioStream = preload("res://assets/audio/music/win.mp3")
+const LOSE_SOUND: AudioStream = preload("res://assets/audio/music/lose.mp3")
+@export_range(-24.0, 24.0, 0.5) var result_sfx_volume_db := 5.0
+
+var _result_sfx: AudioStreamPlayer = null
+
+
 func _ready() -> void:
 	_tap_sfx = AudioStreamPlayer.new()
 	_tap_sfx.bus = &"SFX"
@@ -103,6 +123,10 @@ func _ready() -> void:
 	add_child(_music)
 	_music.play()
 
+	_result_sfx = AudioStreamPlayer.new()
+	_result_sfx.bus = &"Music"
+	add_child(_result_sfx)
+
 
 func _on_node_added(node: Node) -> void:
 	if node is BaseButton:
@@ -121,3 +145,11 @@ func _fade_out_music() -> void:
 	var tw := create_tween()
 	tw.tween_property(_music, "volume_db", -80.0, 0.4)
 	tw.tween_callback(_music.stop)
+
+
+func _play_result_sfx(stream: AudioStream) -> void:
+	if _result_sfx == null or stream == null:
+		return
+	_result_sfx.stream = stream
+	_result_sfx.volume_db = result_sfx_volume_db
+	_result_sfx.play()
