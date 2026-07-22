@@ -50,8 +50,56 @@ func _ready() -> void:
 	var max_h := 0.0
 	for p in _pages:
 		max_h = maxf(max_h, p.get_combined_minimum_size().y)
+	var page4_natural_h: float = _pages[3].get_combined_minimum_size().y
 	stage.custom_minimum_size.y = max_h
 	_go_to_page(0, 0)
+	_scale_rules_list(page4_natural_h)
+
+
+## Page4 ("SPECIAL RULES") is the TALLEST page — its natural size is what
+## `max_h` above reserves for every page — so on a screen taller than the
+## project's 1080x1920 reference (canvas_items+expand stretch gives extra
+## vertical room there, see project.godot), CardPanel still grows past even
+## that reservation, but Page4's own rules list stays fixed-size: the result
+## reads as tiny, hard-to-read text floating in a big empty card. Scale the
+## whole rules list (icon size, font size, row spacing) to whatever space it
+## ACTUALLY ends up with — up on a spacious screen, down on a cramped one —
+## clamped so it never gets comically large or unreadably small either way.
+const RULES_SCALE_MIN := 0.75
+const RULES_SCALE_MAX := 1.15
+const RULE_ICON_SIZE := 95.0
+const RULE_FONT_SIZE := 27
+const RULE_LIST_SEPARATION := 12
+
+
+func _scale_rules_list(natural_h: float) -> void:
+	if natural_h <= 0.0:
+		return
+	# custom_minimum_size only takes effect on the container tree's NEXT
+	# layout pass, and CardPanel expanding to its own final size (governed by
+	# the outer VBox, not this script) needs another pass on top of that —
+	# wait for it to fully settle before reading Page4's real, final height.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var page4: Control = _pages[3]
+	var scale_factor := clampf(page4.size.y / natural_h, RULES_SCALE_MIN, RULES_SCALE_MAX)
+	if absf(scale_factor - 1.0) < 0.03: # close enough to natural size — not worth touching
+		return
+	var rules_list := page4.get_node_or_null("RulesList") as VBoxContainer
+	if rules_list == null:
+		return
+	rules_list.add_theme_constant_override("separation", roundi(RULE_LIST_SEPARATION * scale_factor))
+	for row in rules_list.get_children():
+		var hbox := row.get_node_or_null("Margin/HBox")
+		if hbox == null:
+			continue
+		var icon := hbox.get_node_or_null("Icon") as Control
+		if icon != null:
+			icon.custom_minimum_size = Vector2.ONE * (RULE_ICON_SIZE * scale_factor)
+		var text := hbox.get_node_or_null("Text") as RichTextLabel
+		if text != null:
+			text.add_theme_font_size_override("normal_font_size", roundi(RULE_FONT_SIZE * scale_factor))
 
 
 ## direction: -1 = came from Prev (new page slides in from the left),

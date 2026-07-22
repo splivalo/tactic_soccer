@@ -66,8 +66,13 @@ func clear() -> void:
 
 
 ## Glow tile centred on a cell (world pos = pitch-surface point at the cell).
-## Pass `size < 0` (default) to use the exported `tile_size`.
-func add_tile(pos: Vector3, color: Color, size := -1.0) -> void:
+## Pass `size < 0` (default) to use the exported `tile_size`. `pulsing =
+## false` renders a flat, steady tile instead of joining the shared pulse
+## animation — used for "still yours, but not what you're currently acting
+## on" figures (see main.gd's _draw_combo/_draw_move), so they read as
+## calmly present rather than competing for attention with the actionable
+## (pulsing) tiles.
+func add_tile(pos: Vector3, color: Color, size := -1.0, pulsing := true) -> void:
 	var s: float = tile_size if size < 0.0 else size
 	var mesh := PlaneMesh.new()
 	mesh.size = Vector2(s, s)
@@ -77,7 +82,8 @@ func add_tile(pos: Vector3, color: Color, size := -1.0) -> void:
 	mi.material_override = mat
 	mi.position = pos + Vector3(0, TILE_Y, 0)
 	add_child(mi)
-	_register_pulse(mat, color.a)
+	if pulsing:
+		_register_pulse(mat, color.a)
 
 
 ## Flowing energy ribbon along a polyline of world points (ball -> chain figures).

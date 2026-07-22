@@ -274,6 +274,15 @@ var _node_at: Dictionary = {} # Vector2i(cell) -> Node3D (figure standing there)
 var _ball: Node3D = null
 var _ball_last_pos := Vector3.ZERO  # for rolling-spin (see _spin_ball)
 var _move_from := Vector2i(-1, -1) # figure selected to move (view only)
+# True once the human has tapped a NON-ball-adjacent figure with an empty
+# chain (see _combo_tap) — declining the ball this turn in favour of just
+# moving that figure. From there, input handling (_on_motion/_on_release/
+# _move_click) treats it exactly like Phase.MOVE's tap/drag flow even though
+# _state.phase is still COMBO, and _apply_move's `as_hold` gets this value so
+# the move actually goes through MatchState.hold_and_move instead of
+# do_move. Reset once the hold-move completes, or the player deselects by
+# tapping the same figure again (see _move_click).
+var _holding := false
 var _busy := false # true while the ball animates (ignore input)
 var _fx: BoardFx = null
 
@@ -311,17 +320,24 @@ const FIGURE_HEIGHT := 1.6 # a bit over the model's real height (~1.45 @ scale 1
 @export var color_move := Color(0.28, 1.0, 0.45, 0.9) # move target cell
 @export var color_shoot := Color(0.30, 1.0, 0.5, 0.9) # shoot target cell
 @export var color_tap := Color(0.30, 0.65, 1.0, 0.95) # tappable figure
+## The ONE figure currently selected/held (see _draw_move) — the original
+## cyan-blue "selected mover" colour from before color_tap_selected existed
+## as a separate variable, so it stands out from the plain-blue tappable
+## figures around it.
+@export var color_tap_selected := Color(0.2, 0.95, 1.0, 0.95) # #33F2FF
 @export var color_chain := Color(1.0, 0.6, 0.15, 0.95) # chosen chain figure
-@export var color_select := Color(0.2, 0.95, 1.0, 0.95) # selected mover
 @export var color_trail := Color(0.45, 0.9, 1.0, 0.95) # energy trail
 @export var color_remove := Color(1.0, 0.15, 0.15, 0.95) # figure removable after a red card
 @export var color_offside := Color(1.0, 0.85, 0.1, 0.95) # offside line + flagged figure
-## Move target that WOULD be a contested 50-50 recovery (MatchState.
-## is_contested_recovery) if tapped — close to the HUD's yellow-card colour on
-## purpose, so the meaning reads instantly ("yellow" tile = yellow-card risk)
-## without a legend. Pushed a bit more toward pure yellow (less gold/brown)
-## than the HUD's exact shade so it stays clearly distinct from color_chain's
-## orange as a glowing tile.
+## Flags a SPECIFIC shoot/move target that would immediately trigger the
+## stalling card if picked (see MatchState.would_card_shoot/would_card_move)
+## — used in place of color_shoot/color_move on exactly that tile, so the
+## risk is visible before the card happens, not a surprise after. Only ever
+## marks a target when it's actually knowable in advance (the action would
+## hand the opponent's COMBO straight back with no intervening decision);
+## most of the time no target is flagged at all, since the usual case
+## (opponent gets a reactive move first) genuinely can't be predicted this
+## far ahead — see MatchState's doc comment.
 @export var color_card_warning := Color(1.0, 0.92, 0.1, 0.95)
 @export_range(0.2, 5.0, 0.1) var offside_flash_seconds := 1.8
 
@@ -632,6 +648,25 @@ func _set_own_marker_visible(fig: Node3D, is_own: bool) -> void:
 	var mat := glow.material_override as StandardMaterial3D
 	if mat != null and mat.albedo_texture == null: # shared resource — generate once
 		mat.albedo_texture = BoardFx.make_tile_texture() # SAME shape as the FX tiles
+
+
+## _set_own_marker_visible's is_own only decides "is this the local player's
+## figure at all" (set once at build time) — it says nothing about whose
+## TURN it currently is. Re-synced on every _refresh_turn_view() call so the
+## marker only actually shows during the local player's OWN turn: nothing to
+## tap while the opponent is acting, so it stayed lit the whole match for no
+## reason before this.
+func _update_own_team_markers() -> void:
+	var my_turn := _state.current == GameFlow.player_side
+	for cell in _state.pieces:
+		if _state.pieces[cell]["team"] != GameFlow.player_side:
+			continue
+		var fig: Node3D = _node_at.get(cell)
+		if fig == null:
+			continue
+		var glow := fig.get_node_or_null("OwnTeamTileGlow") as MeshInstance3D
+		if glow != null:
+			glow.visible = my_turn
 
 
 # --- Ball helpers ------------------------------------------------------------
@@ -987,8 +1022,11 @@ func _on_motion(screen_pos: Vector2) -> void:
 		_dragging = true
 		# Starting a drag right on one of your own figures "picks it up" —
 		# same effect as tapping it first, so a single press-drag-release can
-		# select AND move it, instead of needing two separate taps.
-		if _state.phase == MatchState.Phase.MOVE:
+		# select AND move it, instead of needing two separate taps. `_holding`
+		# (the human tapped a non-ball-adjacent figure instead of shooting,
+		# see _combo_tap) gets the exact same tap/drag treatment as a real
+		# Phase.MOVE, just still technically mid-Phase.COMBO.
+		if _state.phase == MatchState.Phase.MOVE or _holding:
 			var picked := _resolve_target(_press_screen_pos, _state.own_cells(), TAP_HIT_RADIUS)
 			if picked != NO_CELL:
 				_move_from = picked
@@ -996,7 +1034,7 @@ func _on_motion(screen_pos: Vector2) -> void:
 	if not _dragging:
 		return
 
-	if _state.phase == MatchState.Phase.MOVE:
+	if _state.phase == MatchState.Phase.MOVE or _holding:
 		if _move_from == NO_CELL:
 			return # nothing picked up/selected — nothing to drag toward
 		_drag_candidate = _resolve_target(screen_pos, _state.move_targets(_move_from), DRAG_SNAP_RADIUS)
@@ -1039,9 +1077,11 @@ func _on_release(screen_pos: Vector2) -> void:
 		_dragging = false
 		var candidate := _drag_candidate
 		_drag_candidate = NO_CELL
-		if _state.phase == MatchState.Phase.MOVE:
+		if _state.phase == MatchState.Phase.MOVE or _holding:
 			if candidate != NO_CELL and _move_from != NO_CELL:
-				_apply_move(_move_from, candidate)
+				var was_holding := _holding
+				_holding = false
+				_apply_move(_move_from, candidate, was_holding)
 			elif _move_from != NO_CELL:
 				_draw_move(_move_from) # dragged into a dead zone — stay selected
 			return
@@ -1052,7 +1092,9 @@ func _on_release(screen_pos: Vector2) -> void:
 		return
 	# A plain tap — resolved against phase-specific candidate sets (see below),
 	# not a single raw raycast cell, so tapping a tall figure's body works too.
-	if _state.phase == MatchState.Phase.COMBO:
+	if _holding:
+		_move_click(screen_pos)
+	elif _state.phase == MatchState.Phase.COMBO:
 		_combo_tap(screen_pos)
 	elif _state.phase == MatchState.Phase.REMOVE:
 		_remove_tap(screen_pos)
@@ -1156,6 +1198,14 @@ func _commit_combo_target(cell: Vector2i) -> void:
 # qualifies as more than one.
 func _combo_tap(screen_pos: Vector2) -> void:
 	if not _state.chain.is_empty():
+		# Tapping the sole starter again cancels the chain outright (not a
+		# rewind-to-self no-op) — backs out of "I tapped my ball-adjacent
+		# figure" back to the neutral "everything's tappable" view (see
+		# _draw_combo), same deselect gesture as the hold-move case below.
+		if _state.chain.size() == 1 and _resolve_target(screen_pos, [_state.chain[0]], TAP_HIT_RADIUS) != NO_CELL:
+			_state.chain.clear()
+			_draw_combo()
+			return
 		var rewind_cell := _resolve_target(screen_pos, _state.chain, TAP_HIT_RADIUS)
 		if rewind_cell != NO_CELL:
 			_state.rewind(rewind_cell)
@@ -1176,11 +1226,26 @@ func _combo_tap(screen_pos: Vector2) -> void:
 		if shoot_cell != NO_CELL:
 			_do_combo(shoot_cell) # direct tap-to-shoot still works, no ambiguity
 			return
-	# Empty chain (or a tap that matched none of the above): (re)start here.
+		return
+	# Nothing engaged yet: tap the ball-adjacent figure to begin a combo, OR
+	# tap ANY other own figure to move IT instead — declining the ball this
+	# turn (see MatchState.hold_and_move). Every own figure is highlighted
+	# here (see _draw_combo), not just the ball-adjacent ones, so this is a
+	# real, always-visible choice, not a hidden fallback. From here on,
+	# taps/drags route through the exact same flow a real Phase.MOVE uses
+	# (see _on_motion/_on_release/_move_click) — `_holding` just means
+	# "resolve the eventual move via hold_and_move, not do_move".
 	var starter := _resolve_target(screen_pos, _state.combo_starters(), TAP_HIT_RADIUS)
 	if starter != NO_CELL and _state.begin(starter):
 		_play_sfx(SELECT_SOUND, select_sfx_volume_db)
 		_draw_combo()
+		return
+	var hold_fig := _resolve_target(screen_pos, _state.own_cells(), TAP_HIT_RADIUS)
+	if hold_fig != NO_CELL:
+		_holding = true
+		_move_from = hold_fig
+		_draw_move(hold_fig)
+		_play_sfx(SELECT_SOUND, select_sfx_volume_db)
 
 
 # A combo plays as ONE continuous ball motion through the whole chain — the ball
@@ -1449,9 +1514,13 @@ func _after_combo(res: Dictionary) -> void:
 		Settings.vibrate()
 		if _hud != null:
 			await _hud.play_announcement("offside")
-	# Cards never come from a shot anymore — see MatchState.is_contested_
-	# recovery/_apply_move's handling of MatchState.last_move_card — so
-	# there's nothing to check here.
+	# A non-scoring shot ends the turn via next_turn() -> start_turn() inside
+	# execute_combo (see its doc comment), same as do_move/hold_and_move — so
+	# it can just as easily hand the NEXT team a 3rd-repeated position and
+	# card them. A goal instead resets() for kickoff further below (fresh
+	# positions, no repetition possible), so this only matters here.
+	if not res["goal"]:
+		await _announce_stalling_card()
 	if res["goal"]:
 		print("%s %s  ->  Home %d : %d Away"
 			% ["AUTOGOL!" if res.get("own_goal", false) else "GOAL!", res["scorer"],
@@ -1946,18 +2015,66 @@ func _move_click(screen_pos: Vector2) -> void:
 			_move_from = fig_hit # reselect a different figure
 			_draw_move(fig_hit)
 			_play_sfx(FIELD_TAP_SOUND, field_tap_volume_db)
-		return # tapping the already-selected figure again is a harmless no-op
+		elif _holding:
+			# Tapping the SAME figure again while it's a hold-move candidate
+			# (not a real reactive move) deselects it entirely, back to the
+			# neutral "every figure is tappable" combo view — same gesture as
+			# tapping the ball-adjacent starter again (see _combo_tap).
+			_holding = false
+			_move_from = NO_CELL
+			_draw_combo()
+		return # tapping the already-selected figure again during a real reactive MOVE is a harmless no-op
 	var dest := _resolve_target(screen_pos, _state.move_targets(_move_from), TAP_HIT_RADIUS)
 	if dest != NO_CELL:
 		_play_sfx(FIELD_TAP_SOUND, field_tap_volume_db)
-		_apply_move(_move_from, dest)
+		var was_holding := _holding
+		_holding = false
+		_apply_move(_move_from, dest, was_holding)
+		return
+	if _holding:
+		# A miss (tap that hit neither a figure nor a move target) must NOT
+		# lose the selection while holding — figures near the ball are often
+		# boxed in tight (ball + other pieces + the move-range cap), so a
+		# slightly-off tap trying to confirm a target was reading as "cancel"
+		# and dropping the whole selection. Only tapping the SAME figure
+		# again (handled above) or a real target backs out now.
 		return
 	_move_from = NO_CELL # cancel selection
 	_fx.clear()
 
 
-func _apply_move(from: Vector2i, to: Vector2i) -> void:
-	if not _state.do_move(from, to): # also advances the turn
+## Shared by every action that can end a turn (execute_combo/do_move/
+## hold_and_move/remove_figure, via _do_combo/_apply_move/_remove_at) — checks
+## MatchState.last_move_card/last_card_team (fresh after EVERY one of those
+## calls, see start_turn()) and, if a stalling card just fired, plays the
+## yellow/red banner + whistle for whichever team last_card_team names — not
+## necessarily whoever's action just ran, see hold_and_move's doc comment.
+func _announce_stalling_card() -> void:
+	if _state.last_move_card == "yellow":
+		print("YELLOW CARD: %s (stalling — repeating the same position)" % _state.last_card_team)
+		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
+		Settings.vibrate()
+		if _hud != null:
+			await _hud.play_announcement("yellow")
+	elif _state.last_move_card == "red":
+		print("RED CARD: %s (stalling — repeating the same position)" % _state.last_card_team)
+		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
+		Settings.vibrate(90) # a notch stronger than yellow — matches the higher severity
+		if _hud != null:
+			await _hud.play_announcement("red")
+
+
+## `as_hold`: use MatchState.hold_and_move (declining to shoot, see there)
+## instead of the reactive MatchState.do_move — same animation either way,
+## just a different underlying rules call. The card announcement below reads
+## _state.last_card_team, NOT whoever made this particular move: a stalling
+## card now comes from position repetition (see MatchState's "cards /
+## stalling" doc comment), which can card the OTHER team — e.g. this reactive
+## move hands a 3rd-repeated position straight back to the team that already
+## has the ball, carding them, not the mover.
+func _apply_move(from: Vector2i, to: Vector2i, as_hold: bool = false) -> void:
+	var moved: bool = _state.hold_and_move(from, to) if as_hold else _state.do_move(from, to)
+	if not moved: # also advances the turn
 		return
 	# Same reason _do_combo snapshots+stops here: do_move() may have already
 	# flipped _state.current to the OTHER team (a reactive move that used up
@@ -2004,24 +2121,7 @@ func _apply_move(from: Vector2i, to: Vector2i) -> void:
 	if fig is PlayerRig:
 		tween.tween_callback((fig as PlayerRig).idle.bind(false))
 	await tween.finished
-	# A contested 50-50 recovery (see MatchState.is_contested_recovery) cards
-	# the team that just moved — do_move() leaves the verdict in last_move_card
-	# rather than returning it, since do_move() otherwise just returns bool.
-	# Reuses the exact same yellow/red banner + whistle a shot-based card used
-	# to trigger. current still refers to the carded team here: do_move() only
-	# calls next_turn() on a CLEAN reactive move, never on a carded one.
-	if _state.last_move_card == "yellow":
-		print("YELLOW CARD: %s (lost a contested 50-50 recovery)" % _state.current)
-		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
-		Settings.vibrate()
-		if _hud != null:
-			await _hud.play_announcement("yellow")
-	elif _state.last_move_card == "red":
-		print("RED CARD: %s (lost a contested 50-50 recovery)" % _state.current)
-		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
-		Settings.vibrate(90) # a notch stronger than yellow — matches the higher severity
-		if _hud != null:
-			await _hud.play_announcement("red")
+	await _announce_stalling_card()
 	_busy = false
 	_refresh_turn_view()
 
@@ -2029,6 +2129,7 @@ func _apply_move(from: Vector2i, to: Vector2i) -> void:
 # --- View refresh (mirror MatchState) ---------------------------------------
 func _refresh_turn_view() -> void:
 	_move_from = NO_CELL
+	_update_own_team_markers()
 	if _state.phase == MatchState.Phase.COMBO:
 		_draw_combo()
 	elif _state.phase == MatchState.Phase.REMOVE:
@@ -2063,6 +2164,7 @@ func _refresh_turn_view() -> void:
 		_turn_timer.start(maxf(_pool_seconds_left, 0.05))
 	if _hud != null:
 		_hud.update_turn_hint(_state.current, _state.phase, "", _state.moves_left)
+	_holding = false
 	_maybe_ai_turn()
 
 
@@ -2093,7 +2195,17 @@ func _maybe_ai_turn() -> void:
 			var shoot := AIPlayer.decide_combo(_state, GameFlow.ai_difficulty)
 			if shoot != NO_CELL:
 				acted = true
-				_do_combo(shoot)
+				# Shooting is no longer mandatory (see MatchState.hold_and_move) —
+				# should_hold checks whether THIS shot looks bad enough to decline
+				# in favour of just repositioning instead.
+				if AIPlayer.should_hold(_state, shoot):
+					var hold := AIPlayer.decide_move(_state, GameFlow.ai_difficulty)
+					if hold.has("from"):
+						_apply_move(hold["from"], hold["to"], true)
+					else:
+						_do_combo(shoot) # no legal hold move somehow — shoot anyway
+				else:
+					_do_combo(shoot)
 		MatchState.Phase.MOVE:
 			var decision := AIPlayer.decide_move(_state, GameFlow.ai_difficulty)
 			if decision.has("from"):
@@ -2136,7 +2248,16 @@ func _draw_remove() -> void:
 func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 	_fx.clear()
 	if _state.chain.is_empty():
-		for cell in _state.combo_starters():
+		# EVERY own figure is a real, tappable choice here (see _combo_tap) —
+		# tapping a ball-adjacent one begins a combo, any other one starts a
+		# hold-move instead (declining the ball this turn) — not just the
+		# combo starters, so all of them light up equally. No card-risk
+		# warning at THIS stage: tapping a figure here doesn't end the turn
+		# by itself (it either opens the chain for a pass/shoot pick, or
+		# opens the hold-move target pick) — see combo_shoot_targets/
+		# _draw_move below for where the actual risky targets get flagged,
+		# right at the point an actual card-triggering action is on offer.
+		for cell in _state.own_cells():
 			_fx.add_tile(_cell_world(cell.x, cell.y), color_tap)
 		return
 	# Energy trail: figure -> figure -> (live) drag preview. Deliberately skips
@@ -2154,12 +2275,17 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 		_fx.add_tile(_cell_world(c.x, c.y), color_chain) # orange = chosen chain (active receiver)
 	for c in _state.combo_pass_targets():
 		_fx.add_tile(_cell_world(c.x, c.y), color_tap) # blue = next pass
+	# Shooting ends the turn (see execute_combo), so THIS is a real point
+	# where a specific target can be known to trigger the stalling card —
+	# see MatchState.would_card_shoot's doc comment. Only that exact target
+	# gets color_card_warning instead of color_shoot.
 	for c in _state.combo_shoot_targets():
-		_fx.add_tile(_cell_world(c.x, c.y), color_shoot)
+		var shoot_col := color_card_warning if _state.would_card_shoot(c) else color_shoot
+		_fx.add_tile(_cell_world(c.x, c.y), shoot_col)
 	if preview != NO_CELL:
 		var col := color_chain
 		if preview in _state.combo_shoot_targets():
-			col = color_shoot
+			col = color_card_warning if _state.would_card_shoot(preview) else color_shoot
 		elif preview in _state.combo_pass_targets():
 			col = color_tap
 		_fx.add_tile(_cell_world(preview.x, preview.y), col.lightened(0.35), fx_tile_size * 1.1)
@@ -2168,20 +2294,18 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 # `preview` is the cell a live drag is currently snapped to (NO_CELL if none).
 func _draw_move(from: Vector2i, preview: Vector2i = NO_CELL) -> void:
 	_fx.clear()
-	_fx.add_tile(_cell_world(from.x, from.y), color_select)
-	# A contested-50-50 risk (see MatchState.is_contested_recovery) only
-	# actually exists when this move could upgrade into a combo at all — the
-	# same reactive/moves_left gate do_move() checks before it ever evaluates
-	# the risk — so cells outside that window never light up yellow even if
-	# they'd geometrically qualify.
-	var risky: bool = _state._move_is_reactive and _state.moves_left > 1
+	_fx.add_tile(_cell_world(from.x, from.y), color_tap_selected)
+	# A move ends the turn (do_move/hold_and_move both call next_turn()), so
+	# each individual target can be checked — see MatchState.would_card_
+	# move's doc comment. Only the specific target(s) that would actually
+	# trigger the card get color_card_warning instead of color_move.
 	for c in _state.move_targets(from):
-		var col := color_card_warning if (risky and _state.is_contested_recovery(c, _state.current)) else color_move
-		_fx.add_tile(_cell_world(c.x, c.y), col)
+		var move_col := color_card_warning if _state.would_card_move(from, c) else color_move
+		_fx.add_tile(_cell_world(c.x, c.y), move_col)
 	if preview != NO_CELL:
+		var preview_col := color_card_warning if _state.would_card_move(from, preview) else color_move
 		var pts := PackedVector3Array([_cell_world(from.x, from.y), _cell_world(preview.x, preview.y)])
 		_fx.set_trail(pts, color_trail)
-		var preview_col := color_card_warning if (risky and _state.is_contested_recovery(preview, _state.current)) else color_move
 		_fx.add_tile(_cell_world(preview.x, preview.y), preview_col.lightened(0.35), fx_tile_size * 1.1)
 
 

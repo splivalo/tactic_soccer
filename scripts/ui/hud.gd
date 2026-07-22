@@ -185,20 +185,19 @@ func set_footer_text(text: String, dot_color: Color) -> void:
 ## telling the player whose turn it is and what to do (dot tinted with that
 ## team's kit colour). `intro`, if given, is prefixed once (e.g. the goals-to-
 ## win reminder shown at kickoff) and dropped again on the next call.
-## `moves_left` (MatchState.moves_left) only matters during Phase.MOVE: 2
-## means this is a REACTIVE move (the team doesn't have the ball at all) with
-## a second one still available after this — worth calling out, since
-## otherwise nothing on screen explains why the turn didn't just end after one
-## move.
-func update_turn_hint(side: String, phase: int, intro: String = "", moves_left: int = 1) -> void:
+## `moves_left` (MatchState.moves_left) is kept for signature compatibility
+## but no longer varies — every MOVE phase is now a single reactive move
+## (2026-07-22 "1 action per turn" redesign), so there's nothing left to
+## call out differently there.
+func update_turn_hint(side: String, phase: int, intro: String = "", _moves_left: int = 1) -> void:
 	var code: String = _home_name.text if side == "HomeTeam" else _away_name.text
 	var dot_color: Color = _home_color if side == "HomeTeam" else _away_color
 	var verb := "plays"
 	match phase:
 		MatchState.Phase.COMBO:
-			verb = "pass or shoot"
+			verb = "pass, shoot, or move a player"
 		MatchState.Phase.MOVE:
-			verb = "move a player (%d left)" % moves_left if moves_left > 1 else "move a player"
+			verb = "move a player"
 		MatchState.Phase.REMOVE:
 			verb = "remove a player (red card)"
 	var hint := "%s: %s" % [code, verb]

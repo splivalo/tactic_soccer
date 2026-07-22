@@ -10,6 +10,7 @@
 [ext_resource type="Texture2D" uid="uid://dmxaf2eyyr0" path="res://assets/textures/ui/instructions/rules_ball.png" id="10_ball"]
 [ext_resource type="Texture2D" uid="uid://b1a7bdofqy57c" path="res://assets/textures/ui/instructions/rules_2_wins.png" id="10_snemp"]
 [ext_resource type="Texture2D" uid="uid://ba6vdj7ugo7iu" path="res://assets/textures/ui/instructions/rules_flag.png" id="11_flag"]
+[ext_resource type="Texture2D" uid="uid://b7npsjj2nk705" path="res://assets/textures/ui/instructions/rules_stalling.png" id="11_jvq8h"]
 [ext_resource type="Texture2D" uid="uid://jrj3j65ai12w" path="res://assets/textures/ui/instructions/rules_goalkeeper.png" id="12_gk"]
 [ext_resource type="Texture2D" uid="uid://bq2f3pbr622vw" path="res://assets/textures/ui/instructions/rules_yellowcard.png" id="13_yellow"]
 [ext_resource type="Texture2D" uid="uid://dae2b3htlc870" path="res://assets/textures/ui/instructions/rules_redcard.png" id="14_red"]
@@ -141,6 +142,7 @@ layout_mode = 2
 
 [node name="Page1" type="VBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage" unique_id=1669904012]
 unique_name_in_owner = true
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -239,8 +241,8 @@ size_flags_horizontal = 3
 theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
 theme_override_font_sizes/normal_font_size = 34
 bbcode_enabled = true
-text = "[center][color=#f7c226]Attack:[/color] after kick, move one player.
-[color=#f7c226]Defend:[/color] move twice or move and shoot.[/center]"
+text = "[center]A player may move up to [color=#f7c226]2 squares[/color].
+Passing and shooting stay unlimited.[/center]"
 fit_content = true
 
 [node name="spacer2" type="Control" parent="SafeArea/VBox/CardPanel/PageStage/Page2" unique_id=415569055]
@@ -342,7 +344,6 @@ stretch_mode = 5
 
 [node name="Page4" type="VBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage" unique_id=1669904015]
 unique_name_in_owner = true
-visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -522,6 +523,40 @@ text = "[color=#f7c226]GOALKEEPER[/color]
 May join passing combinations."
 fit_content = true
 
+[node name="RuleHold" type="PanelContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList" unique_id=1837205544]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
+
+[node name="Margin" type="MarginContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/RuleHold" unique_id=1837205545]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="HBox" type="HBoxContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/RuleHold/Margin" unique_id=1837205546]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Icon" type="TextureRect" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/RuleHold/Margin/HBox" unique_id=1837205547]
+custom_minimum_size = Vector2(95, 95)
+layout_mode = 2
+texture = ExtResource("11_jvq8h")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Text" type="RichTextLabel" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList/RuleHold/Margin/HBox" unique_id=1837205548]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
+theme_override_font_sizes/normal_font_size = 27
+bbcode_enabled = true
+text = "[color=#f7c226]HOLD THE BALL[/color]
+You may move a player instead of shooting."
+fit_content = true
+
 [node name="Rule4" type="PanelContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList" unique_id=1182455552]
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
@@ -552,8 +587,8 @@ size_flags_vertical = 4
 theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
 theme_override_font_sizes/normal_font_size = 27
 bbcode_enabled = true
-text = "[color=#f7c226]50-50 DUEL → YELLOW CARD[/color]
-An opponent opposite the ball risks a foul."
+text = "[color=#f7c226]STALLING → YELLOW CARD[/color]
+Repeating the same position 3 times in a row."
 fit_content = true
 
 [node name="Rule5" type="PanelContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList" unique_id=2067834490]
