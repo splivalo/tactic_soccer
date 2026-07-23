@@ -23,19 +23,22 @@ var chain: Array[Vector2i] = []
 var score: Dictionary = {"HomeTeam": 0, "AwayTeam": 0}
 var goals_to_win: int = 2
 var _next_id: int = 0
-# How many MOVE actions are left this Phase.MOVE before the turn passes — 1
-# for the mandatory tidy-up move right after your OWN combo (see
-# execute_combo), 2 when you're REACTING because you don't have the ball at
-# all (see start_turn/team_has_ball below): enough to physically bring a
-# SECOND figure in (or the same one via two hops, an "L") within one reaction
-# window, so a numbers/reach disadvantage is actually recoverable instead of
-# permanently unreachable — see do_move().
+# How many MOVE actions are left this Phase.MOVE before the turn passes —
+# always 1 (both the post-shot bonus move and the reactive move are single
+# moves; see _move_is_reactive for which one is which).
 var moves_left: int = 1
-# True only for the (single) REACTIVE move (you don't have the ball at all —
-# see start_turn/do_move). Kept even though it's now always true whenever
-# Phase.MOVE is entered (there's no more mandatory post-combo tidy-up move —
-# see execute_combo/hold_and_move) — harmless, and cheap insurance against a
-# future re-introduction of a second move kind.
+# 2026-07-23: re-introduced (was tried, then removed during the "1 action
+# per turn" redesign, now being tested again with the rest of that redesign
+# in place — see the "cards / stalling" doc comment for what else changed
+# meanwhile). True for the REACTIVE move (you don't have the ball at all —
+# see start_turn/do_move); false for the BONUS move a team gets right after
+# its own non-scoring shot (see execute_combo) — shooting now costs a little
+# more than choosing to hold (hold_and_move stays a single action, no bonus
+# move), which is the whole point: it's meant to reward actually taking the
+# risk to advance instead of leaving safe lateral possession with no
+# downside. Both kinds share the exact same move_targets/do_move mechanics
+# (same MAX_MOVE_RANGE) — this flag exists for future UI/logic that wants to
+# tell them apart, nothing currently branches on it.
 var _move_is_reactive: bool = false
 
 ## Max cells a figure may slide in one MOVE action (do_move/hold_and_move) —
@@ -424,17 +427,32 @@ func rewind(cell: Vector2i) -> bool:
 	return true
 
 
+## Drops just the LAST figure from the chain — for tapping the chain's
+## current END again (the ACTIVE figure, the one just picked), meaning
+## "reconsider that last choice" rather than rewind()'s "jump back to an
+## earlier one". Empties the chain entirely when it only had one figure
+## (chain 1, tap 1 again => chain []; chain 1->2, tap 2 again => chain [1],
+## NOT a no-op the way rewind(chain[-1]) would be). True if there was
+## anything to step back from.
+func step_back() -> bool:
+	if chain.is_empty():
+		return false
+	chain.resize(chain.size() - 1)
+	return true
+
+
 ## Shoot from the last figure to `shoot_cell`. Returns:
 ## {ok, path, goal, scorer, win, kickoff, offside, own_goal}. Updates state;
 ## on a goal the caller should call reset() to kick off (kickoff = who
 ## restarts). This never sets a "card" field directly, but a non-scoring shot
-## DOES end the turn via next_turn() -> start_turn(), which can card whoever's
-## COMBO opens next if that hands them a 3rd-repeated position — see
-## MatchState.last_move_card/last_card_team, check both right after calling
-## this exactly like after a MOVE/hold. This IS this team's whole turn now
-## (no more mandatory follow-up move — see hold_and_move's doc comment for
-## the "1 action per turn, shoot-or-hold" redesign), so it always ends the
-## turn (unless it scored).
+## opens a BONUS Phase.MOVE for the SAME team right after (see
+## _move_is_reactive's doc comment, 2026-07-23) — that move's own do_move()
+## call is what actually ends the turn via next_turn() -> start_turn(),
+## which can card whoever's COMBO opens next if that hands them a 3rd-
+## repeated position — see MatchState.last_move_card/last_card_team, check
+## both right after calling THAT move, not this one. hold_and_move (declining
+## to shoot) stays a single action with no bonus move — only an actual shot
+## does this.
 func execute_combo(shoot_cell: Vector2i) -> Dictionary:
 	var res := {
 		"ok": false, "path": [] as Array[Vector2i], "goal": false, "scorer": "",
@@ -475,7 +493,15 @@ func execute_combo(shoot_cell: Vector2i) -> Dictionary:
 		res["win"] = score[scorer] >= goals_to_win
 		res["kickoff"] = opponent(scorer)  # the team scored against restarts
 	else:
-		next_turn()
+		# Didn't score (including offside) — the shooting team stays
+		# `current` and gets ONE bonus move (do_move, same MAX_MOVE_RANGE)
+		# before the turn actually passes. Deliberately does NOT go through
+		# next_turn()/start_turn() — this is still the same team's turn, not
+		# a new one, so there's nothing to check a stalling repeat against
+		# yet (that happens when do_move() eventually calls next_turn()).
+		phase = Phase.MOVE
+		moves_left = 1
+		_move_is_reactive = false
 	return res
 
 
@@ -554,11 +580,14 @@ func do_move(from: Vector2i, to: Vector2i) -> bool:
 
 ## The OTHER thing you can do with the ball besides shooting: just move a
 ## figure (any of your own, MAX_MOVE_RANGE cells) and keep the ball exactly
-## where it is. This is the "1 action per turn, choose shoot OR move" redesign
-## (2026-07-22) — the old rules forced a shot every single time you had the
+## where it is — the old rules forced a shot every single time you had the
 ## ball; this lets a team decline a bad shot without losing the ball outright.
-## No card comes from holding itself any more (see the "cards / stalling" doc
-## comment up top) — repeatedly holding is just one way a position can end up
+## Always exactly ONE action, unlike a real shot (execute_combo), which now
+## also grants a bonus follow-up move (2026-07-23) — deliberately asymmetric:
+## shooting (taking the risk to actually advance) costs a bit more than
+## playing it safe, which is the point (see execute_combo's doc comment).
+## No card comes from holding itself (see the "cards / stalling" doc comment
+## up top) — repeatedly holding is just one way a position can end up
 ## repeating, caught the same way any other stalling loop is. True if the
 ## move was legal.
 func hold_and_move(from: Vector2i, to: Vector2i) -> bool:

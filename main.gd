@@ -651,22 +651,27 @@ func _set_own_marker_visible(fig: Node3D, is_own: bool) -> void:
 
 
 ## _set_own_marker_visible's is_own only decides "is this the local player's
-## figure at all" (set once at build time) — it says nothing about whose
-## TURN it currently is. Re-synced on every _refresh_turn_view() call so the
-## marker only actually shows during the local player's OWN turn: nothing to
-## tap while the opponent is acting, so it stayed lit the whole match for no
-## reason before this.
-func _update_own_team_markers() -> void:
-	var my_turn := _state.current == GameFlow.player_side
+## figure at all" (set once at build time, used for its initial state and
+## the pre-match placement screen) — this is the REAL per-turn sync, and
+## deliberately NOT scoped to just GameFlow.player_side: it lights up
+## whichever team is actually _state.current (yours or the opponent's/AI's),
+## on THEIR figures, during THEIR turn — a human reported the opponent's
+## side never getting this glow at all felt inconsistent once their own
+## side had it. Also skips any cell a Board FX tile is ALSO covering right
+## now (see _draw_combo/_draw_move/_draw_remove/_refresh_turn_view's MOVE
+## branch, each passing the cells THEY just put a tile on) — the glow
+## visibly blended with the FX tile's colour during the pulse animation's
+## dim point (alpha dips as low as 20%, letting the marker show through and
+## muddy the hue), so overlap is avoided entirely rather than relying on
+## "faint enough to not matter".
+func _update_own_team_markers(covered: Array[Vector2i] = []) -> void:
 	for cell in _state.pieces:
-		if _state.pieces[cell]["team"] != GameFlow.player_side:
-			continue
 		var fig: Node3D = _node_at.get(cell)
 		if fig == null:
 			continue
 		var glow := fig.get_node_or_null("OwnTeamTileGlow") as MeshInstance3D
 		if glow != null:
-			glow.visible = my_turn
+			glow.visible = _state.pieces[cell]["team"] == _state.current and not (cell in covered)
 
 
 # --- Ball helpers ------------------------------------------------------------
@@ -1198,12 +1203,14 @@ func _commit_combo_target(cell: Vector2i) -> void:
 # qualifies as more than one.
 func _combo_tap(screen_pos: Vector2) -> void:
 	if not _state.chain.is_empty():
-		# Tapping the sole starter again cancels the chain outright (not a
-		# rewind-to-self no-op) — backs out of "I tapped my ball-adjacent
-		# figure" back to the neutral "everything's tappable" view (see
-		# _draw_combo), same deselect gesture as the hold-move case below.
-		if _state.chain.size() == 1 and _resolve_target(screen_pos, [_state.chain[0]], TAP_HIT_RADIUS) != NO_CELL:
-			_state.chain.clear()
+		# Tapping the chain's ACTIVE figure (the one just picked, always the
+		# LAST entry) again steps the chain back ONE — "reconsider that last
+		# choice" — same gesture whether it's the sole starter (steps back
+		# to empty/neutral) or the 2nd+ figure (steps back to whichever came
+		# before it). Tapping an EARLIER chain figure instead (below) still
+		# jumps straight back to that point (MatchState.rewind), unchanged.
+		if _resolve_target(screen_pos, [_state.chain[-1]], TAP_HIT_RADIUS) != NO_CELL:
+			_state.step_back()
 			_draw_combo()
 			return
 		var rewind_cell := _resolve_target(screen_pos, _state.chain, TAP_HIT_RADIUS)
@@ -2012,6 +2019,19 @@ func _move_click(screen_pos: Vector2) -> void:
 	var fig_hit := _resolve_target(screen_pos, _state.own_cells(), TAP_HIT_RADIUS)
 	if fig_hit != NO_CELL:
 		if fig_hit != _move_from:
+			# While hold-selecting some OTHER figure, tapping the one that's
+			# actually adjacent to the ball always means "start a combo on
+			# THIS one instead" — same as tapping it fresh from neutral (see
+			# _combo_tap) — not just "hold this one too". Without this it
+			# read as just another blue hold candidate instead of properly
+			# (re)entering the chain (orange), which is what tapping a
+			# starter is supposed to look like everywhere else.
+			if _holding and fig_hit in _state.combo_starters() and _state.begin(fig_hit):
+				_holding = false
+				_move_from = NO_CELL
+				_play_sfx(SELECT_SOUND, select_sfx_volume_db)
+				_draw_combo()
+				return
 			_move_from = fig_hit # reselect a different figure
 			_draw_move(fig_hit)
 			_play_sfx(FIELD_TAP_SOUND, field_tap_volume_db)
@@ -2129,7 +2149,6 @@ func _apply_move(from: Vector2i, to: Vector2i, as_hold: bool = false) -> void:
 # --- View refresh (mirror MatchState) ---------------------------------------
 func _refresh_turn_view() -> void:
 	_move_from = NO_CELL
-	_update_own_team_markers()
 	if _state.phase == MatchState.Phase.COMBO:
 		_draw_combo()
 	elif _state.phase == MatchState.Phase.REMOVE:
@@ -2143,8 +2162,10 @@ func _refresh_turn_view() -> void:
 		# realizing a figure — or a second reactive move — was still theirs
 		# to take.
 		_fx.clear()
-		for c in _state.own_cells():
+		var own := _state.own_cells()
+		for c in own:
 			_fx.add_tile(_cell_world(c.x, c.y), color_tap)
+		_update_own_team_markers(own)
 	print("TURN: %s  phase=%s" % [_state.current, MatchState.Phase.keys()[_state.phase]])
 	_shown_time_left = -1
 	if _state.phase == MatchState.Phase.REMOVE:
@@ -2239,8 +2260,10 @@ func _on_turn_timeout() -> void:
 # Highlights every one of the carded team's figures as a removable target.
 func _draw_remove() -> void:
 	_fx.clear()
-	for c in _state.own_cells():
+	var own := _state.own_cells()
+	for c in own:
 		_fx.add_tile(_cell_world(c.x, c.y), color_remove)
+	_update_own_team_markers(own)
 
 
 # `preview` is the cell a live drag is currently snapped to (NO_CELL if none) —
@@ -2257,8 +2280,10 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 		# opens the hold-move target pick) — see combo_shoot_targets/
 		# _draw_move below for where the actual risky targets get flagged,
 		# right at the point an actual card-triggering action is on offer.
-		for cell in _state.own_cells():
+		var own := _state.own_cells()
+		for cell in own:
 			_fx.add_tile(_cell_world(cell.x, cell.y), color_tap)
+		_update_own_team_markers(own)
 		return
 	# Energy trail: figure -> figure -> (live) drag preview. Deliberately skips
 	# the ball itself — it's already visually obvious on its own (a real 3D
@@ -2273,7 +2298,8 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 	_fx.set_trail(pts, color_trail)
 	for c in _state.chain:
 		_fx.add_tile(_cell_world(c.x, c.y), color_chain) # orange = chosen chain (active receiver)
-	for c in _state.combo_pass_targets():
+	var pass_targets := _state.combo_pass_targets()
+	for c in pass_targets:
 		_fx.add_tile(_cell_world(c.x, c.y), color_tap) # blue = next pass
 	# Shooting ends the turn (see execute_combo), so THIS is a real point
 	# where a specific target can be known to trigger the stalling card —
@@ -2289,6 +2315,14 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 		elif preview in _state.combo_pass_targets():
 			col = color_tap
 		_fx.add_tile(_cell_world(preview.x, preview.y), col.lightened(0.35), fx_tile_size * 1.1)
+	# Chain figures + pass targets are own cells wearing an FX tile right
+	# now (shoot targets are always empty cells — see combo_shoot_targets,
+	# never a figure) — suppress OwnTeamTileGlow under just those, see
+	# _update_own_team_markers's doc comment for why.
+	var covered: Array[Vector2i] = []
+	covered.append_array(_state.chain)
+	covered.append_array(pass_targets)
+	_update_own_team_markers(covered)
 
 
 # `preview` is the cell a live drag is currently snapped to (NO_CELL if none).
@@ -2307,6 +2341,10 @@ func _draw_move(from: Vector2i, preview: Vector2i = NO_CELL) -> void:
 		var pts := PackedVector3Array([_cell_world(from.x, from.y), _cell_world(preview.x, preview.y)])
 		_fx.set_trail(pts, color_trail)
 		_fx.add_tile(_cell_world(preview.x, preview.y), preview_col.lightened(0.35), fx_tile_size * 1.1)
+	# move_targets are always EMPTY cells (never a figure) — only `from`
+	# itself is an own figure wearing an FX tile right now, see
+	# _update_own_team_markers's doc comment for why that matters.
+	_update_own_team_markers([from])
 
 
 func _clear_markers() -> void:

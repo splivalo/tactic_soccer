@@ -289,7 +289,7 @@ bind/21/pose = Transform3D(3.2266672, -99.493164, 9.523569, -87.364845, -7.43599
 transparency = 1
 cull_mode = 2
 shading_mode = 0
-albedo_color = Color(0.09, 0.2, 0.08, 0.5)
+albedo_color = Color(0.09019608, 0.2, 0.078431375, 0.8627451)
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_ybybj"]
 size = Vector2(0.92, 0.92)
