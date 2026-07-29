@@ -77,7 +77,13 @@ extends Node3D
 ## thinking between the two, instead of each phase getting its own separate
 ## clock. Runs out with no move made = forfeit. Keeps ticking in real time even
 ## behind the pause modal, so pausing can't be used to stall the clock.
-@export var turn_time_limit := 30.0
+## 40s, raised from 30s (2026-07-28): one budget for the WHOLE turn is the
+## right model — the player sees a single number and budgeting it is part of
+## the skill — but a combo can run to several passes before the shot is even
+## chosen, and letting the MOVE half of the turn expire is now a bookable
+## offence (see MatchState.forfeit), so there has to be room to think about
+## the attack without the clock turning that into a card.
+@export var turn_time_limit := 40.0
 ## Loudness of the countdown tick (assets/audio/sfx/timer.mp3) — one play per
 ## whole-second tick while the HUD's big center-pitch countdown is showing
 ## (see hud.gd's TIMER_URGENT_AT / _update_turn_timer_display below). Same
@@ -329,16 +335,6 @@ const FIGURE_HEIGHT := 1.6 # a bit over the model's real height (~1.45 @ scale 1
 @export var color_trail := Color(0.45, 0.9, 1.0, 0.95) # energy trail
 @export var color_remove := Color(1.0, 0.15, 0.15, 0.95) # figure removable after a red card
 @export var color_offside := Color(1.0, 0.85, 0.1, 0.95) # offside line + flagged figure
-## Flags a SPECIFIC shoot/move target that would immediately trigger the
-## stalling card if picked (see MatchState.would_card_shoot/would_card_move)
-## — used in place of color_shoot/color_move on exactly that tile, so the
-## risk is visible before the card happens, not a surprise after. Only ever
-## marks a target when it's actually knowable in advance (the action would
-## hand the opponent's COMBO straight back with no intervening decision);
-## most of the time no target is flagged at all, since the usual case
-## (opponent gets a reactive move first) genuinely can't be predicted this
-## far ahead — see MatchState's doc comment.
-@export var color_card_warning := Color(1.0, 0.92, 0.1, 0.95)
 @export_range(0.2, 5.0, 0.1) var offside_flash_seconds := 1.8
 
 @export_group("Board FX Tuning")
@@ -1032,7 +1028,8 @@ func _on_motion(screen_pos: Vector2) -> void:
 		# see _combo_tap) gets the exact same tap/drag treatment as a real
 		# Phase.MOVE, just still technically mid-Phase.COMBO.
 		if _state.phase == MatchState.Phase.MOVE or _holding:
-			var picked := _resolve_target(_press_screen_pos, _state.own_cells(), TAP_HIT_RADIUS)
+			var pickable := _state.own_cells() if _holding else _state.move_from_cells()
+			var picked := _resolve_target(_press_screen_pos, pickable, TAP_HIT_RADIUS)
 			if picked != NO_CELL:
 				_move_from = picked
 				_draw_move(_move_from)
@@ -2009,14 +2006,15 @@ func _show_offside(shooter: Vector2i, line_row: int) -> void:
 # the already-selected figure again can get misread as tapping a nearby
 # target tile its tall body visually overlaps under the tilted camera.
 func _move_click(screen_pos: Vector2) -> void:
+	var pickable := _state.own_cells() if _holding else _state.move_from_cells()
 	if _move_from == NO_CELL:
-		var fig_cell := _resolve_target(screen_pos, _state.own_cells(), TAP_HIT_RADIUS)
+		var fig_cell := _resolve_target(screen_pos, pickable, TAP_HIT_RADIUS)
 		if fig_cell != NO_CELL:
 			_move_from = fig_cell
 			_draw_move(fig_cell)
 			_play_sfx(FIELD_TAP_SOUND, field_tap_volume_db)
 		return
-	var fig_hit := _resolve_target(screen_pos, _state.own_cells(), TAP_HIT_RADIUS)
+	var fig_hit := _resolve_target(screen_pos, pickable, TAP_HIT_RADIUS)
 	if fig_hit != NO_CELL:
 		if fig_hit != _move_from:
 			# While hold-selecting some OTHER figure, tapping the one that's
@@ -2064,20 +2062,22 @@ func _move_click(screen_pos: Vector2) -> void:
 
 
 ## Shared by every action that can end a turn (execute_combo/do_move/
-## hold_and_move/remove_figure, via _do_combo/_apply_move/_remove_at) — checks
-## MatchState.last_move_card/last_card_team (fresh after EVERY one of those
-## calls, see start_turn()) and, if a stalling card just fired, plays the
-## yellow/red banner + whistle for whichever team last_card_team names — not
-## necessarily whoever's action just ran, see hold_and_move's doc comment.
+## hold_and_move/remove_figure/forfeit, via _do_combo/_apply_move/_remove_at/
+## _on_turn_timeout) — checks MatchState.last_move_card/last_card_team (fresh
+## after EVERY one of those calls, see start_turn()) and, if a card just
+## fired, plays the yellow/red banner + whistle for whichever team
+## last_card_team names — not necessarily whoever's action just ran, see
+## hold_and_move's doc comment. Exactly one offence is bookable: letting a
+## MOVE's clock run out (MatchState.forfeit).
 func _announce_stalling_card() -> void:
 	if _state.last_move_card == "yellow":
-		print("YELLOW CARD: %s (stalling — repeating the same position)" % _state.last_card_team)
+		print("YELLOW CARD: %s" % _state.last_card_team)
 		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
 		Settings.vibrate()
 		if _hud != null:
 			await _hud.play_announcement("yellow")
 	elif _state.last_move_card == "red":
-		print("RED CARD: %s (stalling — repeating the same position)" % _state.last_card_team)
+		print("RED CARD: %s" % _state.last_card_team)
 		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
 		Settings.vibrate(90) # a notch stronger than yellow — matches the higher severity
 		if _hud != null:
@@ -2154,15 +2154,15 @@ func _refresh_turn_view() -> void:
 	elif _state.phase == MatchState.Phase.REMOVE:
 		_draw_remove()
 	else:
-		# Phase.MOVE, nothing picked up yet — highlight every one of the
-		# current team's figures as tappable (mirrors _draw_combo's
-		# combo_starters highlight). Without this the pitch reads as frozen
-		# whenever a MOVE step follows another MOVE step (moves_left still
-		# > 0 but nothing drawn), and the player can time out never
-		# realizing a figure — or a second reactive move — was still theirs
-		# to take.
+		# Phase.MOVE, nothing picked up yet — highlight whichever figures are
+		# actually tappable (MatchState.move_from_cells: every own figure for
+		# a REACTIVE move, only the shooter for a BONUS move — see do_move).
+		# Without this the pitch reads as frozen whenever a MOVE step follows
+		# another MOVE step (moves_left still > 0 but nothing drawn), and the
+		# player can time out never realizing a figure — or a second reactive
+		# move — was still theirs to take.
 		_fx.clear()
-		var own := _state.own_cells()
+		var own := _state.move_from_cells()
 		for c in own:
 			_fx.add_tile(_cell_world(c.x, c.y), color_tap)
 		_update_own_team_markers(own)
@@ -2247,11 +2247,16 @@ func _maybe_ai_turn() -> void:
 		_refresh_turn_view()
 
 
-# Ran out of time to act — forfeit this decision with no move made (see
-# MatchState.forfeit) and move straight on to whatever comes next.
+# Ran out of time to act — forfeit this decision with no move made and move
+# straight on to whatever comes next. `true` marks this as a REAL clock
+# expiry (the AI's no-legal-action forfeit above deliberately doesn't), which
+# is what books a team for time-wasting when a MOVE is what expired — see
+# MatchState.forfeit. The announcement goes through the shared card channel,
+# same as any other booking.
 func _on_turn_timeout() -> void:
 	print("TIME UP: %s forfeits (phase=%s)" % [_state.current, MatchState.Phase.keys()[_state.phase]])
-	_state.forfeit()
+	_state.forfeit(true)
+	await _announce_stalling_card()
 	_refresh_turn_view()
 
 
@@ -2301,17 +2306,16 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 	var pass_targets := _state.combo_pass_targets()
 	for c in pass_targets:
 		_fx.add_tile(_cell_world(c.x, c.y), color_tap) # blue = next pass
-	# Shooting ends the turn (see execute_combo), so THIS is a real point
-	# where a specific target can be known to trigger the stalling card —
-	# see MatchState.would_card_shoot's doc comment. Only that exact target
-	# gets color_card_warning instead of color_shoot.
+	# No target can be flagged as "this one books you" any more: the only
+	# bookable offence left is time-wasting (see MatchState.forfeit), which is
+	# about the clock, not about where the ball goes — so every shoot target
+	# is just a shoot target.
 	for c in _state.combo_shoot_targets():
-		var shoot_col := color_card_warning if _state.would_card_shoot(c) else color_shoot
-		_fx.add_tile(_cell_world(c.x, c.y), shoot_col)
+		_fx.add_tile(_cell_world(c.x, c.y), color_shoot)
 	if preview != NO_CELL:
 		var col := color_chain
 		if preview in _state.combo_shoot_targets():
-			col = color_card_warning if _state.would_card_shoot(preview) else color_shoot
+			col = color_shoot
 		elif preview in _state.combo_pass_targets():
 			col = color_tap
 		_fx.add_tile(_cell_world(preview.x, preview.y), col.lightened(0.35), fx_tile_size * 1.1)
@@ -2329,18 +2333,13 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 func _draw_move(from: Vector2i, preview: Vector2i = NO_CELL) -> void:
 	_fx.clear()
 	_fx.add_tile(_cell_world(from.x, from.y), color_tap_selected)
-	# A move ends the turn (do_move/hold_and_move both call next_turn()), so
-	# each individual target can be checked — see MatchState.would_card_
-	# move's doc comment. Only the specific target(s) that would actually
-	# trigger the card get color_card_warning instead of color_move.
+	# No "this one books you" flagging here either — see _draw_combo.
 	for c in _state.move_targets(from):
-		var move_col := color_card_warning if _state.would_card_move(from, c) else color_move
-		_fx.add_tile(_cell_world(c.x, c.y), move_col)
+		_fx.add_tile(_cell_world(c.x, c.y), color_move)
 	if preview != NO_CELL:
-		var preview_col := color_card_warning if _state.would_card_move(from, preview) else color_move
 		var pts := PackedVector3Array([_cell_world(from.x, from.y), _cell_world(preview.x, preview.y)])
 		_fx.set_trail(pts, color_trail)
-		_fx.add_tile(_cell_world(preview.x, preview.y), preview_col.lightened(0.35), fx_tile_size * 1.1)
+		_fx.add_tile(_cell_world(preview.x, preview.y), color_move.lightened(0.35), fx_tile_size * 1.1)
 	# move_targets are always EMPTY cells (never a figure) — only `from`
 	# itself is an own figure wearing an FX tile right now, see
 	# _update_own_team_markers's doc comment for why that matters.

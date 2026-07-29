@@ -31,10 +31,14 @@ func _initialize() -> void:
 	assert(ms.current == "HomeTeam")
 	assert(not ms._move_is_reactive)
 
-	# Bonus move should be legal for the SAME team.
-	var mv_targets: Array[Vector2i] = ms.move_targets(Vector2i(3, 6))
-	assert(mv_targets.size() > 0)
-	var moved := ms.do_move(Vector2i(3, 6), mv_targets[0])
+	# The bonus move is limited by RANGE, not by identity (2026-07-27 variant):
+	# ANY own figure may take it, but no further than BONUS_MOVE_RANGE.
+	var other_targets: Array[Vector2i] = ms.move_targets(Vector2i(3, 6))
+	assert(other_targets.size() > 0)
+	for t in other_targets:
+		assert(maxi(absi(t.x - 3), absi(t.y - 6)) <= MatchState.BONUS_MOVE_RANGE)
+	print("Bonus move offers only %d-cell targets, for a NON-shooter too" % MatchState.BONUS_MOVE_RANGE)
+	var moved := ms.do_move(Vector2i(3, 6), other_targets[0])
 	assert(moved)
 	print("After bonus move: phase=%s current=%s (expect COMBO/MOVE, AwayTeam)" \
 		% [MatchState.Phase.keys()[ms.phase], ms.current])

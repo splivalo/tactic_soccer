@@ -150,48 +150,18 @@ func _initialize() -> void:
 	var res_ok := ms.execute_combo(Vector2i(2, 0))
 	_check(res_ok["ok"] and res_ok["goal"] and not res_ok["offside"], "onside shot into the empty goal scores")
 
-	# Cards: a violation is a contested 50-50 — a reactive move that reaches
-	# the ball lands in the ONE cell directly opposite an opponent figure,
-	# straight through the ball, on any of 4 axes (see is_contested_recovery).
-	# 1st = yellow only, and the foul earns no reward: no upgrade into a
-	# combo, same as a real foul never earning the ball. 2nd (and every one
-	# after) = red card AND an immediate figure removal in the same breath —
-	# matches how a red card actually works in real football (sent off there
-	# and then), not a separate 3rd-strike step.
-	var recoverer := {"cell": Vector2i(2, 8), "role": "field"}
-	var contester := {"cell": Vector2i(4, 5), "role": "field"}
-	ms.setup([recoverer], [contester], Vector2i(3, 5), "HomeTeam", 99)
-	_check(ms.is_contested_recovery(Vector2i(2, 5), "HomeTeam"),
-		"geometry sanity: landing at (2,5) puts the ball directly between HomeTeam and the AwayTeam figure at (4,5)")
-	_check(not ms.is_contested_recovery(Vector2i(2, 6), "HomeTeam"),
-		"geometry sanity: (2,6) is adjacent to the ball but NOT opposite anyone through it — no duel")
-	_check(ms.phase == MatchState.Phase.MOVE and ms.moves_left == 2,
-		"setup: AwayTeam already holds the ball (piece at 4,5), so HomeTeam starts this turn reacting")
-
-	# 1st violation: HomeTeam's only reactive move slides straight into the
-	# contested cell.
-	var moved1 := ms.do_move(Vector2i(2, 8), Vector2i(2, 5))
-	_check(moved1, "the move itself is still legal even though it's a contested recovery")
-	_check(ms.last_move_card == "yellow" and ms.yellow_card["HomeTeam"] and ms.foul_count["HomeTeam"] == 1,
-		"1st contested recovery -> yellow card only")
-	_check(ms.phase == MatchState.Phase.MOVE and ms.chain.is_empty() and ms.current == "HomeTeam",
-		"a carded recovery does NOT upgrade into a combo — the foul earns no reward, still HomeTeam's turn")
-	_check(ms.pending_removal == "", "a yellow alone never forces a removal")
-
-	# 2nd violation (fresh kickoff via reset(), so foul_count carries over —
-	# only setup() clears it): the same contested recovery now escalates.
-	ms.reset([recoverer], [contester], Vector2i(3, 5), "HomeTeam")
-	var moved2 := ms.do_move(Vector2i(2, 8), Vector2i(2, 5))
-	_check(moved2, "2nd contested recovery is also a legal move")
-	_check(ms.last_move_card == "red" and ms.red_card["HomeTeam"] and ms.foul_count["HomeTeam"] == 2,
-		"2nd violation -> red card")
-	_check(ms.phase == MatchState.Phase.REMOVE and ms.pending_removal == "HomeTeam",
-		"2nd violation puts the carded team straight into Phase.REMOVE")
-
+	# remove_figure(): during Phase.REMOVE (after a red card — now triggered by
+	# position-repetition/stalling, not a contested-recovery duel, see
+	# MatchState's "cards / stalling" doc comment), the carded team removes
+	# one of its own figures. Drive the state there directly rather than via
+	# a real card trigger — this is only testing remove_figure() itself.
+	ms.setup([{"cell": Vector2i(2, 8), "role": "field"}], [{"cell": Vector2i(4, 5), "role": "field"}], Vector2i(3, 5), "HomeTeam", 99)
+	ms.phase = MatchState.Phase.REMOVE
+	ms.pending_removal = "HomeTeam"
 	_check(not ms.remove_figure(Vector2i(9, 9)), "remove_figure fails for an empty cell")
-	var removed := ms.remove_figure(Vector2i(2, 5))
+	var removed := ms.remove_figure(Vector2i(2, 8))
 	_check(removed, "remove_figure succeeds for the carded team's own figure")
-	_check(not ms.pieces.has(Vector2i(2, 5)), "removed figure is gone from pieces")
+	_check(not ms.pieces.has(Vector2i(2, 8)), "removed figure is gone from pieces")
 	_check(ms.pending_removal == "", "pending_removal is cleared after removal")
 	_check(ms.current == "AwayTeam", "removal spends the turn (hands it to the opponent)")
 
@@ -372,8 +342,10 @@ func _initialize() -> void:
 	_check(ms.team_has_ball("HomeTeam"), "being outnumbered 1-vs-2 no longer denies HomeTeam the ball")
 	_check(ms.team_has_ball("AwayTeam"), "AwayTeam (the majority) still has the ball too")
 
-	# --- moves_left: 2 when reacting (no ball at all), 1 for the mandatory ---
-	# post-combo tidy-up move, and the turn only passes once it hits 0.
+	# --- moves_left: always 1, whether reacting (no ball at all) or taking
+	# the mandatory bonus move after your own non-scoring shot ("1 action per
+	# turn" redesign, 2026-07-22/23) — either way the turn passes as soon as
+	# that single move is made.
 	var home2 := [{"cell": Vector2i(3, 9), "role": "gk"}]
 	var away2 := [
 		{"cell": Vector2i(0, 0), "role": "gk"},
@@ -382,37 +354,28 @@ func _initialize() -> void:
 	ms.setup(home2, away2, Vector2i(3, 5), "HomeTeam", 99) # nobody near the ball at all
 	ms.current = "AwayTeam"
 	ms.start_turn()
-	_check(ms.phase == MatchState.Phase.MOVE and ms.moves_left == 2,
-		"reactive MOVE phase grants moves_left = 2")
+	_check(ms.phase == MatchState.Phase.MOVE and ms.moves_left == 1 and ms._move_is_reactive,
+		"reactive MOVE phase grants moves_left = 1")
 	var mv1_from: Vector2i = ms.own_cells()[0]
 	var mv1_to: Vector2i = ms.move_targets(mv1_from)[0]
 	ms.do_move(mv1_from, mv1_to)
-	_check(ms.phase == MatchState.Phase.MOVE and ms.current == "AwayTeam" and ms.moves_left == 1,
-		"1st reactive move spends the budget but does NOT hand over the turn (moves_left=%d, current=%s)" \
-			% [ms.moves_left, ms.current])
-	var mv2_from: Vector2i = ms.own_cells()[0]
-	var mv2_targets := ms.move_targets(mv2_from)
-	for mc in ms.own_cells():
-		var t := ms.move_targets(mc)
-		if not t.is_empty():
-			mv2_from = mc
-			mv2_targets = t
-			break
-	ms.do_move(mv2_from, mv2_targets[0])
-	_check(ms.current == "HomeTeam", "2nd reactive move exhausts the budget and hands the turn over")
+	_check(ms.current == "HomeTeam", "the single reactive move spends the turn immediately")
 
-	# The mandatory tidy-up move (right after your OWN combo) is just 1, not 2
-	# — the reactive 2-move budget is only for actually catching up to a ball
-	# you don't have at all.
+	# The bonus move (right after your OWN non-scoring shot) is likewise just
+	# 1 move, and restricted to the shooter itself — see
+	# scripts/tools/smoke_test_bonus_move.gd for that restriction's coverage.
 	ms.setup(Formations.home(), Formations.away(), Vector2i(3, 8), "HomeTeam", 99)
 	ms.begin(Vector2i(3, 7))
 	var non_goal_shot := Vector2i(4, 7)
 	ms.execute_combo(non_goal_shot)
-	_check(ms.phase == MatchState.Phase.MOVE and ms.moves_left == 1,
-		"mandatory post-combo move gets moves_left = 1, not 2")
+	_check(ms.phase == MatchState.Phase.MOVE and ms.moves_left == 1 and not ms._move_is_reactive,
+		"bonus post-shot move also gets moves_left = 1")
 
-	# --- Reaching the ball mid-REACTIVE-move upgrades straight to Phase.COMBO,
-	# same team, no turn hand-off — a leftover move slot isn't wasted.
+	# --- Reaching the ball via a MOVE (reactive or bonus) never upgrades into
+	# a same-turn combo any more (that instant-attack bonus is gone in the "1
+	# action per turn" redesign, see MatchState.do_move's doc comment) — the
+	# turn always ends, and it's only on the OTHER team's own next turn that
+	# start_turn() checks adjacency and may open Phase.COMBO for them.
 	var home3 := [{"cell": Vector2i(6, 9), "role": "gk"}] # far from the ball, irrelevant
 	var away3 := [{"cell": Vector2i(3, 3), "role": "field"}] # 2 cells short of adjacency
 	ms.setup(home3, away3, Vector2i(3, 5), "HomeTeam", 99)
@@ -420,54 +383,12 @@ func _initialize() -> void:
 	ms.start_turn()
 	_check(ms.phase == MatchState.Phase.MOVE, "setup: AwayTeam starts this reactive test in Phase.MOVE")
 	ms.do_move(Vector2i(3, 3), Vector2i(3, 4)) # now adjacent to the ball (3,5)
-	_check(ms.phase == MatchState.Phase.COMBO and ms.current == "AwayTeam",
-		"reaching the ball mid-reaction upgrades to Phase.COMBO immediately, same team (no hand-off)")
-	_check(ms.chain == [Vector2i(3, 4)],
-		"the chain auto-begins on the figure that just moved (%s) — no extra tap needed to select it" % [ms.chain])
-	_check(Vector2i(4, 4) in ms.combo_shoot_targets(),
-		"a pass/shoot tap works immediately, straight off the auto-begun chain")
-	var reactive_shot := ms.execute_combo(Vector2i(4, 4)) # non-scoring, (4,4) isn't a goal cell
-	_check(reactive_shot["ok"] and not reactive_shot["goal"], "setup: reactive-combo shot lands, no goal")
 	_check(ms.current == "HomeTeam",
-		"every team gets exactly 2 actions/turn: reach-the-ball + shoot is already 2, so the turn " +
-		"passes immediately — AwayTeam does NOT also get the mandatory tidy-up move on top")
-
-	# --- Guard rail: the MANDATORY post-combo move must NEVER get this
-	# upgrade, even if it happens to land adjacent to your own ball — only the
-	# reactive case may skip the turn hand-off (see do_move's doc comment for
-	# why: this is exactly the "guard your own ball forever" exploit the
-	# reactive system exists to prevent).
-	var home4 := [{"cell": Vector2i(3, 8), "role": "field"}]
-	var away4 := [{"cell": Vector2i(6, 9), "role": "gk"}] # far from the ball, irrelevant
-	ms.setup(home4, away4, Vector2i(3, 7), "HomeTeam", 99)
-	ms.begin(Vector2i(3, 8))
-	ms.execute_combo(Vector2i(3, 5)) # non-scoring shot, 2 cells clear of the shooter
-	_check(ms.phase == MatchState.Phase.MOVE and not ms._move_is_reactive,
-		"setup: mandatory (non-reactive) move phase after the shot")
-	ms.do_move(Vector2i(3, 8), Vector2i(3, 6)) # lands adjacent to the ball (3,5) — but NOT reactive
-	_check(ms.current == "AwayTeam",
-		"mandatory move reaching the ball still hands the turn over — no free extra combo")
-
-	# --- Guard rail: reaching the ball on the LAST reactive move (both slots
-	# already spent on movement) must NOT upgrade either — every team gets
-	# exactly 2 actions/turn, and move+move+shoot would be a 3rd.
-	var home5 := [{"cell": Vector2i(6, 9), "role": "gk"}] # irrelevant
-	var away5 := [
-		{"cell": Vector2i(0, 0), "role": "field"}, # wastes the 1st reactive move, nowhere near the ball
-		{"cell": Vector2i(3, 3), "role": "field"}, # 1 cell short of adjacency, reaches it on the 2nd move
-	]
-	ms.setup(home5, away5, Vector2i(3, 5), "HomeTeam", 99)
-	ms.current = "AwayTeam"
+		"reaching the ball via the reactive move still ends AwayTeam's turn immediately")
+	ms.current = "AwayTeam" # peek: AwayTeam's OWN next turn, ball still at (3,5)
 	ms.start_turn()
-	_check(ms.phase == MatchState.Phase.MOVE and ms.moves_left == 2,
-		"setup: fresh reactive phase for the last-move guard-rail test")
-	ms.do_move(Vector2i(0, 0), Vector2i(1, 0)) # 1st move: unrelated to the ball
-	_check(ms.phase == MatchState.Phase.MOVE and ms.moves_left == 1 and ms.current == "AwayTeam",
-		"1st move doesn't touch the ball area — still Phase.MOVE, 1 move left")
-	ms.do_move(Vector2i(3, 3), Vector2i(3, 4)) # 2nd (LAST) move: reaches adjacency
-	_check(ms.current == "HomeTeam" and ms.phase != MatchState.Phase.COMBO,
-		"reaching the ball on the LAST reactive move must NOT upgrade to COMBO — " +
-		"that would be a 3rd action (move+move+shoot); the turn just ends normally")
+	_check(ms.phase == MatchState.Phase.COMBO,
+		"...but AwayTeam correctly opens Phase.COMBO on its own following turn (now adjacent)")
 
 	if _fail == 0:
 		print("TEST_MATCH: ALL PASSED")

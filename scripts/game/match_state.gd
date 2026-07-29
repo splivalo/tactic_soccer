@@ -37,9 +37,27 @@ var moves_left: int = 1
 # move), which is the whole point: it's meant to reward actually taking the
 # risk to advance instead of leaving safe lateral possession with no
 # downside. Both kinds share the exact same move_targets/do_move mechanics
-# (same MAX_MOVE_RANGE) — this flag exists for future UI/logic that wants to
-# tell them apart, nothing currently branches on it.
-var _move_is_reactive: bool = false
+# (same MAX_MOVE_RANGE), but WHO may move differs — see _bonus_move_shooter
+# and do_move. Defaults to true (the permissive, general case: any own
+# figure) rather than false — execute_combo is the only place that ever
+# flips it to false, right before opening its own narrow bonus-move window,
+# so any OTHER path into Phase.MOVE (start_turn's reactive branch, or a test/
+# query building a MOVE state by hand without going through either) safely
+# falls back to "any figure" instead of silently restricting to whatever
+# _bonus_move_shooter happens to hold (2026-07-27: a hand-built Phase.MOVE
+# state that skipped both start_turn() and execute_combo() was tripping the
+# bonus-move restriction with no shooter ever set).
+var _move_is_reactive: bool = true
+# The figure that just took the non-scoring shot which opened this BONUS
+# move (see execute_combo) — only that same figure may take the bonus move
+# (do_move enforces this whenever not _move_is_reactive). 2026-07-27:
+# restricted from "any own figure" because a team could shoot a throwaway
+# ball just to unlock a free full-range reposition of an UNRELATED figure
+# (e.g. a defender across the pitch) on top of the shot itself — tying the
+# bonus move to the shooter closes that off while still letting the shooter
+# follow up/run onto a rebound, which is the intended use. Meaningless
+# outside a bonus move (_move_is_reactive == true), untouched by reset().
+var _bonus_move_shooter: Vector2i = Vector2i(-1, -1)
 
 ## Max cells a figure may slide in one MOVE action (do_move/hold_and_move) —
 ## deliberately SHORTER than a pass/shot's unlimited range (2026-07-22,
@@ -55,46 +73,38 @@ var _move_is_reactive: bool = false
 ## re-measured, worth a fresh simulation if matches start dragging again.
 const MAX_MOVE_RANGE := 2
 
-# --- cards / stalling --------------------------------------------------------
-# 2026-07-22: switched STALLING's trigger from "held the ball 2 turns in a
-# row" to actual LOOP DETECTION — a human reported the old trigger almost
-# never fired in practice, while a real, worse stalling pattern went totally
-# unpunished: two teams repeatedly shuffling the ball between the same couple
-# of cells (a shoot/reactive-move cycle that never progresses) could in
-# principle repeat forever. Trigger: the exact board position (every piece's
-# cell/team/role + the ball's cell + whose COMBO turn it is) has now been
-# seen for the 3rd time — see _position_key/_position_counts/
-# _check_stalling_repetition, called from start_turn() whenever a team's
-# COMBO opens. The team carded is whichever team's COMBO turn that repeated
-# position belongs to — i.e. the team that HAS the ball and keeps ending up
-# back in the same spot instead of actually progressing (see
-# last_card_team) — not necessarily whoever's move/shot just happened to
-# trigger the check. Coincidentally hitting the exact same full-board
-# position 3 times by chance (rather than an actual repeating cycle) is
-# astronomically unlikely given the size of the state space, so a raw
-# occurrence count is used instead of tracking strict consecutiveness.
-# ESCALATION unchanged: 1st = yellow only; 2nd, and every one after, = red
-# card AND an immediate figure removal in the same breath (matches real
-# football — sent off there and then). Persists for the whole match
-# (partija) — only setup() clears cards/foul_count, not reset().
-# UI warning: see would_card_shoot/would_card_move — a shoot or move target
-# can only be flagged as "would card" in advance when it hands the OTHER
-# team a COMBO turn immediately (no intervening reactive-move decision to
-# wait on), since that's the only case where the resulting position (and
-# its would-be occurrence count) is actually knowable right now.
+# --- cards -------------------------------------------------------------------
+# There is exactly ONE bookable offence: TIME-WASTING — letting the clock run
+# out on a MOVE instead of playing it (see forfeit).
+#
+# History, so nobody re-invents a dead rule: three different stalling triggers
+# were tried and all three were removed. "Ball returned to the figure that
+# last shot it" (the original 2006 rule, verified against its decompiled
+# source) fired on ~0.5% of shots. "Contested 50-50 recovery" was dropped with
+# the turn redesign. "The same board position recurs" survived longest but was
+# abandoned 2026-07-28: it fired 0-2 times per 2500 turns, and a player could
+# neither see it coming nor understand it afterwards, because the thing being
+# compared is the position of all twelve figures plus the ball rather than any
+# decision they made. Its one real job was breaking infinite loops — which
+# only ever mattered in AI-vs-AI simulation, a matchup the shipped game never
+# runs (GameFlow is 1P human-vs-AI or 2P hot-seat).
+# Time-wasting replaces it precisely because it is the opposite on every
+# count: the countdown is on screen, the offence is a choice the player makes,
+# and it is a bookable offence in real football too.
+#
+# ESCALATION: 1st = yellow only; 2nd, and every one after, = red card AND an
+# immediate figure removal in the same breath (matches real football — sent
+# off there and then). Counted per TEAM, not per figure — a deliberate
+# simplification for a side of six. Persists for the whole match (partija) —
+# only setup() clears cards/foul_count, not reset().
 var yellow_card: Dictionary = {"HomeTeam": false, "AwayTeam": false}
 var red_card: Dictionary = {"HomeTeam": false, "AwayTeam": false}
 var foul_count: Dictionary = {"HomeTeam": 0, "AwayTeam": 0}
-# position-key(String) -> how many times that exact board position has
-# occurred at a COMBO-turn start this match — see _check_stalling_repetition.
-# Cleared on reset() (a fresh kickoff's positions can never collide with
-# pre-goal ones anyway, just bounded memory).
-var _position_counts: Dictionary = {}
-# "yellow"/"red"/"" — set by _check_stalling_repetition() when a position
-# repeated for the 3rd time. Cleared at the start of every start_turn() call
-# (i.e. every next_turn()) — main.gd reads this right after calling
-# whichever action ended the turn (execute_combo/do_move/hold_and_move/
-# remove_figure) to surface the card announcement.
+# "yellow"/"red"/"" — set by forfeit() when a MOVE's clock ran out. Cleared at
+# the start of every start_turn() call (i.e. every next_turn()) — main.gd
+# reads this right after calling whichever action ended the turn
+# (execute_combo/do_move/hold_and_move/remove_figure/forfeit) to surface the
+# card announcement.
 var last_move_card: String = ""
 # Which team last_move_card actually belongs to — NOT always whoever's
 # action just ran (see the "cards / stalling" comment above): a reactive
@@ -128,7 +138,6 @@ func reset(home: Array, away: Array, ball_cell: Vector2i, first: String) -> void
 	ball = ball_cell
 	current = first
 	pending_removal = ""
-	_position_counts = {}
 	start_turn()
 
 
@@ -138,86 +147,10 @@ func start_turn() -> void:
 	last_card_team = ""
 	if team_has_ball(current):
 		phase = Phase.COMBO
-		_check_stalling_repetition()
 	else:
 		phase = Phase.MOVE
 		moves_left = 1
 		_move_is_reactive = true
-
-
-## A canonical snapshot of "what the board looks like, and whose COMBO turn
-## it is" for a given team — every piece's cell/team/role, plus the ball's
-## cell, plus `as_team`. Two calls (same or different `as_team`) return the
-## same string iff the position (and whose turn it is to act on it) is truly
-## identical — see _check_stalling_repetition/would_card_shoot/
-## would_card_move.
-func _position_key(as_team: String) -> String:
-	var parts: Array[String] = []
-	for cell in pieces:
-		var info: Dictionary = pieces[cell]
-		parts.append("%d,%d:%s:%s" % [cell.x, cell.y, info["team"], info["role"]])
-	parts.sort()
-	return "%d,%d|%s|%s" % [ball.x, ball.y, as_team, ",".join(PackedStringArray(parts))]
-
-
-## Called from start_turn() right as a team's COMBO opens: counts how many
-## times this exact position (see _position_key) has occurred at a COMBO
-## start, and cards `current` — the team that HAS the ball right now, i.e.
-## the one stuck repeating this spot instead of progressing — the 3rd time
-## it recurs. See the "cards / stalling" doc comment up top for the full
-## reasoning.
-func _check_stalling_repetition() -> void:
-	var key := _position_key(current)
-	var count: int = _position_counts.get(key, 0) + 1
-	_position_counts[key] = count
-	if count >= 3:
-		_position_counts[key] = 0
-		last_move_card = _apply_card(current)
-		last_card_team = current
-		if pending_removal == current:
-			phase = Phase.REMOVE
-
-
-## True if shooting to `shoot_cell` right now would IMMEDIATELY complete a
-## 3rd repeat and card the OPPONENT — i.e. the resulting position (ball at
-## shoot_cell, pieces unchanged) already puts the opponent's own figure(s)
-## adjacent to the ball, so their COMBO opens the instant this shot lands
-## (no intervening reactive move to wait on — see the "cards / stalling" doc
-## comment on why that intervening step usually makes this unknowable in
-## advance). Read-only: saves/restores `ball`, never mutates real state.
-## main.gd uses this to warn on the SPECIFIC shoot target that would trigger
-## the card, not the whole shoot-target set.
-func would_card_shoot(shoot_cell: Vector2i) -> bool:
-	var saved_ball := ball
-	ball = shoot_cell
-	var next_team := opponent(current)
-	var result: bool = false
-	if team_has_ball(next_team):
-		result = _position_counts.get(_position_key(next_team), 0) + 1 >= 3
-	ball = saved_ball
-	return result
-
-
-## True if moving `from` -> `to` right now (ball unchanged — the shared
-## shape of both do_move and hold_and_move) would IMMEDIATELY complete a 3rd
-## repeat and card the OTHER team — see would_card_shoot's doc comment for
-## the same "only knowable when it opens their COMBO with no intervening
-## decision" reasoning. Read-only: saves/restores `pieces`, never mutates
-## real state. main.gd uses this to warn on the SPECIFIC move target that
-## would trigger the card, not the whole move-target set.
-func would_card_move(from: Vector2i, to: Vector2i) -> bool:
-	if not pieces.has(from):
-		return false
-	var saved_info: Dictionary = pieces[from]
-	pieces.erase(from)
-	pieces[to] = saved_info
-	var next_team := opponent(current)
-	var result: bool = false
-	if team_has_ball(next_team):
-		result = _position_counts.get(_position_key(next_team), 0) + 1 >= 3
-	pieces.erase(to)
-	pieces[from] = saved_info
-	return result
 
 
 func next_turn() -> void:
@@ -245,8 +178,38 @@ func clone_for_query() -> MatchState:
 ## made, the board stays exactly as it is, and the turn simply passes to the
 ## opponent (a pending forced removal is dropped, same as skipping any other
 ## decision).
-func forfeit() -> void:
+##
+## `timed_out` marks a REAL clock expiry, as opposed to the caller simply
+## having no legal action to take, and books the team for time-wasting —
+## but ONLY in Phase.MOVE. Sitting out a MOVE is a net GAIN: the shot (or
+## the reactive turn) is already behind you, and there are positions where
+## every legal move breaks up a shape you would rather keep, so running the
+## clock down is a real, rational way to dodge the one action the rules
+## oblige you to take. That is exactly what a time-wasting booking is for.
+## Letting a COMBO expire, by contrast, costs you the whole turn and usually
+## the ball with it — punishment enough, and far more often a player who
+## genuinely thought too long than anyone playing for time (2026-07-28).
+## Callers that forfeit for any other reason must leave it false.
+func forfeit(timed_out: bool = false) -> void:
+	var carding: bool = timed_out and phase == Phase.MOVE
+	var offender := current
 	pending_removal = ""
+	if carding:
+		# Book BEFORE next_turn(), which clears last_move_card as it opens the
+		# other side's turn — then restore the announcement afterwards so
+		# main.gd still finds it (same channel every other card uses).
+		var card := _apply_card(offender)
+		var removal_due: bool = pending_removal == offender
+		next_turn()
+		last_move_card = card
+		last_card_team = offender
+		if removal_due:
+			# A red still owes a figure: hand the turn back so the carded team
+			# serves it immediately, exactly like every other red.
+			current = offender
+			pending_removal = offender
+			phase = Phase.REMOVE
+		return
 	next_turn()
 
 
@@ -461,6 +424,15 @@ func execute_combo(shoot_cell: Vector2i) -> Dictionary:
 	}
 	if phase != Phase.COMBO or chain.is_empty() or not (shoot_cell in combo_shoot_targets()):
 		return res
+	# A non-scoring shot opens the bonus MOVE for the SAME team, so it does
+	# NOT pass through next_turn()/start_turn() — which is the only other
+	# place these get cleared. Without clearing them here, a card booked on
+	# the PREVIOUS turn (forfeit sets them after its own next_turn, so they
+	# survive on purpose) was still sitting there when the next combo
+	# finished, and main.gd announced the very same yellow a second time —
+	# a human saw exactly that in a real match (2026-07-29).
+	last_move_card = ""
+	last_card_team = ""
 	var shooter: Vector2i = chain[-1]
 	var path: Array[Vector2i] = [ball]
 	path.append_array(chain)
@@ -502,6 +474,7 @@ func execute_combo(shoot_cell: Vector2i) -> Dictionary:
 		phase = Phase.MOVE
 		moves_left = 1
 		_move_is_reactive = false
+		_bonus_move_shooter = shooter # do_move only accepts this figure — see its doc comment
 	return res
 
 
@@ -527,16 +500,38 @@ func remove_figure(cell: Vector2i) -> bool:
 ## a genuine multi-turn approach instead of a one-hop teleport. GKs are
 ## further filtered to their own goal cells only; outfield figures may never
 ## land on ANY goal cell.
+## EXPERIMENT (2026-07-27): how far the BONUS move after a non-scoring shot
+## may travel, as an alternative to restricting WHO may take it. Trading the
+## "shooter only, MAX_MOVE_RANGE cells" rule for "any figure, but only this
+## far" keeps the original exploit shut (one cell is far too little to
+## re-shape a defence for free) while restoring the off-the-ball run — a
+## second player breaking toward where the ball is going, which is both more
+## natural football and more expressive. Cost: the shooter can no longer
+## chase its OWN shot two cells, so possession is less sticky for everyone —
+## which is exactly what needs measuring before this is adopted.
+const BONUS_MOVE_RANGE := 1
+
+
+## How far the figure moving right now may travel: the reduced
+## BONUS_MOVE_RANGE during a post-shot bonus move, otherwise the normal
+## MAX_MOVE_RANGE (reactive moves and hold_and_move both keep full range).
+func current_move_range() -> int:
+	if phase == Phase.MOVE and not _move_is_reactive:
+		return BONUS_MOVE_RANGE
+	return MAX_MOVE_RANGE
+
+
 func move_targets(from: Vector2i) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	if not pieces.has(from):
 		return out
 	var role: String = pieces[from]["role"]
 	var team: String = pieces[from]["team"]
+	var reach := current_move_range()
 	for dir in Board.DIRS:
 		var c: Vector2i = from + dir
 		var dist := 1
-		while Board.in_bounds(c) and not pieces.has(c) and c != ball and dist <= MAX_MOVE_RANGE:
+		while Board.in_bounds(c) and not pieces.has(c) and c != ball and dist <= reach:
 			if role == "gk":
 				if is_own_goal_cell(c, team):
 					out.append(c)
@@ -567,15 +562,37 @@ func _apply_card(team: String) -> String:
 ## instant-attack bonus is gone in the "1 action per turn" redesign, see
 ## hold_and_move's doc comment): if it now leaves your team adjacent to the
 ## ball, start_turn() will correctly open Phase.COMBO on your own NEXT turn.
-## True if the move was legal.
+## When this is instead the BONUS move after your own non-scoring shot
+## (_move_is_reactive == false), only the figure that took that shot
+## (_bonus_move_shooter) may move — see its doc comment for why. True if the
+## move was legal.
 func do_move(from: Vector2i, to: Vector2i) -> bool:
 	if phase != Phase.MOVE or not is_own(from) or not (to in move_targets(from)):
 		return false
+	# EXPERIMENT (2026-07-27): the "only the shooter may take the bonus move"
+	# restriction is replaced by BONUS_MOVE_RANGE (see current_move_range) —
+	# any figure may take it, but only one cell. Kept here, commented, so the
+	# two variants can be swapped back and forth while they're being measured.
+	#if not _move_is_reactive and from != _bonus_move_shooter:
+	#	return false
 	var info: Dictionary = pieces[from]
 	pieces.erase(from)
 	pieces[to] = info
 	next_turn()
 	return true
+
+
+## Which of your own figures may currently take a Phase.MOVE action: every
+## figure during a REACTIVE move, but only the shooter during a BONUS move
+## (see do_move). UI/AI should use this instead of own_cells() whenever
+## picking a figure for a real Phase.MOVE (NOT for hold_and_move, which
+## still allows any own figure — see its doc comment).
+func move_from_cells() -> Array[Vector2i]:
+	# EXPERIMENT (2026-07-27): see do_move — the bonus move is now limited by
+	# RANGE rather than by identity, so every own figure is selectable again.
+	#if phase == Phase.MOVE and not _move_is_reactive:
+	#	return [_bonus_move_shooter]
+	return own_cells()
 
 
 ## The OTHER thing you can do with the ball besides shooting: just move a
