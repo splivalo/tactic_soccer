@@ -1,3 +1,7 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Export/build artifacts — rebuilt from source, and an APK blows past
+# GitHub's hard 100 MB per-file limit.
+build_out/
