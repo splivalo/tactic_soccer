@@ -5,13 +5,14 @@ extends Node
 ## set) and otherwise falls back to its own @export defaults, so main.tscn
 ## still works fine when run standalone in the editor.
 
-enum Screen { SPLASH, MAIN_MENU, DIFFICULTY_SELECT, TEAM_SELECT, OPTIONS, INSTRUCTIONS, LEGAL, MATCH, WIN_SCREEN, LOSE_SCREEN }
+enum Screen { SPLASH, MAIN_MENU, DIFFICULTY_SELECT, TEAM_SELECT, ONLINE, OPTIONS, INSTRUCTIONS, LEGAL, MATCH, WIN_SCREEN, LOSE_SCREEN }
 
 const SCENE_PATHS := {
 	Screen.SPLASH: "res://scenes/ui/splash_screen.tscn",
 	Screen.MAIN_MENU: "res://scenes/ui/main_menu.tscn",
 	Screen.DIFFICULTY_SELECT: "res://scenes/ui/difficulty_screen.tscn",
 	Screen.TEAM_SELECT: "res://scenes/ui/team_select.tscn",
+	Screen.ONLINE: "res://scenes/ui/online_screen.tscn",
 	Screen.OPTIONS: "res://scenes/ui/options_screen.tscn",
 	Screen.INSTRUCTIONS: "res://scenes/ui/instructions_screen.tscn",
 	Screen.LEGAL: "res://scenes/ui/legal_screen.tscn",

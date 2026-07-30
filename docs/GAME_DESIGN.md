@@ -7,7 +7,8 @@
 
 ## 1. Pregled
 - **Žanr:** turn-based (na poteze) taktička nogometna igra.
-- **Igrači:** 2 igrača (za sad hot-seat na istom uređaju).
+- **Igrači:** 2 igrača — hot-seat na istom uređaju ili protiv AI-a (§10); online je odlučen ali
+  još neimplementiran (§11).
 - **Platforma:** mobitel, **portret / okomito**. (Kratko isprobana PC/landscape varijanta 2026-07-08, vraćeno na portret jer se brojevi/UI bolje vide — vidi `docs/CHANGELOG.md`. Kod je platformski neovisan pa je povratak na landscape kasnije lak.)
 - **Engine:** Godot 4.6, mobile renderer, Jolt physics.
 - **Cilj partije:** dati gol; igra se na 2 dobivene partije / 2 gola (ili po dogovoru).
@@ -203,12 +204,117 @@ Node `Pitch` mora se poklapati s logičkom mrežom 7×10 (detalji u `assets/mode
   u `main.gd`), pa se animira identično čovjeku; kratka umjetna "razmišljam" pauza
   (`AI_THINK_TIME`) prije poteza da ne djeluje trenutačno/robotski.
 
-## 11. Otvorena pitanja / odluke za kasnije
-- [ ] Online multiplayer (Firebase) — u planu da zamijeni lokalni hot-seat "2 Player"; taj način
-  za sad ostaje samo kao test placeholder.
+## 11. Online multiplayer (odlučeno 2026-07-29, još neimplementirano)
+Zamjenjuje raniju natuknicu "Online multiplayer (Firebase)?" iz otvorenih pitanja. Hot-seat se
+**NE ukida** (ranija namjera je bila da ga online zamijeni) — već radi, radi bez interneta i ne
+košta ništa, pa ostaje kao treći mod. Izbornik zato ima tri gumba: Single player / Online /
+Two players (isti uređaj). Trenutno je to raspetljano samo napola: `TwoPlayerButton` u
+`main_menu.tscn` NOSI tekst "Online game" ali vodi na lokalni `TEAM_SELECT`.
+
+**Tehnološki izbor:**
+- **Firebase Realtime Database, NE Firestore.** Razlog je **realtime push preko običnog SSE
+  streama** koji RTDB nudi na svom REST API-ju; Firestore za to traži gRPC Listen API, bitno teži
+  iz Godota. Uz to Firestore bi za održavanje liste online igrača tražio Cloud Functions, a
+  Functions traže Blaze plan (= vezana kartica) — RTDB drži cijeli projekt na besplatnom Sparku.
+  ⚠️ **Ispravak ranije tvrdnje** (2026-07-30): prvotno je kao presudan razlog naveden
+  `onDisconnect()` (server sam briše zapis kad padne veza). **To je pogrešno za nas** —
+  `onDisconnect()` je funkcija realtime SDK-a preko websocketa i **NE postoji na REST API-ju**, a
+  mi idemo REST-om jer Godot nema SDK. Presence se zato rješava **heartbeatom**: klijent svakih
+  `HEARTBEAT_SECONDS` (60 s) osvježi `last_seen`, a čitatelji ignoriraju sve starije od
+  `PRESENCE_STALE_SECONDS` (150 s) — vidi `scripts/net/net_config.gd`. Mrtvi zapisi ostaju u bazi
+  dok ih nešto ne pospremi, samo se ne prikazuju; igrač razliku ne vidi. Trošak heartbeata je
+  zanemariv (~100 B po igraču po minuti) **pod uvjetom da se lista ne streama uživo** nego
+  dohvaća na zahtjev — što je ionako već bila odluka zbog kvadratnog rasta prometa.
+- **REST + SSE stream iz `HTTPClient`, bez plugina.** Godot nema službeni Firebase SDK; community
+  addon (`godot-firebase`) je alternativa ali ovisi o tuđoj 4.6 kompatibilnosti.
+- **Anonymous Auth** — stabilan UID bez ijednog ekrana registracije. Igrač samo upiše ime.
+  **Auto-cleanup anonimnih računa (brisanje nakon 30 dana neaktivnosti) je UKLJUČEN** (odluka
+  2026-07-30). Bezopasno je jer UID trenutno ne nosi ništa vrijedno: ime živi lokalno u
+  `settings.cfg`, a `/players/{uid}` ionako ispada iz liste čim `last_seen` zastari. Igrač koji se
+  vrati nakon 31 dan dobije novi UID i ne primijeti razliku — ime mu je i dalje na uređaju.
+  Implementacijski je to već pokriveno: `Net._do_sign_in()` pri neuspjelom osvježavanju
+  keširanog refresh tokena tiho izvadi novi anonimni račun umjesto da javi grešku.
+  Korist je konkretna: testiranje tijekom razvoja generira hrpu anonimnih računa (svaki reinstall
+  je novi) i ovo ih čisti samo. Neaktivnost se broji od zadnje prijave, a app se prijavljuje pri
+  svakom pokretanju, pa tko igra i jednom mjesečno zadržava račun.
+  ⚠️ **UVJET koji se aktivira tek kasnije, lako ga je zaboraviti:** onog dana kad se uz UID zakači
+  BILO ŠTO trajno — statistika, rang ljestvica, lista prijatelja, otključani dresovi, kupnje —
+  auto-delete postaje tihi gubitak igračevih podataka. Tada ga treba ili isključiti, ili prije toga
+  dodati **povezivanje računa** (anonimni → Google/email) da igrač može spasiti napredak. Dok je
+  online "uđi, odigraj partiju, izađi", nema problema.
+- **Security rules postavljene ODMAH pri stvaranju baze, ne "test mode"** (2026-07-30) —
+  `firebase/database.rules.json`, verzionirano u repou. Razlog: database URL putuje unutar APK-a,
+  pa je otvorena baza otvorena cijelom internetu, a "zaključat ću kasnije" se u praksi ne ispuni;
+  pravila se ionako jednako lako mijenjaju u oba slučaja, razlika je samo s čime se kreće.
+  **Dva sloja koja se ne smiju miješati:** pravila čuvaju **PODATKE** (tko što smije čitati i
+  pisati, tko ne može pisati potez u tuđe ime), a klijentska validacija čuva **PRAVILA IGRE** —
+  Firebase pravila su ograničen jezik izraza i ne mogu odvrtjeti `MatchState` da presude je li
+  combo legalan. Detalji dosega i RTDB gotcha (`.write` na roditelju daje sve ispod sebe i dijete
+  to ne može oduzeti → piši na listovima, nikad na roditelju) su u komentaru samog fajla.
+  Regija RTDB-a je **trajna** kao i Project ID — odabrano `europe-west1`.
+- **Trošak:** promet je nebitan (potez ≈ 200 B, partija ≈ 10 KB, free tier 10 GB/mj). Pravi zid je
+  **100 istovremenih konekcija** na Sparku, i troše ga i igrači koji samo gledaju listu u
+  izborniku, ne samo oni u meču. Zato: odspoji se kad app ode u pozadinu, i **ne pretplaćuj se na
+  cijelu listu igrača** (`limitToFirst`, osvježavanje na zahtjev) — inače svaki ulazak/izlazak
+  šalje update svima i promet raste kvadratno. Lista je jedini dio koji uopće može poskupjeti.
+
+**Sinkroniziraju se POTEZI, ne stanje.** Ovo se besplatno uklapa u postojeću arhitekturu: mrežni
+protivnik postaje **treći izvor inputa** uz tap i AI, jer AI već izvršava odluke kroz iste
+`_do_combo`/`_apply_move` funkcije koje bi tap odigrao (§10) — pa se i mrežni potez animira
+identično. Format preslikava `MatchState` API:
+```
+{"t":"combo","chain":[[3,7],[3,4]],"shoot":[3,1]}
+{"t":"move","from":[2,6],"to":[2,3]}
+{"t":"remove","cell":[4,8]}
+{"t":"place","cells":[...]}
+{"t":"resign"}
+```
+
+**Struktura u RTDB** — srž je `turns` kao **append-only log**, ne promjenjivo stanje. Time reconnect
+postaje "odigraj log od nule", nema konflikata pri istovremenom pisanju, i svaki potez je jedan
+sitan zapis:
+```
+/players/{uid}                 name, tag, status, last_seen   ← heartbeat 60s, stale nakon 150s
+/invites/{to_uid}/{from_uid}   from_name, room, created_at
+/rooms/{code}
+    host, guest
+    host_country, guest_country, host_ready, guest_ready
+    state: lobby | placing | playing | done
+    deadline_at                                  ← serverski timestamp, ne lokalni sat
+    formations/{uid}: [...]
+    presence/{uid}                               ← isto heartbeat, ne onDisconnect
+    turns/{seq}: { by, action, at }              ← append-only
+```
+
+**Autoritativnost:** nema je (nema servera). Oba klijenta vrte isti deterministički `MatchState`, a
+svaki **validira protivnikovu akciju kroz vlastiti `MatchState` prije nego je primijeni** — ne
+prođe li, to je desync i meč se prekida s greškom umjesto da dva uređaja tiho odu u različita
+stanja. Modificiran klijent može varati; za igru s prijateljima prihvatljivo, za rang ljestvicu
+nije. Host je "sudac" **samo za dvosmislene zapise** (istek timera, protivnik nestao) da ne pišu
+oba — nikad za pravila.
+
+**Perspektiva: svatko vidi svoje figure dolje.** Ploča ostaje apsolutna (`MatchState` se ne mijenja
+ni za slovo); okreće se **samo kamera za 180°** oko centra terena + zamjena grbova u HUD-u. Ovo je
+namjerno, ne stvar ukusa: tap/drag ide raycastom na stvarni 3D svijet (`Board.ray_vertical_closest`,
+cilindar test — vidi `docs/TODO.md` Faza 3), pa fizički okrenuta kamera znači da svi ti popravci
+rade dalje netaknuti. Zrcaljenje koordinata umjesto kamere razbilo bi ih. **Zamka:** gol-cinematika
+ima dvije ručno autorirane statične kamere (§6) i repriznu top-down — njih treba zrcaliti zasebno.
+
+**Dva ulaza u istu sobu** (oba završe s dva UID-a u istom `/rooms/{code}`, pa nisu dvostruk posao):
+kod za prijatelja (`KX7P2M`, deterministički — radi i kad se prijatelj ne može naći u listi) i lista
+online igrača (tap → poziv → protivnik prihvaća/odbija; tap NIKAD ne smije nekoga ubaciti u meč).
+Lista traži i status uz ime (Slobodan / U meču), tag protiv kolizija (`Marko#7K2`), te filter
+psovki + gumb "Prijavi" — slobodan tekst vidljiv strancima nije kozmetika za Play Store.
+
+**Nepotvrđeni rizici (provjeriti u implementaciji, ne pretpostavljati):**
+- Ima li `MatchState` **bilo gdje slučajnosti** u meč-putu? Ako ima, mora se sijati zajedničkim
+  seedom iz sobe, inače dva klijenta divergiraju na istom potezu.
+- Radi li SSE stream iz `HTTPClient` stabilno na Androidu pri prelasku u pozadinu.
+
+## 12. Otvorena pitanja / odluke za kasnije
 - [ ] Točan izgled/uvjeti "zaleđa" u kodu (rub slučajevi).
 - [ ] Vizual za brojeve: pravi broj na dresu (numbers PNG) vs. `Label3D` iznad glave.
 - [ ] Poklapanje uvezenog terena s logičkom mrežom (skala/origin).
 
 ---
-*Zadnje ažurirano: 2026-07-19. Uz ovaj dokument idi i [`docs/TODO.md`](TODO.md).*
+*Zadnje ažurirano: 2026-07-29. Uz ovaj dokument idi i [`docs/TODO.md`](TODO.md).*

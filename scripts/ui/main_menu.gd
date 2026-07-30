@@ -5,6 +5,7 @@ extends Control
 ## the scene).
 
 @onready var _one_player_button: Button = %OnePlayerButton
+@onready var _online_button: Button = %OnlineButton
 @onready var _two_player_button: Button = %TwoPlayerButton
 @onready var _options_button: Button = %OptionsButton
 @onready var _instructions_button: Button = %InstructionsButton
@@ -22,6 +23,13 @@ func _ready() -> void:
 	_one_player_button.pressed.connect(func():
 		GameFlow.single_player = true
 		GameFlow.goto(GameFlow.Screen.DIFFICULTY_SELECT))
+	# Online and hot-seat are now separate entries. Until 2026-07-30 there was
+	# ONE button labelled "Online game" that actually ran the local hot-seat —
+	# which is exactly what it looked like when you tried to play online and it
+	# asked you to pick a country for player two.
+	_online_button.pressed.connect(func():
+		GameFlow.single_player = false
+		GameFlow.goto(GameFlow.Screen.ONLINE))
 	_two_player_button.pressed.connect(func():
 		GameFlow.single_player = false
 		GameFlow.goto(GameFlow.Screen.TEAM_SELECT))

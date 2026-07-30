@@ -100,7 +100,106 @@
 - [ ] Kartoni, imena timova
 - [ ] Menu / pobjeda ekran
 
+## Faza 8 — Online multiplayer (odlučeno 2026-07-29, vidi `GAME_DESIGN.md` §11)
+> Firebase RTDB + Anonymous Auth, REST+SSE bez plugina, sinkroniziraju se POTEZI (append-only log)
+> a ne stanje. Redoslijed je namjeran: **B prije C** jer se ne isplati trošiti vrijeme na kamere
+> dok se ne zna radi li mreža uopće; **C prije D** jer je lista igrača koja te ubaci u meč s
+> krivom perspektivom gora nego da liste nema.
+
+**A — temelj** (samostalno, odmah kaže radi li Firebase iz Godota)
+- [ ] Firebase projekt: Anonymous Auth + RTDB (europe-west1) — *traži korisnikov Google račun*
+- [ ] Uključiti auto-cleanup anonimnih računa (30 dana neaktivnosti) — čisti testne račune sam;
+      bezopasno DOK UID ne nosi ništa trajno, vidi uvjet u `GAME_DESIGN.md` §11
+- [x] **Security rules postavljene ODMAH**, ne u test modeu — `firebase/database.rules.json`
+      (verzionirano u repou). Prvotno su bile planirane za fazu E; korisnik je s pravom pitao
+      zašto ne odmah kad se ionako jednako lako mijenjaju — a "zaključat ću kasnije" se ne
+      ispuni, dok database URL ionako putuje u APK-u. Doseg i RTDB gotcha o nasljeđivanju
+      `.write` s roditelja objašnjeni u komentaru samog fajla.
+- [x] Config fajl s database URL + Web API key (NISU tajne — ionako se šalju u APK-u; sigurnost
+      dolazi od database rules, ne od skrivanja ključa) — `scripts/net/net_config.gd`
+- [x] `Net` autoload (`scripts/net/net.gd`): anonimna prijava + RTDB REST. Refresh token se čuva u
+      `user://net_auth.cfg` da UID bude STABILAN kroz pokretanja — bez toga svaki start pravi novi
+      anonimni račun. Svaki poziv je korutina koja vraća `{ok, code, data, error}`.
+- [x] `scripts/tests/test_net.gd` — end-to-end protiv ŽIVE baze: prijava, upis/čitanje, serverski
+      timestamp, te **dva namjerna pokušaja koja pravila MORAJU odbiti** (nepoznato polje, pisanje
+      u tuđi zapis). Prošlo 10/10, oba odbijanja vratila 401 → pravila su živa.
+- [ ] SSE stream (`HTTPClient`, realtime push) — treba tek u fazi B za sobu i poteze; lista igrača
+      se namjerno dohvaća na zahtjev, ne streama
+- [x] Ime igrača: upisuje se **na samom Online ekranu**, prvi put kad zatreba (`Settings.player_name`
+      → `settings.cfg`, pa objava na `/players/{uid}`). Odstupanje od prvotnog plana: polje u
+      `SettingsModal` je izostavljeno jer nitko ne ide u postavke prije nego tapne Online — ondje
+      bi ga tek trebalo tražiti. "Promijeni ime" gumb stoji uz listu.
+- [x] Izbornik: **`OnlineButton` odvojen od hot-seata** (`main_menu.tscn`). Dotad je JEDAN gumb
+      pisao "Online game" a vodio na lokalni hot-seat — zato je pokušaj online igre tražio odabir
+      države za drugog igrača. Stari gumb sad piše "Two players (1 device)".
+- [x] `scenes/ui/online_screen.tscn` + `scripts/ui/online_screen.gd`: prijava → objava sebe →
+      heartbeat (60 s) → popis ostalih, sa **filtriranjem** zapisa starijih od 150 s. Popis se
+      dohvaća na zahtjev (gumb "Osvježi"), namjerno se NE streama. Izgled je placeholder kao i
+      ostali ekrani u `scenes/ui/` — za urediti u editoru.
+- [x] *Gotovo kad:* dva uređaja vide da se međusobno pojavljuju i nestaju — **potvrđeno na
+      desktopu + mobu 2026-07-30**. Usput otkriveno: Android build je imao
+      `permissions/internet=false` u export presetu, pa je prijava padala s `can't resolve host`
+      dok je desktop radio. Mora se kvačiti **u editoru** (Project → Export → Android →
+      Permissions), jer editor drži presete u memoriji i prepisuje ručnu izmjenu fajla.
+
+**A+ — pozivi (dodano nakon što se lista pokazala lakšom nego kod; vidi bilješku uz fazu B)**
+- [x] Gumb "Invite" u svakom redu liste; igrač koji je zauzet dobije **onemogućen** gumb s
+      natpisom "In match" (informacija je bolja od gumba kojeg nema)
+- [x] Poziv → protivnik dobije Accept/Decline → oboje završe u istoj sobi. Nitko se ne ubacuje u
+      igru bez pristanka, a nepotvrđen poziv istekne sam nakon 60 s
+- [x] Soba se stvara **`PATCH`-em po poljima, ne `PUT`-om cijele sobe** — pravila namjerno ne daju
+      `.write` na `/rooms/$code` jer bi to u RTDB-u dalo i sve ispod, uključujući `turns`.
+      `test_net.gd` to i **provjerava**: PATCH prolazi, PUT cijele sobe mora biti odbijen
+- [x] `test_net.gd` proširen na sobe i pozive — 18/18 protiv žive baze, uključujući da je tuđi
+      inbox poziva nečitljiv
+
+**B — soba preko koda + meč se stvarno sinkronizira** (~70% posla)
+- [ ] Izbornik raspetljan na tri gumba: Single player / Online / Two players (isti uređaj) —
+      `TwoPlayerButton` trenutno nosi tekst "Online game" ali vodi na lokalni hot-seat
+- [ ] Create room / join by code (`KX7P2M`)
+- [ ] Živi lobby za odabir države: `_update_country_visual` se reciklira, samo drugi izvor istine
+      umjesto lokalnog `_stage` (hot-seat dvoprolaz iz `team_select.gd` ne radi za dva uređaja)
+- [ ] Turn log: slanje + primanje + primjena kroz POSTOJEĆE `_do_combo`/`_apply_move`
+- [ ] Validacija protivnikove akcije kroz vlastiti `MatchState`; ne prođe li → desync → prekid
+- [ ] Stegnuti pravila za polja sobe (`state`, `ready`, `country`) — sad traže samo prijavu, jer
+      bi prije implementacije to bilo pogađanje; vidi doseg u `firebase/database.rules.json`
+- [ ] **Popraviti `host` / `created_at` iz write-once u "vlasnik smije prepisati/obrisati"** —
+      trenutno `".write": "auth != null && !data.exists()"` znači da se soba NIKAD ne može
+      obrisati, pa napuštene sobe ostaju zauvijek. Bezopasno po veličini (~desetak bajtova), ali
+      je stvarna greška u dizajnu pravila. `test_net.gd` tu rupu **namjerno tvrdi kao test**, pa
+      će pući čim se popravi — to je znak da se test ažurira, ne da je nešto slomljeno.
+- [ ] Zamijeniti pollanje (3 s) SSE streamom za poziv i sobu — lista igrača namjerno OSTAJE na
+      dohvat-na-zahtjev zbog kvadratnog rasta prometa
+- [ ] **Provjeriti ima li `MatchState` slučajnosti u meč-putu** → ako ima, zajednički seed iz sobe
+- [ ] *Gotovo kad:* dva uređaja odigraju punu partiju preko mreže
+
+**C — perspektiva + paralelne formacije**
+- [ ] Kamera rotirana 180° za Away igrača (logika se NE dira — vidi §11 zašto)
+- [ ] Zamjena grbova u HUD-u
+- [ ] Zrcaljenje gol-cinematike (Cam A/Cam B) i reprizne top-down kamere
+- [ ] Obojica postavljaju formaciju istovremeno + "čekam protivnika..." stanje
+      (`_start_placement` sad postavlja samo svoju stranu i pretpostavlja fiksni `Formations`)
+
+**D — lista igrača + pozivi**
+- [ ] Presence preko **heartbeata** (`last_seen` svakih 60 s, stale nakon 150 s) + status uz ime
+      (Slobodan / U meču). NE `onDisconnect()` — to je realtime-SDK funkcija koje na REST API-ju
+      nema, vidi ispravak u `GAME_DESIGN.md` §11
+- [ ] Poziv → prihvati/odbij s timeoutom (tap NIKAD ne ubacuje protivnika u meč izravno)
+- [ ] Tag protiv kolizija imena (`Marko#7K2`)
+- [ ] Filter psovki + gumb "Prijavi" (Play Store zahtjev, ne kozmetika)
+- [ ] `limitToFirst` + osvježavanje na zahtjev, NE trajni stream cijele liste (trošak)
+- [ ] Odspoji se kad app ode u pozadinu (100 istovremenih konekcija je zid na Sparku)
+
+**E — otpornost**
+- [ ] Reconnect kroz replay append-only loga
+- [ ] Protivnik otišao: "napustio je meč — uzmi pobjedu / čekaj"
+- [ ] Istek poteza po **serverskom** vremenu (`deadline_at`), ne lokalnom satu — inače driftaju
+- [ ] Provjeriti stabilnost SSE streama na Androidu pri prelasku u pozadinu
+
 ## Backlog / ideje
-- [ ] Online multiplayer?
-- [ ] AI protivnik?
+- [x] ~~Online multiplayer?~~ → odlučeno, vidi Fazu 8 gore
+- [x] ~~AI protivnik?~~ → implementirano, vidi `GAME_DESIGN.md` §10
 - [ ] Tutorial / prikaz pravila u igri
+- [ ] Povezivanje računa (anonimni → Google/email) — **obavezno PRIJE** bilo kakve trajne
+      progresije vezane uz UID (statistika, rang, prijatelji, otključavanja), jer je auto-cleanup
+      anonimnih računa uključen; vidi `GAME_DESIGN.md` §11

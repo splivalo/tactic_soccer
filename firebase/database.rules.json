@@ -1,0 +1,78 @@
+// Firebase Realtime Database security rules — TACTIC SOCCER online (GAME_DESIGN.md §11).
+//
+// Postavljeno ODMAH pri stvaranju baze (2026-07-30), namjerno NE "test mode":
+// database URL putuje unutar APK-a, pa je otvorena baza otvorena cijelom internetu,
+// a "zaključat ću kasnije" je obećanje koje se u praksi ne ispuni.
+//
+// GOTCHA koji objašnjava zašto su pravila razlomljena po listovima: u RTDB-u .write
+// na roditelju DAJE pravo na sve ispod njega, i dijete to NE MOŽE oduzeti. Zato
+// namjerno nema .write na /rooms/$code — da ga ima, pravila za turns / formations /
+// presence bila bi mrtvo slovo. Pri dodavanju novih pravila drži se istog obrasca:
+// piši na listovima, nikad na roditelju.
+//
+// DOSEG: players / invites / turns / formations / presence su zatvoreni kako treba.
+// Polja sobe (state, ready, country) za sad traže samo prijavu — svaki prijavljeni
+// igrač ih može mijenjati u bilo kojoj sobi ako pogodi kod. Stegnuti u fazi B, kad
+// postoje stvarni obrasci pisanja (sad bi to bilo pogađanje). Nije izloženost
+// internetu, nego "drugi prijavljeni bi mogao petljati po tuđoj sobi".
+//
+// Ovo NE sprječava varanje u igri: pravila su ograničen jezik izraza i ne mogu
+// odvrtjeti MatchState da presude je li combo legalan. Za to služi klijentska
+// validacija protivnikove akcije (ne prođe -> desync -> prekid meča), vidi §11.
+//
+// Testiranje bez ijedne linije koda: Firebase konzola -> Realtime Database ->
+// Rules -> Playground.
+
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "players": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && auth.uid == $uid",
+        "name":      { ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 16" },
+        "tag":       { ".validate": "newData.isString() && newData.val().length <= 8" },
+        "status":    { ".validate": "newData.val() == 'idle' || newData.val() == 'in_match'" },
+        "last_seen": { ".validate": "newData.isNumber()" },
+        "$other":    { ".validate": false }
+      }
+    },
+
+    "invites": {
+      "$to": {
+        ".read": "auth != null && auth.uid == $to",
+        "$from": {
+          ".write": "auth != null && (auth.uid == $from || auth.uid == $to)"
+        }
+      }
+    },
+
+    "rooms": {
+      "$code": {
+        ".read": "auth != null",
+
+        "host":          { ".write": "auth != null && !data.exists()" },
+        "guest":         { ".write": "auth != null && (!data.exists() || data.val() == auth.uid)" },
+        "created_at":    { ".write": "auth != null && !data.exists()" },
+        "host_country":  { ".write": "auth != null" },
+        "guest_country": { ".write": "auth != null" },
+        "host_ready":    { ".write": "auth != null" },
+        "guest_ready":   { ".write": "auth != null" },
+        "state":         { ".write": "auth != null" },
+        "deadline_at":   { ".write": "auth != null" },
+
+        "formations": { "$uid": { ".write": "auth != null && auth.uid == $uid" } },
+        "presence":   { "$uid": { ".write": "auth != null && auth.uid == $uid" } },
+
+        "turns": {
+          "$seq": {
+            ".write": "auth != null && !data.exists()",
+            ".validate": "newData.hasChildren(['by','action']) && newData.child('by').val() == auth.uid"
+          }
+        }
+      }
+    }
+  }
+}

@@ -23,6 +23,7 @@ buses/default_bus_layout="res://assets/audio/bus_layout.tres"
 
 GameFlow="*res://scripts/game/game_flow.gd"
 Settings="*res://scripts/game/settings.gd"
+Net="*res://scripts/net/net.gd"
 
 [display]
 

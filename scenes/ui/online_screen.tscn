@@ -1,0 +1,165 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/online_screen.gd" id="1_online"]
+[ext_resource type="Theme" uid="uid://3sfso1by5eio" path="res://my_theme.tres" id="2_theme"]
+
+[node name="OnlineScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_online")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.06, 0.09, 0.06, 1)
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 80
+theme_override_constants/margin_right = 80
+theme_override_constants/margin_top = 60
+theme_override_constants/margin_bottom = 60
+
+[node name="VBox" type="VBoxContainer" parent="SafeArea"]
+layout_mode = 2
+theme_override_constants/separation = 30
+alignment = 1
+
+[node name="Title" type="Label" parent="SafeArea/VBox"]
+layout_mode = 2
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 84
+text = "Online"
+
+[node name="StatusLabel" type="Label" parent="SafeArea/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+autowrap_mode = 2
+custom_minimum_size = Vector2(860, 0)
+text = "..."
+
+[node name="NamePanel" type="VBoxContainer" parent="SafeArea/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="NameEdit" type="LineEdit" parent="SafeArea/VBox/NamePanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(820, 130)
+layout_mode = 2
+max_length = 16
+placeholder_text = "Your name"
+
+[node name="NameOkButton" type="Button" parent="SafeArea/VBox/NamePanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(820, 130)
+layout_mode = 2
+text = "Connect"
+
+[node name="ListPanel" type="VBoxContainer" parent="SafeArea/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 24
+visible = false
+
+[node name="Buttons" type="HBoxContainer" parent="SafeArea/VBox/ListPanel"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="RefreshButton" type="Button" parent="SafeArea/VBox/ListPanel/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 130)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Refresh"
+
+[node name="ChangeNameButton" type="Button" parent="SafeArea/VBox/ListPanel/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 130)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Change name"
+
+[node name="Scroll" type="ScrollContainer" parent="SafeArea/VBox/ListPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PlayerList" type="VBoxContainer" parent="SafeArea/VBox/ListPanel/Scroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 18
+
+[node name="InvitePanel" type="VBoxContainer" parent="SafeArea/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 24
+visible = false
+
+[node name="InviteLabel" type="Label" parent="SafeArea/VBox/InvitePanel"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+autowrap_mode = 2
+custom_minimum_size = Vector2(860, 0)
+text = "..."
+
+[node name="InviteButtons" type="HBoxContainer" parent="SafeArea/VBox/InvitePanel"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="AcceptButton" type="Button" parent="SafeArea/VBox/InvitePanel/InviteButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 130)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Accept"
+
+[node name="DeclineButton" type="Button" parent="SafeArea/VBox/InvitePanel/InviteButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 130)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Decline"
+
+[node name="RoomPanel" type="VBoxContainer" parent="SafeArea/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 24
+visible = false
+
+[node name="RoomLabel" type="Label" parent="SafeArea/VBox/RoomPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+autowrap_mode = 2
+custom_minimum_size = Vector2(860, 0)
+text = "..."
+
+[node name="LeaveButton" type="Button" parent="SafeArea/VBox/RoomPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(820, 130)
+layout_mode = 2
+text = "Leave"
+
+[node name="BackButton" type="Button" parent="SafeArea/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(340, 130)
+layout_mode = 2
+text = "Back"
