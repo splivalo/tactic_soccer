@@ -124,8 +124,30 @@ func _exit_to_menu() -> void:
 ## kit's secondary colour when primary is white/near-white, since a white
 ## dot has no contrast against its own white outline (see set_footer_text's
 ## comment on the dot's border).
-func set_team(side: String, country: String, kit: Dictionary) -> void:
+## Longest player name the shield label will show. It is sized for a 3-letter
+## country code, and a name may be up to 16 characters.
+const MAX_NAME_CHARS := 9
+
+
+## Online shows the two players' NAMES instead of country codes, because
+## duplicate countries are allowed and both sides would otherwise read the same.
+##
+## The name is truncated AND sanitized: it was typed by a stranger and lands in
+## this HUD mid-match, so a line break would wreck the layout no matter how few
+## characters were kept. Settings.sanitize_name removes those; this caps width.
+static func display_label(raw_name: String, fallback_code: String) -> String:
+	var clean := Settings.sanitize_name(raw_name)
+	if clean == "":
+		return fallback_code
+	if clean.length() <= MAX_NAME_CHARS:
+		return clean
+	return clean.left(MAX_NAME_CHARS - 1) + "…"
+
+
+func set_team(side: String, country: String, kit: Dictionary, label_override: String = "") -> void:
 	var code := CountryKits.get_code(country)
+	if label_override != "":
+		code = display_label(label_override, code)
 	var primary: TextureRect = _home_primary if side == "HomeTeam" else _away_primary
 	var name_label: Label = _home_name if side == "HomeTeam" else _away_name
 	var flag_path := CountryKits.get_flag(country)
@@ -334,9 +356,10 @@ func play_announcement(kind: String) -> void:
 ## line. Re-derives the SAME clash-resolved kits main.gd's _build_team()
 ## used for the actual 3D players (resolve_match is a pure function of the
 ## two country names, so calling it again here always agrees with them).
-func refresh(state: MatchState, home_country: String, away_country: String) -> void:
+func refresh(state: MatchState, home_country: String, away_country: String,
+		home_label: String = "", away_label: String = "") -> void:
 	var kits := CountryKits.resolve_match(home_country, away_country)
-	set_team("HomeTeam", home_country, kits["home"])
-	set_team("AwayTeam", away_country, kits["away"])
+	set_team("HomeTeam", home_country, kits["home"], home_label)
+	set_team("AwayTeam", away_country, kits["away"], away_label)
 	update_score(state.score)
 	update_cards(state.yellow_card, state.red_card)

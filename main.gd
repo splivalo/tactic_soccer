@@ -591,7 +591,16 @@ func _build_match(kickoff_team: String) -> void:
 # Single call point that mirrors MatchState (shields/names/score/cards) onto the HUD.
 func _refresh_hud() -> void:
 	if _hud != null:
-		_hud.refresh(_state, home_country, away_country)
+		# Online labels the shields with the two players' names — with duplicate
+		# countries allowed, two "CRO" shields would be indistinguishable.
+		var home_label := ""
+		var away_label := ""
+		if GameFlow.online_mode:
+			var mine := Settings.player_name
+			var theirs := GameFlow.online_opponent_name
+			home_label = mine if GameFlow.player_side == "HomeTeam" else theirs
+			away_label = theirs if GameFlow.player_side == "HomeTeam" else mine
+		_hud.refresh(_state, home_country, away_country, home_label, away_label)
 
 
 func _build_team(team_name: String, pieces: Array[Dictionary], kit: Dictionary, facing: float) -> void:
@@ -965,9 +974,15 @@ func _finish_placement() -> void:
 # --- Online: finding an opponent, without leaving the pitch -------------------
 
 const ONLINE_OVERLAY_SCENE := preload("res://scenes/ui/online_screen.tscn")
+const NET_MATCH_SCENE := preload("res://scripts/net/net_match.gd")
+const NetAction := preload("res://scripts/net/net_action.gd")
 
 var _online_overlay: CanvasLayer = null
 var _net_match: Node = null
+## True while we are replaying the OPPONENT's action locally. Without it, every
+## remote action would be echoed straight back as if we had played it — the two
+## clients would keep bouncing the same turn at each other forever.
+var _applying_remote := false
 
 
 func _show_online_overlay() -> void:
@@ -1026,7 +1041,107 @@ func _on_online_match_ready(room: String, opponent_name: String, opponent_countr
 	GameFlow.away_country = away_country
 
 	_hide_online_overlay()
+	_start_net_match(room)
 	_start_coin_toss()
+
+
+func _start_net_match(room: String) -> void:
+	_net_match = NET_MATCH_SCENE.new()
+	add_child(_net_match)
+	_net_match.action_received.connect(_on_remote_action)
+	_net_match.desync.connect(_net_desync)
+	_net_match.start(room)
+
+
+## True when the networked opponent, not this player, is the one to act. Mirrors
+## _is_ai_turn exactly, because a remote opponent IS just a third source of
+## input alongside taps and the AI (§10) — same gate, same functions, same
+## animations.
+func _is_remote_turn() -> bool:
+	if not GameFlow.online_mode or _state == null:
+		return false
+	return _state.current != GameFlow.player_side
+
+
+## Sends an action we just played. Fire-and-forget on purpose: the local game
+## has already moved on, and making the animation wait for a round trip is what
+## makes networked games feel sluggish.
+func _net_send(action: Dictionary) -> void:
+	if _net_match == null or _applying_remote:
+		return
+	var res: Dictionary = await _net_match.send_action(action)
+	if not res["ok"]:
+		_net_desync("could not send our own turn: %s" % res["error"])
+
+
+## Replays the opponent's action through the SAME functions a tap would call, so
+## it animates identically. Every step is checked against our own MatchState
+## first: this is the only real defence against a tampered client, since
+## database rules cannot run the rules of the game (see net.gd).
+func _on_remote_action(action: Dictionary) -> void:
+	if _state == null:
+		return
+	_applying_remote = true
+	var ok := await _play_remote_action(action)
+	_applying_remote = false
+	if not ok:
+		_net_desync("opponent played something our rules refuse: %s" % JSON.stringify(action))
+
+
+func _play_remote_action(action: Dictionary) -> bool:
+	match String(action.get("t", "")):
+		"combo":
+			var chain = action.get("chain", [])
+			if not (chain is Array) or chain.is_empty():
+				return false
+			if not _state.begin(NetAction.cell_from_json(chain[0])):
+				return false
+			for i in range(1, chain.size()):
+				if not _state.extend(NetAction.cell_from_json(chain[i])):
+					return false
+			var shoot := NetAction.cell_from_json(action.get("shoot", null))
+			if not (shoot in _state.combo_shoot_targets()):
+				return false
+			await _do_combo(shoot)
+			return true
+		"move", "hold":
+			var from := NetAction.cell_from_json(action.get("from", null))
+			var to := NetAction.cell_from_json(action.get("to", null))
+			if not (to in _state.move_targets(from)):
+				return false
+			_apply_move(from, to, String(action["t"]) == "hold")
+			return true
+		"remove":
+			var cell := NetAction.cell_from_json(action.get("cell", null))
+			if not _state.is_own(cell):
+				return false
+			_remove_at(cell)
+			return true
+		"resign":
+			_net_opponent_left("Opponent resigned.")
+			return true
+	return false
+
+
+## The two clients no longer agree on the board. There is nothing safe to do but
+## stop: continuing would leave both players making moves against a position the
+## other one isn't looking at.
+func _net_desync(reason: String) -> void:
+	push_error("ONLINE DESYNC: %s" % reason)
+	_net_opponent_left("Connection problem — match abandoned.")
+
+
+func _net_opponent_left(message: String) -> void:
+	if _net_match != null:
+		_net_match.stop()
+		_net_match.queue_free()
+		_net_match = null
+	_busy = true
+	if _hud != null:
+		_hud.set_footer_text(message, Color.WHITE)
+	await get_tree().create_timer(2.5).timeout
+	GameFlow.reset_online()
+	GameFlow.goto(GameFlow.Screen.MAIN_MENU)
 
 
 func _on_online_cancelled() -> void:
@@ -1069,7 +1184,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	# ever fails to decide anything (see _maybe_ai_turn's fallback forfeit),
 	# this is the hard backstop so the human can't step in and play the AI's
 	# pieces for it.
-	if _is_ai_turn():
+	# Online has the same problem with the same answer: while the opponent is to
+	# move, taps must not touch the board.
+	if _is_ai_turn() or _is_remote_turn():
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		var mb := event as InputEventMouseButton
@@ -1198,6 +1315,7 @@ func _remove_tap(screen_pos: Vector2) -> void:
 func _remove_at(cell: Vector2i) -> void:
 	if not _state.remove_figure(cell):
 		return
+	_net_send(NetAction.remove(cell))
 	var fig: Node3D = _node_at.get(cell)
 	if fig != null:
 		fig.queue_free()
@@ -1339,9 +1457,13 @@ func _combo_tap(screen_pos: Vector2) -> void:
 # under the receiver. Strength (swing + ball speed) scales with distance; the
 # kicking foot matches the side the ball comes from.
 func _do_combo(shoot_cell: Vector2i) -> void:
+	# Snapshot BEFORE executing — execute_combo consumes the chain, and the
+	# chain is what the opponent needs to replay this move.
+	var chain_played: Array = _state.chain.duplicate()
 	var res := _state.execute_combo(shoot_cell)
 	if not res["ok"]:
 		return
+	_net_send(NetAction.combo(chain_played, shoot_cell))
 	# Already decided — don't let the old countdown fire mid-animation. This team's
 	# turn isn't over though (MOVE/REMOVE still to come): snapshot whatever's left
 	# of their pool so _refresh_turn_view can resume it, not hand out a fresh 30s.
@@ -1929,7 +2051,11 @@ func _place_replay_cam() -> void:
 	if _fit_meshes.is_empty():
 		return
 	var center := (_cell_world(0, 0) + _cell_world(Board.COLS - 1, Board.ROWS - 1)) * 0.5
-	var cam_basis := Basis.from_euler(Vector3(deg_to_rad(-90.0), 0.0, 0.0)) # straight down
+	# Straight down, but yawed with the player: the replay must read the same way
+	# round as the match they just watched, or the away player sees the goal
+	# they conceded played back from the other end.
+	var replay_yaw := PI if GameFlow.player_side == "AwayTeam" else 0.0
+	var cam_basis := Basis.from_euler(Vector3(deg_to_rad(-90.0), replay_yaw, 0.0))
 	var right := cam_basis.x
 	var up := cam_basis.y
 	var fwd := -cam_basis.z # Godot cameras look down -Z
@@ -2176,6 +2302,7 @@ func _apply_move(from: Vector2i, to: Vector2i, as_hold: bool = false) -> void:
 	var moved: bool = _state.hold_and_move(from, to) if as_hold else _state.do_move(from, to)
 	if not moved: # also advances the turn
 		return
+	_net_send(NetAction.hold(from, to) if as_hold else NetAction.move(from, to))
 	# Same reason _do_combo snapshots+stops here: do_move() may have already
 	# flipped _state.current to the OTHER team (a reactive move that used up
 	# moves_left, or a mandatory tidy-up move ending the turn) — if left
@@ -2555,6 +2682,15 @@ func _fit_camera() -> void:
 	# Capture the transform you tuned in the editor as the fixed reference.
 	if not _cam_ref_set:
 		_cam_ref = cam.global_transform
+		# Everyone sees their OWN figures at the bottom. The board logic is NOT
+		# mirrored for this — only the camera is spun 180 degrees about the
+		# pitch centre (which is the world origin, see Board). That matters:
+		# taps are raycast against the real 3D world, so a genuinely turned
+		# camera keeps every bit of the tap/drag hit-testing working untouched,
+		# whereas mirroring coordinates would have broken all of it
+		# (GAME_DESIGN.md §11).
+		if GameFlow.player_side == "AwayTeam":
+			_cam_ref = Transform3D(Basis(Vector3.UP, PI), Vector3.ZERO) * _cam_ref
 		_cam_ref_set = true
 
 	var cam_basis := _cam_ref.basis.orthonormalized()

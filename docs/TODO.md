@@ -185,10 +185,12 @@
       akcija se odbija i NIŠTA ne mijenja; prepisivanje već odigranog indeksa vraća 401
 - [x] Replay iz loga: svjež klijent odigra log od nule i završi u istoj poziciji kao igrači —
       time je reconnect riješen istim kodom kojim se prati normalna igra
-- [ ] **Ožičiti u `main.gd`**: mrežni protivnik kao treći izvor inputa uz tap i AI, po uzoru na
-      `_is_ai_turn()`/`_maybe_ai_turn()` (main.gd:2195) — primljena akcija ide kroz iste
-      `_do_combo`/`_apply_move`/`_remove_at`, lokalna se šalje. Treba zastavica da se primijenjena
-      mrežna akcija ne pošalje natrag kao vlastita.
+- [x] **Ožičeno u `main.gd`**: `_is_remote_turn()` uz `_is_ai_turn()` gasi tap dok je protivnik na
+      potezu; `_net_send()` šalje iz `_do_combo`/`_apply_move`/`_remove_at`; `_on_remote_action()`
+      primljeno vrti kroz ISTE te funkcije pa se animira identično. Zastavica `_applying_remote`
+      sprječava da se primljena akcija odbije natrag pošiljatelju (inače bi klijenti dobacivali
+      isti potez u krug). Desync i odlazak protivnika prekidaju meč umjesto da se nastavi na
+      poziciji koju druga strana ne vidi.
 - [x] **Traženje protivnika je OVERLAY na terenu, ne zaseban ekran** (odluka 2026-07-30). Tok:
       izbornik → države → teren (slažeš formaciju) → overlay s listom → protivnik prihvati →
       overlay nestane i meč kreće na ploči koju već gledaš. Nema promjene scene ni drugog
@@ -216,12 +218,18 @@
 - [ ] **Provjeriti ima li `MatchState` slučajnosti u meč-putu** → ako ima, zajednički seed iz sobe
 - [ ] *Gotovo kad:* dva uređaja odigraju punu partiju preko mreže
 
-**C — perspektiva + paralelne formacije**
-- [ ] Kamera rotirana 180° za Away igrača (logika se NE dira — vidi §11 zašto)
-- [ ] Zamjena grbova u HUD-u
-- [ ] Zrcaljenje gol-cinematike (Cam A/Cam B) i reprizne top-down kamere
-- [ ] Obojica postavljaju formaciju istovremeno + "čekam protivnika..." stanje
-      (`_start_placement` sad postavlja samo svoju stranu i pretpostavlja fiksni `Formations`)
+**C — perspektiva**
+- [x] Kamera rotirana 180° za Away igrača (`_fit_camera`) — rotira se SAMO kamera oko središta
+      terena, logika se ne dira. Time sav tap/drag hit-test ostaje netaknut; zrcaljenje koordinata
+      bi ga razbilo.
+- [x] Reprizna top-down kamera dobiva isti yaw (`_place_replay_cam`) — inače gost gleda repriziran
+      gol s krivog kraja
+- [x] Imena igrača u HUD-u umjesto kratice države (`hud.gd::display_label`) — skraćeno na 9 znakova
+      s `…` I očišćeno preko `Settings.sanitize_name`
+- [ ] **Provjeriti uživo gol-cinematiku iz perspektive gosta** — Cam A/Cam B se računaju iz osi
+      šuta pa bi trebale pratiti same, ali to je pretpostavka koju nisam mogao testirati odavde
+- [ ] Paralelno postavljanje formacije nije potrebno u ovom toku: formacija se slaže PRIJE traženja
+      protivnika, pa nitko nikoga ne čeka. Gostova se zrcali (`_mirror_formation`).
 
 **D — lista igrača + pozivi**
 - [ ] Presence preko **heartbeata** (`last_seen` svakih 60 s, stale nakon 150 s) + status uz ime
