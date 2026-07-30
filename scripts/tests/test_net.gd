@@ -77,6 +77,7 @@ func _run() -> void:
 	var record := {
 		"name": "probe",
 		"status": "idle",
+		"country": "Croatia",
 		"last_seen": NetScript.server_timestamp(),
 	}
 	var put: Dictionary = await _net.db_put(me, record)
@@ -88,6 +89,9 @@ func _run() -> void:
 	_check(got["ok"] and data is Dictionary, "read own player record back")
 	if data is Dictionary:
 		_check(data.get("name", "") == "probe", "name survived the round trip")
+		# The list draws each player's flag from this, so it has to be an
+		# allowed field — "$other": false refuses anything not named in the rules.
+		_check(data.get("country", "") == "Croatia", "country is published for the flag")
 		_check(data.get("last_seen", 0) is float or data.get("last_seen", 0) is int,
 			"server timestamp resolved to a number (%s)" % str(data.get("last_seen")))
 

@@ -215,6 +215,7 @@ func _publish_me(status: String = "") -> void:
 	var res: Dictionary = await Net.db_put("players/%s" % Net.uid, {
 		"name": Settings.player_name,
 		"status": status,
+		"country": Settings.player_country,
 		"last_seen": Net.server_timestamp(),
 	})
 	if not res["ok"]:
@@ -302,6 +303,19 @@ func _make_row(other_uid: String, rec: Dictionary, shown_name: String) -> Contro
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 18)
 	margin.add_child(row)
+
+	# Flag first, so the row reads the way a fixture list does. Only added when
+	# there is one to show: a blank gap where an image should be looks like a
+	# loading failure, whereas a name that simply starts at the left edge reads
+	# as intentional.
+	var flag_path := CountryKits.get_flag(String(rec.get("country", "")))
+	if flag_path != "" and ResourceLoader.exists(flag_path):
+		var flag := TextureRect.new()
+		flag.texture = load(flag_path)
+		flag.custom_minimum_size = Vector2(96, 64)
+		flag.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		flag.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		row.add_child(flag)
 
 	var who := Label.new()
 	who.text = shown_name

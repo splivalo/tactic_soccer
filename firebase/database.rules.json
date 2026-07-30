@@ -36,6 +36,10 @@
         "tag":       { ".validate": "newData.isString() && newData.val().length <= 8" },
         "status":    { ".validate": "newData.val() == 'idle' || newData.val() == 'in_match'" },
         "last_seen": { ".validate": "newData.isNumber()" },
+        // Published so the player list can show each player's flag beside their
+        // name. Listed explicitly because "$other": false below refuses any
+        // field not named here — which is the point of it.
+        "country":   { ".validate": "newData.isString() && newData.val().length <= 32" },
         "$other":    { ".validate": false }
       }
     },

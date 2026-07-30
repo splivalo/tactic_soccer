@@ -240,6 +240,10 @@
       (Slobodan / U meču). NE `onDisconnect()` — to je realtime-SDK funkcija koje na REST API-ju
       nema, vidi ispravak u `GAME_DESIGN.md` §11
 - [ ] Poziv → prihvati/odbij s timeoutom (tap NIKAD ne ubacuje protivnika u meč izravno)
+- [x] Grb države uz ime u popisu igrača — traži novo polje `country` u `/players/{uid}`, a time i
+      izmjenu pravila: `"$other": false` odbija svako polje koje nije izrijekom navedeno (što mu i
+      jest svrha). Grb se crta samo kad postoji: prazna rupa gdje bi slika trebala biti izgleda kao
+      greška u učitavanju, dok ime koje počinje s lijevog ruba izgleda namjerno.
 - [x] Tag protiv kolizija imena — dodaje se **samo tamo gdje treba** (`Marko #7K2` kad postoje dva
       Marka); stavljati ga svima otežalo bi čitanje svih imena zbog problema koji većina nema
 - [x] Filter psovki (`Settings.name_is_acceptable`) — provjerava se na **slova bez znamenki i
