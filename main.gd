@@ -1120,6 +1120,11 @@ func _play_remote_action(action: Dictionary) -> bool:
 				return false
 			_remove_at(cell)
 			return true
+		"forfeit":
+			_state.forfeit(true)
+			await _announce_stalling_card()
+			_refresh_turn_view()
+			return true
 		"resign":
 			_net_opponent_left("Opponent resigned.")
 			return true
@@ -2464,8 +2469,21 @@ func _maybe_ai_turn() -> void:
 # MatchState.forfeit. The announcement goes through the shared card channel,
 # same as any other booking.
 func _on_turn_timeout() -> void:
+	# Online: ONLY the device actually on the clock rules that time is up, and
+	# sends that as an action like any other. The waiting player's countdown is
+	# information, not a verdict.
+	#
+	# This is why the turn clock needs no server timestamps at all. If both
+	# clients timed the turn themselves they could disagree — one forfeits, the
+	# other doesn't, and from there they are playing different games. Asking
+	# exactly one device removes the disagreement instead of trying to keep two
+	# clocks in step. (A frozen or malicious client that never sends anything is
+	# caught by presence — see NetMatch.)
+	if GameFlow.online_mode and _is_remote_turn():
+		return
 	print("TIME UP: %s forfeits (phase=%s)" % [_state.current, MatchState.Phase.keys()[_state.phase]])
 	_state.forfeit(true)
+	_net_send(NetAction.forfeit())
 	await _announce_stalling_card()
 	_refresh_turn_view()
 

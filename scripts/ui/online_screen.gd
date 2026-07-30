@@ -180,6 +180,9 @@ func _on_name_confirmed() -> void:
 	if typed.length() < 2:
 		_status.text = "Name must be at least 2 characters."
 		return
+	if not Settings.name_is_acceptable(typed):
+		_status.text = "Please choose a different name."
+		return
 	Settings.set_player_name(typed)
 	_go_online()
 
@@ -236,7 +239,11 @@ func _refresh_list() -> void:
 	for child in _player_list.get_children():
 		child.queue_free()
 
-	var others := 0
+	# Collected before rendering so duplicate names can be spotted: with only 16
+	# countries and no name reservations, several "Marko" online at once is the
+	# normal case, not the odd one.
+	var live: Array = []
+	var name_counts := {}
 	if res["data"] is Dictionary:
 		# Firebase timestamps are epoch MILLISECONDS, not seconds.
 		var now_ms := Time.get_unix_time_from_system() * 1000.0
@@ -253,8 +260,19 @@ func _refresh_list() -> void:
 			var age := now_ms - float(rec.get("last_seen", 0))
 			if age > NetConfig.PRESENCE_STALE_SECONDS * 1000.0:
 				continue
-			_player_list.add_child(_make_row(String(other_uid), rec))
-			others += 1
+			var who := Settings.sanitize_name(String(rec.get("name", "?")))
+			name_counts[who] = int(name_counts.get(who, 0)) + 1
+			live.append({"uid": String(other_uid), "name": who, "rec": rec})
+
+	var others := live.size()
+	for item in live:
+		# The tag is added ONLY where it is needed. Stamping #7K2 on everybody
+		# would make every name harder to read in order to solve a problem most
+		# of them don't have.
+		var shown: String = item["name"]
+		if int(name_counts.get(shown, 0)) > 1:
+			shown = "%s #%s" % [shown, item["uid"].substr(item["uid"].length() - 3).to_upper()]
+		_player_list.add_child(_make_row(item["uid"], item["rec"], shown))
 
 	# The empty state lives OUTSIDE the scroll area so it can sit centred in the
 	# whole panel. Inside a ScrollContainer a child only ever gets its minimum
@@ -268,7 +286,7 @@ func _refresh_list() -> void:
 ## One row = a MiniCard. That style is already defined in my_theme.tres (dark
 ## panel, green border) and is exactly what a list entry wants, so rows look
 ## like the rest of the game instead of like bare text.
-func _make_row(other_uid: String, rec: Dictionary) -> Control:
+func _make_row(other_uid: String, rec: Dictionary, shown_name: String) -> Control:
 	var card := PanelContainer.new()
 	card.theme_type_variation = &"MiniCard"
 
@@ -286,7 +304,7 @@ func _make_row(other_uid: String, rec: Dictionary) -> Control:
 	margin.add_child(row)
 
 	var who := Label.new()
-	who.text = String(rec.get("name", "?"))
+	who.text = shown_name
 	who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	who.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	# The theme's default label size (42) reads as small next to the game's
@@ -311,7 +329,7 @@ func _make_row(other_uid: String, rec: Dictionary) -> Control:
 	# "they're busy" is information, a missing control is just confusing.
 	invite.text = "In match" if busy else "Invite"
 	invite.disabled = busy
-	invite.pressed.connect(func(): _send_invite(other_uid, String(rec.get("name", "?"))))
+	invite.pressed.connect(func(): _send_invite(other_uid, shown_name))
 	row.add_child(invite)
 
 	return card

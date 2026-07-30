@@ -71,6 +71,47 @@ func set_player_country(value: String) -> void:
 ## does nothing about a newline, which breaks the layout regardless of length.
 ## Applied both when a player sets their own name and before showing someone
 ## else's.
+## Words refused in a player name. Deliberately small and English/Croatian only:
+## a blocklist can never be complete, and pretending otherwise invites relying on
+## it. It stops the lazy cases at the door; anything past that is what the
+## "Report" button is for.
+##
+## Matching is on the LETTERS ONLY (digits, spacing and punctuation stripped, and
+## common letter-for-digit swaps folded back), because "f_u_c_k" and "fu.ck" are
+## the entire trick.
+const BLOCKED_WORDS := [
+	"fuck", "shit", "cunt", "bitch", "nigger", "faggot", "rape",
+	"jebi", "pizda", "kurac", "picka", "peder", "govno",
+]
+
+
+## True when a name is fit to show to strangers. Length is checked here too, so
+## the caller has one question to ask instead of three.
+static func name_is_acceptable(value: String) -> bool:
+	var clean := sanitize_name(value)
+	if clean.length() < 2 or clean.length() > 16:
+		return false
+	var folded := _fold_for_matching(clean)
+	for word in BLOCKED_WORDS:
+		if folded.contains(word):
+			return false
+	return true
+
+
+## Reduces a name to bare lowercase letters so the obvious evasions collapse
+## onto the word they were hiding: "P1zd@ !!" -> "pizda".
+static func _fold_for_matching(value: String) -> String:
+	var lowered := value.to_lower()
+	var swaps := {"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", "$": "s"}
+	var out := ""
+	for c in lowered:
+		if swaps.has(c):
+			out += swaps[c]
+		elif c >= "a" and c <= "z":
+			out += c
+	return out
+
+
 static func sanitize_name(value: String) -> String:
 	var out := ""
 	for c in value:

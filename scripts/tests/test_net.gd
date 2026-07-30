@@ -155,12 +155,23 @@ func _run() -> void:
 	var gone: Dictionary = await _net.db_delete(me)
 	_check(gone["ok"], "probe record deleted")
 
-	# Known gap, deliberately asserted so it shows up the day it's fixed: host
-	# is write-once in the current rules, so a room cannot be torn down. See
-	# TODO.md Faza 8B.
+	# The creator may clear their own claim, so an abandoned room can be tidied
+	# up and a code reused. (This FAILS until the updated rules in
+	# firebase/database.rules.json are published — they were write-once before.)
 	var room_gone: Dictionary = await _net.db_delete("rooms/%s/host" % code)
-	_check(not room_gone["ok"],
-		"KNOWN GAP: room host is write-once, room can't be cleaned up yet (code %d)" % room_gone["code"])
+	_check(room_gone["ok"], "the room's creator can clear their own claim%s"
+		% ("" if room_gone["ok"] else " -> " + room_gone["error"]))
+
+	# But a played turn stays put, forever. That is the deliberate trade: the
+	# append-only rule is what makes the log tamper-proof, and loosening it so
+	# finished matches could be swept up would also let a client rewrite
+	# history. Integrity wins; see TODO.md Faza 8E for what that costs.
+	var a_turn: Dictionary = await _net.db_put("rooms/%s/turns/0" % code, {
+		"by": _net.uid, "action": {"t": "resign"}, "at": NetScript.server_timestamp()})
+	_check(a_turn["ok"], "a turn can be appended")
+	var rewrite: Dictionary = await _net.db_delete("rooms/%s/turns/0" % code)
+	_check(not rewrite["ok"],
+		"a played turn can never be deleted, even by the room's creator (code %d)" % rewrite["code"])
 
 	_finish()
 

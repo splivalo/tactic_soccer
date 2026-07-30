@@ -53,9 +53,15 @@
       "$code": {
         ".read": "auth != null",
 
-        "host":          { ".write": "auth != null && !data.exists()" },
+        // "claim it if free, and you may clear your own claim afterwards".
+        // These were write-once ("!data.exists()"), which locked a room in
+        // place forever: abandoned rooms could never be deleted, and a code
+        // could never be reused. Harmless in size, but a real mistake in the
+        // rules — a room its creator cannot tear down is not a design, it is an
+        // oversight.
+        "host":          { ".write": "auth != null && (!data.exists() || data.val() == auth.uid)" },
         "guest":         { ".write": "auth != null && (!data.exists() || data.val() == auth.uid)" },
-        "created_at":    { ".write": "auth != null && !data.exists()" },
+        "created_at":    { ".write": "auth != null" },
         "host_country":  { ".write": "auth != null" },
         "guest_country": { ".write": "auth != null" },
         "host_ready":    { ".write": "auth != null" },

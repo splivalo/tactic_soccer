@@ -208,11 +208,15 @@
       identično onome što je postavio.
 - [ ] Stegnuti pravila za polja sobe (`state`, `ready`, `country`) — sad traže samo prijavu, jer
       bi prije implementacije to bilo pogađanje; vidi doseg u `firebase/database.rules.json`
-- [ ] **Popraviti `host` / `created_at` iz write-once u "vlasnik smije prepisati/obrisati"** —
-      trenutno `".write": "auth != null && !data.exists()"` znači da se soba NIKAD ne može
-      obrisati, pa napuštene sobe ostaju zauvijek. Bezopasno po veličini (~desetak bajtova), ali
-      je stvarna greška u dizajnu pravila. `test_net.gd` tu rupu **namjerno tvrdi kao test**, pa
-      će pući čim se popravi — to je znak da se test ažurira, ne da je nešto slomljeno.
+- [x] `host` / `created_at` više nisu write-once — vlasnik smije očistiti vlastiti zapis, pa se
+      napuštena soba može pospremiti i kod ponovno iskoristiti. ⚠️ **Traži objavu pravila iz
+      `firebase/database.rules.json` u konzoli**; dok se ne objavi, `test_net.gd` pada na
+      "the room's creator can clear their own claim" — to je jedini očekivani pad.
+- [ ] **Odigrani potezi se NIKAD ne mogu obrisati** — svjesna nagodba, ne propust: `!data.exists()`
+      na `turns/$seq` je ono što log čini neizmjenjivim. Olabaviti to zbog pospremanja značilo bi
+      dopustiti klijentu da prepiše povijest meča. Posljedica: logovi odigranih mečeva ostaju
+      zauvijek (~10 KB po meču). Na Sparku nema Functions za periodično čišćenje, pa je opcija
+      ručno pražnjenje ili Blaze kasnije.
 - [ ] Zamijeniti pollanje (3 s) SSE streamom za poziv i sobu — lista igrača namjerno OSTAJE na
       dohvat-na-zahtjev zbog kvadratnog rasta prometa
 - [ ] **Provjeriti ima li `MatchState` slučajnosti u meč-putu** → ako ima, zajednički seed iz sobe
@@ -236,8 +240,13 @@
       (Slobodan / U meču). NE `onDisconnect()` — to je realtime-SDK funkcija koje na REST API-ju
       nema, vidi ispravak u `GAME_DESIGN.md` §11
 - [ ] Poziv → prihvati/odbij s timeoutom (tap NIKAD ne ubacuje protivnika u meč izravno)
-- [ ] Tag protiv kolizija imena (`Marko#7K2`)
-- [ ] Filter psovki + gumb "Prijavi" (Play Store zahtjev, ne kozmetika)
+- [x] Tag protiv kolizija imena — dodaje se **samo tamo gdje treba** (`Marko #7K2` kad postoje dva
+      Marka); stavljati ga svima otežalo bi čitanje svih imena zbog problema koji većina nema
+- [x] Filter psovki (`Settings.name_is_acceptable`) — provjerava se na **slova bez znamenki i
+      interpunkcije**, uz vraćanje zamjena tipa `0→o`, `1→i`, `@→a`, jer je `p1zd@` cijeli trik.
+      Popis je namjerno kratak: blocklist nikad nije potpun i pretvarati se da jest znači osloniti
+      se na njega.
+- [ ] Gumb "Prijavi" uz igrača — filter hvata lijene slučajeve, sve dalje traži prijavu
 - [ ] `limitToFirst` + osvježavanje na zahtjev, NE trajni stream cijele liste (trošak)
 - [ ] Odspoji se kad app ode u pozadinu (100 istovremenih konekcija je zid na Sparku)
 
@@ -251,10 +260,12 @@
       se žig PROMIJENIO i mjeri se vlastito proteklo vrijeme. Oba sata postaju nebitna.
 - [ ] Reconnect kroz replay append-only loga
 - [ ] Protivnik otišao: "napustio je meč — uzmi pobjedu / čekaj"
-- [ ] Istek poteza po **serverskom** vremenu (`deadline_at`), ne lokalnom satu — inače dva uređaja
-      ne bi bila složna je li red istekao, što je desync. **Ne opterećuje server**: sentinel
-      `{".sv":"timestamp"}` razriješi se pri UPISU koji se ionako događa, pa je trošak jedno polje
-      po redu, a odbrojavanje je čisto lokalno prema tom fiksnom trenutku. Nema pollanja vremena.
+- [x] **Istek poteza — riješen BEZ serverskog vremena.** Plan je bio `deadline_at` sa serverskim
+      timestampom; ispalo je da se problem može ukloniti umjesto ublažiti. Istek sad odlučuje
+      **isključivo uređaj koji je na potezu** i šalje ga kao akciju (`NetAction.forfeit`), a
+      protivnikovo odbrojavanje je samo informacija. Dva uređaja se ne mogu razići oko toga je li
+      red istekao jer se pita samo jedan. Zamrznut ili zlonamjeran klijent koji ne pošalje ništa
+      hvata se presenceom. `deadline_at` ostaje u shemi neiskorišten.
 - [ ] Provjeriti stabilnost SSE streama na Androidu pri prelasku u pozadinu
 
 ## Backlog / ideje

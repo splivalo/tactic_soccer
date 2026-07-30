@@ -54,6 +54,17 @@ static func resign() -> Dictionary:
 	return {"t": "resign"}
 
 
+## The player to move ran out of time.
+##
+## Sent as an action rather than each client timing the turn for itself, which
+## is what makes the whole server-clock question go away: only ONE device — the
+## one actually on the clock — decides that time is up, and everyone else simply
+## receives the result like any other move. Two devices can never disagree about
+## whether a turn expired, because only one of them is asked.
+static func forfeit() -> Dictionary:
+	return {"t": "forfeit"}
+
+
 ## Validates and applies an action to `state`.
 ##
 ## Returns {ok, error, result}. `result` carries execute_combo's dictionary for
