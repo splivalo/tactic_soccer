@@ -5,3 +5,11 @@
 # Export/build artifacts — rebuilt from source, and an APK blows past
 # GitHub's hard 100 MB per-file limit.
 build_out/
+
+# Firebase Web API key. Kept out of the tree not because it is a secret — it
+# ships inside every build and is backed by the database rules, not by being
+# hidden — but because secret scanners match the AIza... shape regardless, and
+# alerts that get routinely dismissed teach you to dismiss the real ones.
+# Copy scripts/net/net_secrets.gd.example to create it; see net_config.gd.
+scripts/net/net_secrets.gd
+scripts/net/net_secrets.gd.uid

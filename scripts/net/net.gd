@@ -105,7 +105,7 @@ func _do_sign_in() -> Dictionary:
 
 func _sign_up_anonymous() -> Dictionary:
 	var res := await _http_json(
-		SIGNUP_URL % NetConfig.WEB_API_KEY,
+		SIGNUP_URL % NetConfig.web_api_key(),
 		HTTPClient.METHOD_POST,
 		{"returnSecureToken": true})
 	if not res["ok"]:
@@ -127,7 +127,7 @@ func _refresh_id_token() -> Dictionary:
 	# unlike the identitytoolkit one right above. Easy to trip over.
 	var body := "grant_type=refresh_token&refresh_token=%s" % _refresh_token.uri_encode()
 	var res := await _http_raw(
-		REFRESH_URL % NetConfig.WEB_API_KEY,
+		REFRESH_URL % NetConfig.web_api_key(),
 		HTTPClient.METHOD_POST,
 		body,
 		["Content-Type: application/x-www-form-urlencoded"])
