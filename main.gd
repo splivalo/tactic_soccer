@@ -1050,7 +1050,10 @@ func _start_net_match(room: String) -> void:
 	add_child(_net_match)
 	_net_match.action_received.connect(_on_remote_action)
 	_net_match.desync.connect(_net_desync)
-	_net_match.start(room)
+	# Resigning arrives as an action; somebody who just closes the app doesn't
+	# send anything at all, and only presence catches that.
+	_net_match.opponent_lost.connect(_net_opponent_left)
+	_net_match.start(room, null, GameFlow.online_opponent_uid)
 
 
 ## True when the networked opponent, not this player, is the one to act. Mirrors

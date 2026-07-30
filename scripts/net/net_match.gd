@@ -31,6 +31,17 @@ signal action_received(action: Dictionary)
 ## the two clients disagree about how far the game has got.
 signal desync(reason: String)
 signal sync_failed(reason: String)
+## The opponent stopped showing up. Not the same as resigning: this is the
+## player who closes the app, loses signal, or walks into a lift.
+signal opponent_lost(reason: String)
+
+## How often we announce that we are still here, and how long an opponent may go
+## quiet before the match is called off. The window is deliberately generous —
+## a phone that gets backgrounded or hops between wifi and mobile data goes
+## briefly silent all the time, and dropping someone's match for that would be
+## far worse than waiting a few extra seconds.
+const PRESENCE_SECONDS := 10.0
+const OPPONENT_TIMEOUT_SECONDS := 45.0
 
 ## Temporary. The log is polled until the SSE stream lands (TODO.md Faza 8B);
 ## unlike the player list, a match genuinely wants push, so this is a stopgap
@@ -47,14 +58,33 @@ var applied := 0
 ## players — with two different anonymous accounts — inside one process.
 var net: Node = null
 
+## Who to watch for. Empty = nobody is being watched (the two-client test drives
+## presence itself).
+var opponent_uid := ""
+
 var _poll: Timer = null
+var _presence_timer: Timer = null
 var _busy := false
+var _presence_busy := false
 var _live := false
 
+## The last presence stamp we saw from the opponent, and how long WE have been
+## looking at that same value.
+##
+## Comparing their server timestamp against our own device clock would drag in
+## clock skew — a phone set a minute fast would declare a perfectly healthy
+## opponent dead. Watching for the value to CHANGE, and timing that with our own
+## elapsed seconds, makes both clocks irrelevant.
+var _last_opponent_stamp := ""
+var _opponent_quiet_for := 0.0
 
-func start(room_code: String, client: Node = null) -> void:
+
+func start(room_code: String, client: Node = null, watch_uid: String = "") -> void:
 	room = room_code
+	opponent_uid = watch_uid
 	applied = 0
+	_last_opponent_stamp = ""
+	_opponent_quiet_for = 0.0
 	_live = true
 	if client != null:
 		net = client
@@ -67,11 +97,57 @@ func start(room_code: String, client: Node = null) -> void:
 		add_child(_poll)
 	_poll.start()
 
+	if opponent_uid != "":
+		if _presence_timer == null:
+			_presence_timer = Timer.new()
+			_presence_timer.wait_time = PRESENCE_SECONDS
+			_presence_timer.timeout.connect(func(): _presence_tick())
+			add_child(_presence_timer)
+		_presence_timer.start()
+		_presence_tick()
+
 
 func stop() -> void:
 	_live = false
 	if _poll != null:
 		_poll.stop()
+	if _presence_timer != null:
+		_presence_timer.stop()
+
+
+## Says "still here", then checks whether the opponent has said the same
+## recently enough.
+##
+## This exists because onDisconnect() — the server-side "wipe this when the
+## socket drops" primitive — is a realtime-SDK feature and is NOT on the REST
+## API we use (§11). Resigning is caught by an explicit action; somebody who
+## simply closes the app is caught only here. Without it the other player waits
+## for a turn that is never coming.
+func _presence_tick() -> void:
+	if _presence_busy or not _live or room == "" or opponent_uid == "":
+		return
+	_presence_busy = true
+
+	await net.db_put("rooms/%s/presence/%s" % [room, net.uid], net.server_timestamp())
+	var res: Dictionary = await net.db_get("rooms/%s/presence/%s" % [room, opponent_uid])
+
+	_presence_busy = false
+	if not _live:
+		return
+
+	if res["ok"] and res["data"] != null:
+		var stamp := str(res["data"])
+		if stamp != _last_opponent_stamp:
+			_last_opponent_stamp = stamp
+			_opponent_quiet_for = 0.0
+			return
+
+	# Either unchanged or unreadable. Count our OWN elapsed seconds rather than
+	# trusting either device's idea of the time.
+	_opponent_quiet_for += PRESENCE_SECONDS
+	if _opponent_quiet_for >= OPPONENT_TIMEOUT_SECONDS:
+		stop()
+		opponent_lost.emit("Opponent left the match.")
 
 
 ## Appends one of OUR actions to the log.

@@ -505,6 +505,8 @@ func _enter_room(code: String, opponent: String, opponent_uid: String, is_host: 
 
 	_heartbeat.stop()
 	_poll.stop()
+	# The match needs their uid to notice if they vanish without resigning.
+	GameFlow.online_opponent_uid = opponent_uid
 	match_ready.emit(code, Settings.sanitize_name(shown), country, is_host)
 
 

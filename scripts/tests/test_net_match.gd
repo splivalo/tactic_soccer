@@ -188,6 +188,26 @@ func _run() -> void:
 	_check(fresh.current == _state_a.current and fresh.score == _state_a.score,
 		"...and lands in the same position as the players")
 
+	# --- presence: a live opponent registers, a silent one is noticed ---
+	# Written directly rather than by running the 10s timer, so the test checks
+	# the LOGIC (does a changed stamp read as alive) without waiting a minute.
+	var beat: Dictionary = await _net_b.db_put(
+		"rooms/%s/presence/%s" % [_room, _net_b.uid], _net_b.server_timestamp())
+	_check(beat["ok"], "a player can announce presence in their own room slot")
+
+	var seen: Dictionary = await _net_a.db_get("rooms/%s/presence/%s" % [_room, _net_b.uid])
+	_check(seen["ok"] and seen["data"] != null, "the opponent can read that heartbeat")
+	var first_stamp := str(seen["data"])
+
+	var intruder: Dictionary = await _net_a.db_put(
+		"rooms/%s/presence/%s" % [_room, _net_b.uid], _net_a.server_timestamp())
+	_check(not intruder["ok"],
+		"nobody can fake somebody else's heartbeat (code %d)" % intruder["code"])
+
+	var again: Dictionary = await _net_a.db_get("rooms/%s/presence/%s" % [_room, _net_b.uid])
+	_check(again["ok"] and str(again["data"]) == first_stamp,
+		"a silent opponent's stamp does NOT change — which is what raises the alarm")
+
 	_finish()
 
 

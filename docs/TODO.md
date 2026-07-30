@@ -242,9 +242,19 @@
 - [ ] Odspoji se kad app ode u pozadinu (100 istovremenih konekcija je zid na Sparku)
 
 **E — otpornost**
+- [x] **Protivnik koji nestane bez predaje** (`NetMatch._presence_tick`) — predaja stiže kao akcija,
+      ali tko zatvori app ne pošalje ništa. Svaki klijent svakih 10 s upiše `presence/{uid}` i
+      provjeri protivnikov; nakon 45 s tišine meč se prekida. Prozor je namjerno velik jer
+      backgroundiranje i prelazak wifi↔mobilni podaci nakratko ušutkaju uređaj stalno.
+- [x] **Skew satova zaobiđen, ne riješen**: umjesto usporedbe tuđeg serverskog žiga s VLASTITIM
+      satom (gdje bi telefon minutu naprijed proglasio zdravog protivnika mrtvim), gleda se je li
+      se žig PROMIJENIO i mjeri se vlastito proteklo vrijeme. Oba sata postaju nebitna.
 - [ ] Reconnect kroz replay append-only loga
 - [ ] Protivnik otišao: "napustio je meč — uzmi pobjedu / čekaj"
-- [ ] Istek poteza po **serverskom** vremenu (`deadline_at`), ne lokalnom satu — inače driftaju
+- [ ] Istek poteza po **serverskom** vremenu (`deadline_at`), ne lokalnom satu — inače dva uređaja
+      ne bi bila složna je li red istekao, što je desync. **Ne opterećuje server**: sentinel
+      `{".sv":"timestamp"}` razriješi se pri UPISU koji se ionako događa, pa je trošak jedno polje
+      po redu, a odbrojavanje je čisto lokalno prema tom fiksnom trenutku. Nema pollanja vremena.
 - [ ] Provjeriti stabilnost SSE streama na Androidu pri prelasku u pozadinu
 
 ## Backlog / ideje

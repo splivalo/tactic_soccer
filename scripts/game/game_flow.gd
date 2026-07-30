@@ -50,6 +50,8 @@ var online_mode: bool = false
 ## Filled in by the online overlay once an opponent is found.
 var online_room: String = ""
 var online_opponent_name: String = ""
+## Needed during the match to notice an opponent who vanishes without resigning.
+var online_opponent_uid: String = ""
 ## Host keeps the home kit, guest takes the alternative one — a fixed rule, so
 ## both clients reach the same answer without exchanging a word about it. See
 ## the country-duplicate decision in GAME_DESIGN.md §11.
@@ -60,6 +62,7 @@ func reset_online() -> void:
 	online_mode = false
 	online_room = ""
 	online_opponent_name = ""
+	online_opponent_uid = ""
 	online_is_host = false
 
 # Set by main.gd right before routing to WIN_SCREEN (goals_to_win reached).
