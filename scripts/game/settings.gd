@@ -17,6 +17,13 @@ var vibration_enabled := true
 ## back with their name intact and never has to type it again.
 var player_name := ""
 
+## Country played online. Chosen ahead of time and reused, so a match starts the
+## instant an invite is accepted instead of making both players sit through a
+## "waiting for opponent to choose" screen (GAME_DESIGN.md §11). Empty = never
+## picked; the online screen asks for one. Offline modes ignore this and keep
+## choosing per match in team_select.
+var player_country := ""
+
 
 func _ready() -> void:
 	_load()
@@ -44,12 +51,35 @@ func set_vibration_enabled(on: bool) -> void:
 ## the rules would reject must never reach the server, or the player just sees a
 ## failed write with no idea why.
 func set_player_name(value: String) -> void:
-	player_name = value.strip_edges().left(16)
+	player_name = sanitize_name(value).left(16)
 	_save()
 
 
 func has_valid_player_name() -> bool:
 	return player_name.length() >= 2
+
+
+func set_player_country(value: String) -> void:
+	player_country = value
+	_save()
+
+
+## Strips line breaks and control characters out of a display name.
+##
+## Not paranoia: online, this text is typed by a STRANGER and ends up in the
+## other player's HUD mid-match. Truncating to a few characters fixes width but
+## does nothing about a newline, which breaks the layout regardless of length.
+## Applied both when a player sets their own name and before showing someone
+## else's.
+static func sanitize_name(value: String) -> String:
+	var out := ""
+	for c in value:
+		# Everything below space is a control character (newline, tab, NUL...);
+		# 0x7F is DEL.
+		var code := c.unicode_at(0)
+		if code >= 32 and code != 0x7F:
+			out += c
+	return out.strip_edges()
 
 
 ## Short haptic buzz, gated on the user's preference. Called from main.gd
@@ -79,6 +109,7 @@ func _save() -> void:
 	cfg.set_value("audio", "sfx_volume", sfx_volume)
 	cfg.set_value("audio", "vibration_enabled", vibration_enabled)
 	cfg.set_value("online", "player_name", player_name)
+	cfg.set_value("online", "player_country", player_country)
 	cfg.save(SAVE_PATH)
 
 
@@ -90,3 +121,4 @@ func _load() -> void:
 	sfx_volume = cfg.get_value("audio", "sfx_volume", sfx_volume)
 	vibration_enabled = cfg.get_value("audio", "vibration_enabled", vibration_enabled)
 	player_name = cfg.get_value("online", "player_name", player_name)
+	player_country = cfg.get_value("online", "player_country", player_country)

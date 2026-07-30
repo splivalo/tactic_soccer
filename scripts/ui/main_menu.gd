@@ -6,7 +6,6 @@ extends Control
 
 @onready var _one_player_button: Button = %OnePlayerButton
 @onready var _online_button: Button = %OnlineButton
-@onready var _two_player_button: Button = %TwoPlayerButton
 @onready var _options_button: Button = %OptionsButton
 @onready var _instructions_button: Button = %InstructionsButton
 @onready var _credits_button: Button = %CreditsButton
@@ -23,15 +22,19 @@ func _ready() -> void:
 	_one_player_button.pressed.connect(func():
 		GameFlow.single_player = true
 		GameFlow.goto(GameFlow.Screen.DIFFICULTY_SELECT))
-	# Online and hot-seat are now separate entries. Until 2026-07-30 there was
-	# ONE button labelled "Online game" that actually ran the local hot-seat —
-	# which is exactly what it looked like when you tried to play online and it
-	# asked you to pick a country for player two.
+	# Two modes only: AI and Online. The local hot-seat entry was dropped on
+	# 2026-07-30 once online worked — two people sharing one phone is an edge
+	# case, and the button was adding a choice without adding value. The
+	# hot-seat LOGIC in main.gd/MatchState is untouched; only the way in is gone.
+	# Online goes to country select FIRST, exactly like the single player route
+	# does — same screen, same Back/Next. Picking it up front (rather than from
+	# a button on the online screen) keeps the two modes consistent and keeps
+	# the online screen from growing yet another button.
 	_online_button.pressed.connect(func():
 		GameFlow.single_player = false
-		GameFlow.goto(GameFlow.Screen.ONLINE))
-	_two_player_button.pressed.connect(func():
-		GameFlow.single_player = false
+		GameFlow.reset_online()
+		GameFlow.online_mode = true
+		GameFlow.online_country_picker = true
 		GameFlow.goto(GameFlow.Screen.TEAM_SELECT))
 	_options_button.pressed.connect(_open_settings)
 	_instructions_button.pressed.connect(func(): GameFlow.goto(GameFlow.Screen.INSTRUCTIONS))

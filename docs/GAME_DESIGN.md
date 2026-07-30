@@ -205,11 +205,13 @@ Node `Pitch` mora se poklapati s logičkom mrežom 7×10 (detalji u `assets/mode
   (`AI_THINK_TIME`) prije poteza da ne djeluje trenutačno/robotski.
 
 ## 11. Online multiplayer (odlučeno 2026-07-29, još neimplementirano)
-Zamjenjuje raniju natuknicu "Online multiplayer (Firebase)?" iz otvorenih pitanja. Hot-seat se
-**NE ukida** (ranija namjera je bila da ga online zamijeni) — već radi, radi bez interneta i ne
-košta ništa, pa ostaje kao treći mod. Izbornik zato ima tri gumba: Single player / Online /
-Two players (isti uređaj). Trenutno je to raspetljano samo napola: `TwoPlayerButton` u
-`main_menu.tscn` NOSI tekst "Online game" ali vodi na lokalni `TEAM_SELECT`.
+Zamjenjuje raniju natuknicu "Online multiplayer (Firebase)?" iz otvorenih pitanja.
+
+**Hot-seat je uklonjen iz izbornika** (odluka 2026-07-30). Kratko je bio zadržan kao treći mod uz
+Single player i Online, ali kad je online zaživio pokazao se suvišnim — dva igrača koja dijele
+jedan mobitel su rubni slučaj, a gumb je samo dodavao izbor bez vrijednosti. Izbornik sad ima
+**dva** načina igre: Single player (AI) i Online. Sama hot-seat logika u `main.gd`/`MatchState`
+nije dirana; nestao je samo ulaz u nju.
 
 **Tehnološki izbor:**
 - **Firebase Realtime Database, NE Firestore.** Razlog je **realtime push preko običnog SSE
@@ -270,6 +272,12 @@ identično. Format preslikava `MatchState` API:
 {"t":"resign"}
 ```
 
+⚠️ **Zamka pri čitanju loga** (otkrivena 2026-07-30, koštala je jednog "poteze se šalju ali nikad ne
+stignu" buga): Firebase vraća log kao **JSON `array`, ne objekt**, kad su ključevi uzastopni cijeli
+brojevi od 0 — a append-only log uvijek izgleda točno tako. Probuši li se rupa, isti podatak dolazi
+kao objekt sa string ključevima. Oba oblika se moraju obraditi; provjera samo na `Dictionary` čini
+da log tiho izgleda prazan. Vidi `NetMatch.normalize_log`.
+
 **Struktura u RTDB** — srž je `turns` kao **append-only log**, ne promjenjivo stanje. Time reconnect
 postaje "odigraj log od nule", nema konflikata pri istovremenom pisanju, i svaki potez je jedan
 sitan zapis:
@@ -278,13 +286,48 @@ sitan zapis:
 /invites/{to_uid}/{from_uid}   from_name, room, created_at
 /rooms/{code}
     host, guest
-    host_country, guest_country, host_ready, guest_ready
-    state: lobby | placing | playing | done
+    host_country, guest_country          ← samo objava izbora, NE pregovaranje (vidi dolje)
+                                         (ime protivnika se NE piše ovdje — već stoji u
+                                          /players/{uid} i čitljivo je, pa soba ostaje uža
+                                          i pravila se ne moraju mijenjati)
+    state: lobby | playing | done
     deadline_at                                  ← serverski timestamp, ne lokalni sat
     formations/{uid}: [...]
     presence/{uid}                               ← isto heartbeat, ne onDisconnect
     turns/{seq}: { by, action, at }              ← append-only
 ```
+
+**Država i formacija biraju se PRIJE uparivanja, ne poslije** (odluka 2026-07-30). Da se biraju u
+sobi, svaki meč bi počinjao s dva čekanja ("čekam da odabere državu", pa "čekam da postavi figure")
+— za partiju od par minuta to je mučno. Oboje su lokalne postavke koje se pamte i ponovno koriste,
+pa **meč kreće odmah** čim je poziv prihvaćen; tko nikad ne postavi formaciju, dobije `Formations`
+default. ⚠️ **Ovo poništava raniji plan "živog lobbyja"** u kojem su se države birale sinkronizirano
+s pravilom "prvi uzeo, drugi ne može" — vidi sljedeći odlomak, on je razlog zašto koordinacija više
+ne treba.
+
+**Duplikati država su DOPUŠTENI online** (odluka 2026-07-30). Ima samo 16 reprezentacija, a
+potencijalno stotine igrača — u Hrvatskoj će skoro svatko htjeti hrvatski grb. Zabraniti duplikat
+znači da ti igra oduzima ono što si htio zbog nekog nepoznatog. Umjesto toga, kao u pravom
+nogometu: **ista država → jedan tim u alternativnom dresu.** Pravilo mora biti **determinističko**,
+jer oba klijenta zaključuju neovisno i bez dogovora: **host (pozivatelj) zadržava domaći dres,
+gost ide u alternativni.** Time odabir države prestaje biti pregovor i postaje čista lokalna
+postavka — zato živi lobby otpada.
+- *Doseg:* za sad se poklapanje provjerava samo kao **identična država**. Sudar boja između
+  RAZLIČITIH država (Hrvatska–Peru, oboje crveno-bijelo) je isti problem u pravom nogometu, ali
+  traži usporedbu kitova umjesto provjere jednakosti — ostavljeno za kasnije.
+- Grbovi u HUD-u tada izgledaju identično. Prihvatljivo: na terenu igrače razlikuju dresovi, u
+  HUD-u imena. Ako se pokaže zbunjujuće, jeftina dorada je tanki obrub u boji dresa oko grba.
+
+**U HUD-u se online prikazuje IME igrača, ne kratica države** (`CRO`) — jer bi kod duplikata s obje
+strane pisalo isto. Tehnički je to jedna točka izmjene: `hud.gd::set_team` upisuje kraticu u
+`name_label`, a `set_turn` čita **taj isti label** za tekst u footeru, pa se zamjena povuče sama.
+**Ime se MORA i skratiti i očistiti** prije prikaza: taj label je dimenzioniran za 3 znaka a ime ide
+do 16, i — bitnije — to je tekst koji je upisao **stranac s interneta** i sjeda ravno u tvoj HUD
+usred meča. Skraćivanje na ~8-10 znaka + `…` rješava širinu, ali NE zaustavlja prijelom retka ili
+kontrolne znakove; oni se moraju posebno ukloniti. (Filter psovki je zasebna stavka, faza D.)
+
+**Sve gore vrijedi SAMO za online.** Hot-seat i meč protiv AI-a ostaju nepromijenjeni: biraju
+državu kroz `team_select`, prikazuju kraticu države u HUD-u, i nemaju pojma o dresovnim sudarima.
 
 **Autoritativnost:** nema je (nema servera). Oba klijenta vrte isti deterministički `MatchState`, a
 svaki **validira protivnikovu akciju kroz vlastiti `MatchState` prije nego je primijeni** — ne

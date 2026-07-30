@@ -1,10 +1,19 @@
 extends Control
-## Team select: ONE screen, TWO passes (hotseat). Player 1 picks a country;
-## Player 2 then sees the same screen with Player 1's country disabled
-## (mirrors the original 2006 game's flow — see the reference screenshot).
-## Player 1 is always HomeTeam (bottom of the pitch, left shield in the HUD)
-## and Player 2 is always AwayTeam — no side choice, since which physical
-## side you're on doesn't affect the match, only which country is which.
+## Team select. ONE pass, always — you only ever choose your OWN country.
+##
+## It used to run two passes for the local hot-seat (player 1 picked, then the
+## screen reset with that country disabled for player 2). Hot-seat left the menu
+## on 2026-07-30, so nothing could reach the second pass any more and it was
+## removed along with the "this country is taken" state.
+##
+## Two callers remain:
+##   - Single player: you pick, the AI gets a random different country.
+##   - Online (GameFlow.online_country_picker): you pick YOUR country, it is
+##     saved to Settings and reused for every match. Duplicates are allowed
+##     online — two players may both be Croatia, and the guest simply plays in
+##     the alternative kit — so there is nothing to coordinate and nothing to
+##     grey out (GAME_DESIGN.md §11).
+##
 ## Each country in the grid is a small wrapper Control holding a "Flag"
 ## TextureButton. The flag's rounded_texture shader both chamfers the corners
 ## AND draws the yellow selection border along that exact same edge (via its
@@ -17,7 +26,6 @@ extends Control
 ## ~140px, so 0.05 ≈ 7px).
 const COUNTRY_BORDER := 0.05
 const COLOR_SELECTED := Color(0.97, 0.76, 0.15, 1.0)  # yellow, matches buttons
-const COLOR_TAKEN := Color(0.85, 0.16, 0.16, 1.0)  # red, "not available to you"
 
 @onready var _country_grid: GridContainer = %CountryGrid
 @onready var _back_button: Button = %BackButton
@@ -25,19 +33,27 @@ const COLOR_TAKEN := Color(0.85, 0.16, 0.16, 1.0)  # red, "not available to you"
 
 var _country_buttons: Dictionary = {}  # String country -> TextureButton
 
-var _stage := 0  # 0 = picking for player 1, 1 = picking for player 2
-var _p1_country := ""
+var _for_online := false
 
 
 func _ready() -> void:
-	# Every visit here starts a genuinely NEW match — a formation placed for a
-	# PREVIOUS game must not carry over and silently skip the placement phase
-	# main.gd's _start_placement() checks for.
-	GameFlow.player_formation = []
+	_for_online = GameFlow.online_country_picker
+	if not _for_online:
+		# Starting a genuinely NEW match — a formation placed for a PREVIOUS
+		# game must not carry over and silently skip the placement phase
+		# main.gd's _start_placement() checks for. The online picker is just
+		# editing a setting, so it must not wipe anything.
+		GameFlow.player_formation = []
+
 	_collect_country_buttons()
 	_back_button.pressed.connect(_on_back_pressed)
 	_next_button.pressed.connect(_on_next_pressed)
-	_refresh_stage()
+
+	# Coming back to change an online country shows the current one selected,
+	# rather than making the player hunt for what they already chose.
+	if _for_online and _country_buttons.has(Settings.player_country):
+		_country_buttons[Settings.player_country].button_pressed = true
+		_update_country_visual(Settings.player_country)
 
 
 func _collect_country_buttons() -> void:
@@ -55,37 +71,17 @@ func _collect_country_buttons() -> void:
 		_update_country_visual(country)
 
 
-## Selection = yellow border. Disabled (taken by the other player) = dimmed
-## flag + red border, so it reads as "off limits" rather than just "picked".
-## Both borders are drawn by the same shader edge as the corner chamfer.
+## Selection = yellow border, drawn by the same shader edge as the corner
+## chamfer. There is no "taken" state any more: nothing is ever off limits,
+## because you only pick for yourself.
 func _update_country_visual(country: String) -> void:
 	var flag: TextureButton = _country_buttons[country]
-	if flag.disabled:
-		flag.material.set_shader_parameter("border_width", COUNTRY_BORDER)
-		flag.material.set_shader_parameter("border_color", COLOR_TAKEN)
-		flag.modulate = Color(0.35, 0.35, 0.35, 0.6)
-	elif flag.button_pressed:
+	if flag.button_pressed:
 		flag.material.set_shader_parameter("border_width", COUNTRY_BORDER)
 		flag.material.set_shader_parameter("border_color", COLOR_SELECTED)
-		flag.modulate = Color(1, 1, 1, 1)
 	else:
 		flag.material.set_shader_parameter("border_width", 0.0)
-		flag.modulate = Color(1, 1, 1, 1)
-
-
-## Resets the country picker for the current stage and applies Player 1's
-## restriction (disabled country) when it's Player 2's turn.
-func _refresh_stage() -> void:
-	for country in _country_buttons:
-		var b: TextureButton = _country_buttons[country]
-		b.button_pressed = false
-		b.disabled = false
-
-	if _stage == 1 and _country_buttons.has(_p1_country):
-		_country_buttons[_p1_country].disabled = true
-
-	for country in _country_buttons:
-		_update_country_visual(country)
+	flag.modulate = Color(1, 1, 1, 1)
 
 
 func _picked_country() -> String:
@@ -95,46 +91,45 @@ func _picked_country() -> String:
 	return ""
 
 
+## Back always means the main menu. For online this screen sits BETWEEN the menu
+## and the player list, so Back goes back up the stack the player came through,
+## and Back from the player list returns here — which is also how the country
+## gets changed later, without needing a button for it.
 func _on_back_pressed() -> void:
-	if _stage == 0:
-		GameFlow.goto(GameFlow.Screen.MAIN_MENU)
-		return
-	_stage = 0
-	_refresh_stage()
-	if _country_buttons.has(_p1_country):
-		_country_buttons[_p1_country].button_pressed = true
+	GameFlow.online_country_picker = false
+	GameFlow.goto(GameFlow.Screen.MAIN_MENU)
 
 
-## Player 1 is always Home, Player 2 is always Away (see class doc).
 func _on_next_pressed() -> void:
 	var picked_country := _picked_country()
 	if picked_country == "":
 		return  # nothing picked yet
 
-	if _stage == 0:
-		_p1_country = picked_country
-		# Single Player has no human "Player 2" — don't make the player
-		# configure their OWN opponent, just assign the AI a country and go.
-		if GameFlow.single_player:
-			_finish_single_player()
-			return
-		_stage = 1
-		_refresh_stage()
+	if _for_online:
+		# Straight to the pitch. You place your formation first and only THEN
+		# look for an opponent — as an overlay on that same board — so there is
+		# no waiting once someone accepts (GAME_DESIGN.md §11).
+		Settings.set_player_country(picked_country)
+		GameFlow.online_country_picker = false
+		GameFlow.home_country = picked_country
+		GameFlow.player_side = "HomeTeam"
+		GameFlow.player_formation = []
+		GameFlow.goto(GameFlow.Screen.MATCH)
 		return
 
-	GameFlow.home_country = _p1_country
-	GameFlow.away_country = picked_country
-	GameFlow.goto(GameFlow.Screen.MATCH) # formation placement now happens in-match, see main.gd
+	_finish_single_player()
 
 
-## Random country for the AI (different from the player's pick where
-## possible) instead of a second manual pick — see _on_next_pressed.
+## Random country for the AI (different from the player's pick where possible)
+## instead of a second manual pick — don't make the player configure their OWN
+## opponent.
 func _finish_single_player() -> void:
+	var mine := _picked_country()
 	var choices := _country_buttons.keys()
-	choices.erase(_p1_country)
+	choices.erase(mine)
 	if choices.is_empty():
 		choices = _country_buttons.keys()
 	var ai_country: String = choices[randi() % choices.size()]
-	GameFlow.home_country = _p1_country
+	GameFlow.home_country = mine
 	GameFlow.away_country = ai_country
 	GameFlow.goto(GameFlow.Screen.MATCH)

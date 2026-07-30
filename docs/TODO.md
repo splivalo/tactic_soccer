@@ -154,13 +154,56 @@
       inbox poziva nečitljiv
 
 **B — soba preko koda + meč se stvarno sinkronizira** (~70% posla)
-- [ ] Izbornik raspetljan na tri gumba: Single player / Online / Two players (isti uređaj) —
-      `TwoPlayerButton` trenutno nosi tekst "Online game" ali vodi na lokalni hot-seat
+- [x] Izbornik: **hot-seat uklonjen**, ostaju dva načina — Single player i Online (odluka
+      2026-07-30; dva igrača na jednom mobitelu su rubni slučaj, gumb je samo dodavao izbor bez
+      vrijednosti). Logika hot-seata u `main.gd`/`MatchState` nije dirana, nestao je samo ulaz.
+- [x] **Država se bira PRIJE uparivanja**, lokalno, i pamti se — ne u sobi. Inače bi svaki meč
+      počinjao s dva čekanja (država, pa formacija). `team_select` je dobio online-način:
+      jedan prolaz, biraš samo sebe.
+- [x] Tok je **Izbornik → države (Back/Next) → lista igrača**, isti oblik kao Single player
+      (izbornik → težina → države → meč). Kratko je postojao zaseban "Country" gumb na Online
+      ekranu; maknut jer je nedosljedan s AI tokom i jer je taj ekran ionako imao previše gumba.
+      Back s liste vraća na države — tako se država i mijenja, bez ijednog dodatnog gumba.
+- [x] **Duplikati država dopušteni**, ista država → gost u alternativnom dresu (host zadržava
+      domaći). Determinističko, bez dogovora. Time **živi lobby za odabir države OTPADA** — bio je
+      planiran ovdje, ali koordinacija više nema svrhu. Vidi `GAME_DESIGN.md` §11.
 - [ ] Create room / join by code (`KX7P2M`)
-- [ ] Živi lobby za odabir države: `_update_country_visual` se reciklira, samo drugi izvor istine
-      umjesto lokalnog `_stage` (hot-seat dvoprolaz iz `team_select.gd` ne radi za dva uređaja)
-- [ ] Turn log: slanje + primanje + primjena kroz POSTOJEĆE `_do_combo`/`_apply_move`
-- [ ] Validacija protivnikove akcije kroz vlastiti `MatchState`; ne prođe li → desync → prekid
+- [ ] Formacija se isto pamti kao postavka i ponovno koristi (tko je ne postavi → `Formations`
+      default), da meč kreće odmah po prihvaćanju poziva
+- [ ] HUD: ime igrača umjesto kratice države (samo online) — `hud.gd::set_team` piše u `name_label`,
+      `set_turn` čita isti label pa se footer povuče sam. **Skratiti (~8-10 + `…`) I OČISTITI**
+      (prijelomi retka, kontrolni znakovi) — tekst dolazi od stranca i ide ravno u HUD
+- [ ] Sudar boja između različitih država (Hrvatska–Peru) — traži usporedbu kitova, ne samo
+      provjeru jednakosti; za sad se hvata samo identična država
+- [x] **Sloj za sinkronizaciju poteza gotov i dokazan** — `scripts/net/net_match.gd` (append-only
+      log, slanje/primanje/redoslijed) + `scripts/net/net_action.gd` (žični format + JEDNO mjesto
+      koje akciju primjenjuje i time je validira). `test_net_match.gd` glumi **dva klijenta s dva
+      odvojena anonimna računa u istom procesu** i odigra prave poteze preko žive baze: 27/27.
+      Ključna tvrdnja koju testira: nakon svake razmjene oba `MatchState`-a imaju isti red, fazu,
+      poziciju lopte i rezultat. To je cijeli smisao "šaljemo poteze, ne stanje".
+- [x] Validacija protivnikove akcije kroz vlastiti `MatchState` (`NetAction.apply`) — ilegalna
+      akcija se odbija i NIŠTA ne mijenja; prepisivanje već odigranog indeksa vraća 401
+- [x] Replay iz loga: svjež klijent odigra log od nule i završi u istoj poziciji kao igrači —
+      time je reconnect riješen istim kodom kojim se prati normalna igra
+- [ ] **Ožičiti u `main.gd`**: mrežni protivnik kao treći izvor inputa uz tap i AI, po uzoru na
+      `_is_ai_turn()`/`_maybe_ai_turn()` (main.gd:2195) — primljena akcija ide kroz iste
+      `_do_combo`/`_apply_move`/`_remove_at`, lokalna se šalje. Treba zastavica da se primijenjena
+      mrežna akcija ne pošalje natrag kao vlastita.
+- [x] **Traženje protivnika je OVERLAY na terenu, ne zaseban ekran** (odluka 2026-07-30). Tok:
+      izbornik → države → teren (slažeš formaciju) → overlay s listom → protivnik prihvati →
+      overlay nestane i meč kreće na ploči koju već gledaš. Nema promjene scene ni drugog
+      učitavanja. `Screen.ONLINE` je zato uklonjen iz `GameFlow`; overlay se instancira iz koda
+      (`main.gd::_show_online_overlay`) da se ne dira `main.tscn`. Ekran je dobio prozirni scrim
+      umjesto pozadinske slike.
+- [x] Predaja iz sobe u meč: `GameFlow.online_room` / `online_opponent_name` / `online_is_host`,
+      strane se dodjeljuju (host = HomeTeam) i države upisuju prije `_start_coin_toss()`
+- [x] **Dresovni sudar NE treba novi kod** — `CountryKits.resolve_match` ga već rješava, i to
+      usporedbom boja a ne samo država, pa pokriva i Hrvatsku–Peru. Ranija bilješka da je to
+      budući posao bila je netočna. Dovoljno je da host bude HomeTeam.
+- [x] **Zrcaljenje formacije za gosta** (`main.gd::_mirror_formation`) — formacija se slaže PRIJE
+      nego se zna koja si strana, pa je gost složi na domaćoj polovici. Rotacija za 180° premješta
+      je na gostujuću polovicu čuvajući oblik; kako je i kamera gosta okrenuta, njemu izgleda
+      identično onome što je postavio.
 - [ ] Stegnuti pravila za polja sobe (`state`, `ready`, `country`) — sad traže samo prijavu, jer
       bi prije implementacije to bilo pogađanje; vidi doseg u `firebase/database.rules.json`
 - [ ] **Popraviti `host` / `created_at` iz write-once u "vlasnik smije prepisati/obrisati"** —

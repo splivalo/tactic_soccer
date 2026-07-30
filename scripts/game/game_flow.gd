@@ -5,14 +5,13 @@ extends Node
 ## set) and otherwise falls back to its own @export defaults, so main.tscn
 ## still works fine when run standalone in the editor.
 
-enum Screen { SPLASH, MAIN_MENU, DIFFICULTY_SELECT, TEAM_SELECT, ONLINE, OPTIONS, INSTRUCTIONS, LEGAL, MATCH, WIN_SCREEN, LOSE_SCREEN }
+enum Screen { SPLASH, MAIN_MENU, DIFFICULTY_SELECT, TEAM_SELECT, OPTIONS, INSTRUCTIONS, LEGAL, MATCH, WIN_SCREEN, LOSE_SCREEN }
 
 const SCENE_PATHS := {
 	Screen.SPLASH: "res://scenes/ui/splash_screen.tscn",
 	Screen.MAIN_MENU: "res://scenes/ui/main_menu.tscn",
 	Screen.DIFFICULTY_SELECT: "res://scenes/ui/difficulty_screen.tscn",
 	Screen.TEAM_SELECT: "res://scenes/ui/team_select.tscn",
-	Screen.ONLINE: "res://scenes/ui/online_screen.tscn",
 	Screen.OPTIONS: "res://scenes/ui/options_screen.tscn",
 	Screen.INSTRUCTIONS: "res://scenes/ui/instructions_screen.tscn",
 	Screen.LEGAL: "res://scenes/ui/legal_screen.tscn",
@@ -33,6 +32,35 @@ var player_formation: Array[Dictionary] = []
 # ai_difficulty only matters when single_player is true.
 var single_player: bool = false
 var ai_difficulty: String = "Medium" # "Easy" / "Medium" / "Hard"
+
+## When true, team_select is being used as "pick MY country for online" rather
+## than as a pre-match step: one pass, no opponent involved, and it saves to
+## Settings.player_country and returns to the online screen instead of starting
+## a match. Online picks its country ahead of time so a match can start the
+## moment an invite is accepted (GAME_DESIGN.md §11).
+var online_country_picker: bool = false
+
+## True for a networked match. There is deliberately no separate "online screen"
+## any more: finding an opponent happens as an OVERLAY on the match scene, on
+## top of the pitch you just placed your formation on (GAME_DESIGN.md §11). When
+## someone accepts, the overlay disappears and play begins on the board already
+## in front of you — no scene change, no second load, nothing to wait for.
+var online_mode: bool = false
+
+## Filled in by the online overlay once an opponent is found.
+var online_room: String = ""
+var online_opponent_name: String = ""
+## Host keeps the home kit, guest takes the alternative one — a fixed rule, so
+## both clients reach the same answer without exchanging a word about it. See
+## the country-duplicate decision in GAME_DESIGN.md §11.
+var online_is_host: bool = false
+
+
+func reset_online() -> void:
+	online_mode = false
+	online_room = ""
+	online_opponent_name = ""
+	online_is_host = false
 
 # Set by main.gd right before routing to WIN_SCREEN (goals_to_win reached).
 var last_winner: String = "" # "HomeTeam" / "AwayTeam"

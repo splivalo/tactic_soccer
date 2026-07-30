@@ -20,6 +20,18 @@ shadow_color = Color(0.08, 0.03, 0.02, 0.4)
 shadow_size = 12
 shadow_offset = Vector2(0, 6)
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_arrow_disabled"]
+content_margin_left = 16.0
+content_margin_top = 16.0
+content_margin_right = 16.0
+content_margin_bottom = 16.0
+bg_color = Color(0.24, 0.31, 0.26, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+corner_detail = 1
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_arrow_normal"]
 content_margin_left = 16.0
 content_margin_top = 16.0
@@ -136,6 +148,11 @@ bg_color = Color(0.96862745, 0.7607843, 0.14901961, 1)
 default_font = ExtResource("1_pvayc")
 default_font_size = 42
 ArrowButton/base_type = &"Button"
+ArrowButton/colors/font_color = Color(1, 1, 1, 1)
+ArrowButton/colors/font_disabled_color = Color(0.62, 0.66, 0.62, 1)
+ArrowButton/colors/font_hover_color = Color(1, 1, 1, 1)
+ArrowButton/colors/font_pressed_color = Color(1, 1, 1, 1)
+ArrowButton/styles/disabled = SubResource("StyleBoxFlat_arrow_disabled")
 ArrowButton/styles/hover = SubResource("StyleBoxFlat_arrow_hover")
 ArrowButton/styles/normal = SubResource("StyleBoxFlat_arrow_normal")
 ArrowButton/styles/pressed = SubResource("StyleBoxFlat_arrow_hover")

@@ -952,7 +952,87 @@ func _finish_placement() -> void:
 	if _placement_root != null:
 		_placement_root.free()
 		_placement_root = null
+
+	# Online looks for an opponent HERE, as an overlay on this very pitch, so
+	# that accepting an invite drops straight into play with nothing to load and
+	# nobody to wait for (GAME_DESIGN.md §11).
+	if GameFlow.online_mode:
+		_show_online_overlay()
+		return
 	_start_coin_toss()
+
+
+# --- Online: finding an opponent, without leaving the pitch -------------------
+
+const ONLINE_OVERLAY_SCENE := preload("res://scenes/ui/online_screen.tscn")
+
+var _online_overlay: CanvasLayer = null
+var _net_match: Node = null
+
+
+func _show_online_overlay() -> void:
+	_busy = true # no board input while the overlay owns the screen
+	_online_overlay = CanvasLayer.new()
+	_online_overlay.layer = 10 # above the HUD
+	var ui := ONLINE_OVERLAY_SCENE.instantiate()
+	ui.match_ready.connect(_on_online_match_ready)
+	ui.cancelled.connect(_on_online_cancelled)
+	_online_overlay.add_child(ui)
+	add_child(_online_overlay)
+
+
+func _hide_online_overlay() -> void:
+	if _online_overlay != null:
+		_online_overlay.queue_free()
+		_online_overlay = null
+	_busy = false
+
+
+## The formation was placed BEFORE we knew which side we would end up on, so a
+## player who turns out to be the guest has laid their figures out on the home
+## half. Rotating the layout 180 degrees moves it to the away half while keeping
+## its shape exactly as drawn — and since the guest's camera is turned around
+## too, it looks identical to what they placed.
+func _mirror_formation(layout: Array) -> Array:
+	var out: Array[Dictionary] = []
+	for entry in layout:
+		var c: Vector2i = entry["cell"]
+		var flipped := entry.duplicate()
+		flipped["cell"] = Vector2i(Board.COLS - 1 - c.x, Board.ROWS - 1 - c.y)
+		out.append(flipped)
+	return out
+
+
+func _on_online_match_ready(room: String, opponent_name: String, opponent_country: String, is_host: bool) -> void:
+	GameFlow.online_room = room
+	GameFlow.online_opponent_name = opponent_name
+	GameFlow.online_is_host = is_host
+
+	# Host is always HomeTeam. That single fixed rule is what lets both clients
+	# work out the kits without exchanging a word: CountryKits.resolve_match
+	# already puts the away side in its alternative strip whenever the two
+	# primaries clash — which two identical countries always do.
+	GameFlow.player_side = "HomeTeam" if is_host else "AwayTeam"
+	if is_host:
+		home_country = Settings.player_country
+		if opponent_country != "":
+			away_country = opponent_country
+	else:
+		away_country = Settings.player_country
+		if opponent_country != "":
+			home_country = opponent_country
+		GameFlow.player_formation = _mirror_formation(GameFlow.player_formation)
+	GameFlow.home_country = home_country
+	GameFlow.away_country = away_country
+
+	_hide_online_overlay()
+	_start_coin_toss()
+
+
+func _on_online_cancelled() -> void:
+	_hide_online_overlay()
+	GameFlow.reset_online()
+	GameFlow.goto(GameFlow.Screen.MAIN_MENU)
 
 
 ## Pre-match coin toss deciding who kicks off first (mirrors the original

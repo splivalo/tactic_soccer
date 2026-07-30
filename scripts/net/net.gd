@@ -48,6 +48,11 @@ const TOKEN_REFRESH_MARGIN := 120.0
 var uid := ""
 var signed_in := false
 
+## Off for a SECOND client in the same process (the two-client test), so it
+## signs up as its own anonymous player instead of loading — and then
+## overwriting — the real one's cached identity.
+var use_token_cache := true
+
 var _id_token := ""
 var _refresh_token := ""
 var _token_expires_at := 0.0
@@ -166,6 +171,8 @@ func _ensure_token() -> Dictionary:
 
 
 func _save_cached_token() -> void:
+	if not use_token_cache:
+		return
 	var cfg := ConfigFile.new()
 	cfg.set_value("auth", "refresh_token", _refresh_token)
 	cfg.set_value("auth", "uid", uid)
@@ -173,7 +180,7 @@ func _save_cached_token() -> void:
 
 
 func _load_cached_token() -> void:
-	if _refresh_token != "":
+	if not use_token_cache or _refresh_token != "":
 		return
 	var cfg := ConfigFile.new()
 	if cfg.load(AUTH_CACHE_PATH) != OK:
@@ -186,7 +193,8 @@ func _clear_cached_token() -> void:
 	_refresh_token = ""
 	uid = ""
 	signed_in = false
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(AUTH_CACHE_PATH))
+	if use_token_cache:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(AUTH_CACHE_PATH))
 
 
 ## Drops local credentials (testing, or "sign out" later). The anonymous account
