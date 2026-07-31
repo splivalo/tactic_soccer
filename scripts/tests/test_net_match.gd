@@ -188,6 +188,20 @@ func _run() -> void:
 	_check(fresh.current == _state_a.current and fresh.score == _state_a.score,
 		"...and lands in the same position as the players")
 
+	# --- two actions in one poll must arrive, in order ---
+	# A single turn writes TWO entries (combo, then the compulsory move), so one
+	# poll routinely returns both. They have to come out separately and in the
+	# order they were played; delivering them together is what let the receiver
+	# start replaying the second one mid-animation of the first.
+	_inbox_a.clear()
+	await _match_b.send_action(NetAction.remove(Vector2i(1, 1)))
+	await _match_b.send_action(NetAction.remove(Vector2i(2, 2)))
+	await _await_inbox(_inbox_a, 2, "host receives both actions from one turn")
+	if _inbox_a.size() >= 2:
+		_check(NetAction.cell_from_json(_inbox_a[0].get("cell")) == Vector2i(1, 1)
+			and NetAction.cell_from_json(_inbox_a[1].get("cell")) == Vector2i(2, 2),
+			"...and in the order they were played")
+
 	# --- formations must survive the swap intact ---
 	# Each client only ever places its OWN six figures. Without exchanging them
 	# both sides fill the opponent's half with the default layout, and the two

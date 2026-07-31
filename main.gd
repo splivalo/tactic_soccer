@@ -995,6 +995,10 @@ var _remote_formation: Array[Dictionary] = []
 ## remote action would be echoed straight back as if we had played it — the two
 ## clients would keep bouncing the same turn at each other forever.
 var _applying_remote := false
+## Opponent actions waiting their turn, and whether the drain loop is running.
+## Actions MUST be applied one at a time and in order — see _on_remote_action.
+var _remote_queue: Array = []
+var _remote_busy := false
 
 
 func _show_online_overlay() -> void:
@@ -1141,11 +1145,38 @@ func _net_send(action: Dictionary) -> void:
 func _on_remote_action(action: Dictionary) -> void:
 	if _state == null:
 		return
-	_applying_remote = true
-	var ok := await _play_remote_action(action)
-	_applying_remote = false
-	if not ok:
-		_net_desync("opponent played something our rules refuse: %s" % JSON.stringify(action))
+	# Queued, never applied straight away.
+	#
+	# One turn produces TWO log entries (the combo, then the compulsory move), so
+	# a single poll routinely delivers both at once. _play_remote_action is a
+	# coroutine that returns at its first await, which meant the second action
+	# started replaying in the middle of the first one's animation, against a
+	# board still mid-change. That is the intermittent "he moved and I never saw
+	# it, then nothing worked" — it only showed up when the poll happened to
+	# catch two entries together.
+	_remote_queue.append(action)
+	if _remote_busy:
+		return
+
+	_remote_busy = true
+	while not _remote_queue.is_empty():
+		# Let any animation already running finish first, including one started
+		# by the previous queued action.
+		var guard := 0
+		while _busy and guard < 1200:
+			await get_tree().process_frame
+			guard += 1
+
+		var next: Dictionary = _remote_queue.pop_front()
+		_applying_remote = true
+		var ok := await _play_remote_action(next)
+		_applying_remote = false
+		if not ok:
+			_remote_queue.clear()
+			_remote_busy = false
+			_net_desync("opponent played something our rules refuse: %s" % JSON.stringify(next))
+			return
+	_remote_busy = false
 
 
 func _play_remote_action(action: Dictionary) -> bool:
@@ -1750,7 +1781,15 @@ func _process(_delta: float) -> void:
 # Pushes the whole-seconds countdown to the HUD, only when it actually ticks
 # over (avoid poking the label every frame for no reason).
 func _update_turn_timer_display() -> void:
-	if _hud == null or _turn_timer.is_stopped():
+	if _hud == null:
+		return
+	# Online, the waiting player has no clock of their own (see
+	# _refresh_turn_view) — show a dash rather than leaving the opponent's last
+	# number frozen on screen looking like a stalled timer.
+	if _turn_timer.is_stopped():
+		if GameFlow.online_mode and _is_remote_turn() and _shown_time_left != -1:
+			_shown_time_left = -1
+			_hud.update_timer(-1)
 		return
 	var seconds_left: int = ceili(_turn_timer.time_left)
 	if seconds_left != _shown_time_left:
@@ -2463,6 +2502,20 @@ func _refresh_turn_view() -> void:
 		# every other phase, forfeit() would just cancel pending_removal and
 		# the penalty would vanish. Waiting it out must not be an escape
 		# hatch, so there's simply nothing to wait out.
+		_turn_timer.stop()
+	elif GameFlow.online_mode and _is_remote_turn():
+		# The waiting player runs NO clock at all.
+		#
+		# Two devices counting the same turn can never agree: the opponent's
+		# action arrives up to a poll late, then plays out an animation, so this
+		# side starts its countdown seconds behind and the numbers drift apart —
+		# 18 here, 10 there. Worse, when the waiting side hit zero it just sat
+		# there, because only the player actually on the clock may rule that time
+		# is up (see _on_turn_timeout).
+		#
+		# A countdown that isn't yours and doesn't match theirs is worse than no
+		# countdown, so there isn't one.
+		_pool_team = _state.current
 		_turn_timer.stop()
 	elif _state.current != _pool_team:
 		# A genuinely new team's turn (next_turn() ran since the last refresh) —

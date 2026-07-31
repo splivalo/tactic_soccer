@@ -180,7 +180,18 @@ func update_cards(yellow: Dictionary, red: Dictionary) -> void:
 ## Whole seconds left in the current player's decision (see main.gd's turn
 ## timer). Called once per whole-second tick, so toggling the blink here
 ## (rather than on a separate timer) naturally blinks once per second.
+## A negative value means "this turn isn't on your clock" — online, only the
+## player to move runs a countdown, so the waiting side shows a dash instead of
+## a number that would drift out of step with the opponent's.
 func update_timer(seconds_left: int) -> void:
+	if seconds_left < 0:
+		_time_label.text = "—"
+		_timer_blink_on = false
+		_timer_pill.fill_color = TIMER_COLOR_NORMAL
+		_timer_pill.queue_redraw()
+		_time_label.add_theme_color_override("font_color", Color.BLACK)
+		_big_countdown.visible = false
+		return
 	_time_label.text = "%d SEC" % seconds_left
 	var urgent: bool = seconds_left > 0 and seconds_left <= TIMER_URGENT_AT
 	if urgent:
