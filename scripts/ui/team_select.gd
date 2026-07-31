@@ -49,11 +49,11 @@ func _ready() -> void:
 	_back_button.pressed.connect(_on_back_pressed)
 	_next_button.pressed.connect(_on_next_pressed)
 
-	# Coming back to change an online country shows the current one selected,
-	# rather than making the player hunt for what they already chose.
-	if _for_online and _country_buttons.has(Settings.player_country):
-		_country_buttons[Settings.player_country].button_pressed = true
-		_update_country_visual(Settings.player_country)
+	# Nothing is ever pre-selected, online included. Pre-ticking the country
+	# saved from last time was tried and dropped: the choice is the entire point
+	# of this screen, and starting it half-made invites tapping Next without
+	# looking. Settings.player_country is still remembered — it just doesn't
+	# preempt the decision.
 
 
 func _collect_country_buttons() -> void:
