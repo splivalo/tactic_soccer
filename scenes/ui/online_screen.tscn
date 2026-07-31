@@ -1,9 +1,9 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://coiqefjp6krg5"]
 
-[ext_resource type="Script" path="res://scripts/ui/online_screen.gd" id="1_online"]
+[ext_resource type="Script" uid="uid://8y0iafq5bot5" path="res://scripts/ui/online_screen.gd" id="1_online"]
 [ext_resource type="Theme" uid="uid://3sfso1by5eio" path="res://my_theme.tres" id="2_theme"]
 
-[node name="OnlineScreen" type="Control"]
+[node name="OnlineScreen" type="Control" unique_id=831502505]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -13,16 +13,16 @@ grow_vertical = 2
 theme = ExtResource("2_theme")
 script = ExtResource("1_online")
 
-[node name="Scrim" type="ColorRect" parent="."]
+[node name="Scrim" type="ColorRect" parent="." unique_id=158912791]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.02584, 0.171844, 0.117741, 0.62)
+color = Color(0.02745098, 0.17254902, 0.11764706, 0.9843137)
 
-[node name="SafeArea" type="MarginContainer" parent="."]
+[node name="SafeArea" type="MarginContainer" parent="." unique_id=1981076581]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -31,114 +31,114 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/margin_left = 80
-theme_override_constants/margin_right = 80
 theme_override_constants/margin_top = 60
+theme_override_constants/margin_right = 80
 theme_override_constants/margin_bottom = 60
 
-[node name="VBox" type="VBoxContainer" parent="SafeArea"]
+[node name="VBox" type="VBoxContainer" parent="SafeArea" unique_id=516774454]
 layout_mode = 2
 theme_override_constants/separation = 30
 alignment = 1
 
-[node name="Title" type="Label" parent="SafeArea/VBox"]
+[node name="Title" type="Label" parent="SafeArea/VBox" unique_id=1854755126]
 layout_mode = 2
-horizontal_alignment = 1
 theme_override_font_sizes/font_size = 84
 text = "Online"
+horizontal_alignment = 1
 
-[node name="ListButtons" type="HBoxContainer" parent="SafeArea/VBox"]
+[node name="ListButtons" type="HBoxContainer" parent="SafeArea/VBox" unique_id=1412458626]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 theme_override_constants/separation = 24
-visible = false
 
-[node name="RefreshButton" type="Button" parent="SafeArea/VBox/ListButtons"]
+[node name="RefreshButton" type="Button" parent="SafeArea/VBox/ListButtons" unique_id=1951863675]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 130)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Refresh"
 
-[node name="ChangeNameButton" type="Button" parent="SafeArea/VBox/ListButtons"]
+[node name="ChangeNameButton" type="Button" parent="SafeArea/VBox/ListButtons" unique_id=1577008703]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 130)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Change name"
 
-[node name="StatusLabel" type="Label" parent="SafeArea/VBox"]
+[node name="StatusLabel" type="Label" parent="SafeArea/VBox" unique_id=35848676]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(860, 0)
 layout_mode = 2
+text = "..."
 horizontal_alignment = 1
 autowrap_mode = 2
-custom_minimum_size = Vector2(860, 0)
-text = "..."
 
-[node name="NamePanel" type="VBoxContainer" parent="SafeArea/VBox"]
+[node name="NamePanel" type="VBoxContainer" parent="SafeArea/VBox" unique_id=308179153]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="NameEdit" type="LineEdit" parent="SafeArea/VBox/NamePanel"]
+[node name="NameEdit" type="LineEdit" parent="SafeArea/VBox/NamePanel" unique_id=878808107]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(820, 130)
 layout_mode = 2
-max_length = 16
 placeholder_text = "Your name"
+max_length = 16
 
-[node name="NameOkButton" type="Button" parent="SafeArea/VBox/NamePanel"]
+[node name="NameOkButton" type="Button" parent="SafeArea/VBox/NamePanel" unique_id=682511926]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(820, 130)
 layout_mode = 2
 text = "Connect"
 
-[node name="ListPanel" type="VBoxContainer" parent="SafeArea/VBox"]
+[node name="ListPanel" type="VBoxContainer" parent="SafeArea/VBox" unique_id=15340769]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 24
-visible = false
 
-[node name="EmptyLabel" type="Label" parent="SafeArea/VBox/ListPanel"]
+[node name="EmptyLabel" type="Label" parent="SafeArea/VBox/ListPanel" unique_id=947075178]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 size_flags_vertical = 3
+text = "No other players online."
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
-visible = false
-text = "No other players online."
 
-[node name="Scroll" type="ScrollContainer" parent="SafeArea/VBox/ListPanel"]
+[node name="Scroll" type="ScrollContainer" parent="SafeArea/VBox/ListPanel" unique_id=1907034476]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="PlayerList" type="VBoxContainer" parent="SafeArea/VBox/ListPanel/Scroll"]
+[node name="PlayerList" type="VBoxContainer" parent="SafeArea/VBox/ListPanel/Scroll" unique_id=1768797999]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 18
 
-[node name="InvitePanel" type="VBoxContainer" parent="SafeArea/VBox"]
+[node name="InvitePanel" type="VBoxContainer" parent="SafeArea/VBox" unique_id=1342607591]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 theme_override_constants/separation = 24
-visible = false
 
-[node name="InviteLabel" type="Label" parent="SafeArea/VBox/InvitePanel"]
+[node name="InviteLabel" type="Label" parent="SafeArea/VBox/InvitePanel" unique_id=1546024624]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(860, 0)
 layout_mode = 2
+text = "..."
 horizontal_alignment = 1
 autowrap_mode = 2
-custom_minimum_size = Vector2(860, 0)
-text = "..."
 
-[node name="InviteButtons" type="HBoxContainer" parent="SafeArea/VBox/InvitePanel"]
+[node name="InviteButtons" type="HBoxContainer" parent="SafeArea/VBox/InvitePanel" unique_id=1434202815]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="AcceptButton" type="Button" parent="SafeArea/VBox/InvitePanel/InviteButtons"]
+[node name="AcceptButton" type="Button" parent="SafeArea/VBox/InvitePanel/InviteButtons" unique_id=1712194832]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 130)
 layout_mode = 2
@@ -147,7 +147,7 @@ theme_type_variation = &"ArrowButton"
 theme_override_font_sizes/font_size = 52
 text = "Accept"
 
-[node name="DeclineButton" type="Button" parent="SafeArea/VBox/InvitePanel/InviteButtons"]
+[node name="DeclineButton" type="Button" parent="SafeArea/VBox/InvitePanel/InviteButtons" unique_id=1037246019]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 130)
 layout_mode = 2
@@ -156,27 +156,27 @@ theme_type_variation = &"ArrowButton"
 theme_override_font_sizes/font_size = 52
 text = "Decline"
 
-[node name="RoomPanel" type="VBoxContainer" parent="SafeArea/VBox"]
+[node name="RoomPanel" type="VBoxContainer" parent="SafeArea/VBox" unique_id=2001702895]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 theme_override_constants/separation = 24
-visible = false
 
-[node name="RoomLabel" type="Label" parent="SafeArea/VBox/RoomPanel"]
+[node name="RoomLabel" type="Label" parent="SafeArea/VBox/RoomPanel" unique_id=1978445490]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(860, 0)
 layout_mode = 2
+text = "..."
 horizontal_alignment = 1
 autowrap_mode = 2
-custom_minimum_size = Vector2(860, 0)
-text = "..."
 
-[node name="LeaveButton" type="Button" parent="SafeArea/VBox/RoomPanel"]
+[node name="LeaveButton" type="Button" parent="SafeArea/VBox/RoomPanel" unique_id=2026428717]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(820, 130)
 layout_mode = 2
 text = "Leave"
 
-[node name="BackButton" type="Button" parent="SafeArea/VBox"]
+[node name="BackButton" type="Button" parent="SafeArea/VBox" unique_id=1034854105]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(340, 130)
 layout_mode = 2

@@ -28,6 +28,39 @@ static func cell_from_json(v) -> Vector2i:
 	return Vector2i(-1, -1)
 
 
+## A placed formation, for the one exchange that happens before kick-off.
+##
+## Both clients must build the SAME board. Each only places its own six figures,
+## so without swapping them each side would fill the opponent's half with the
+## default layout — two different boards, desynced before anyone has moved.
+## Cells are already absolute board coordinates (the guest mirrors before
+## sending), so the receiver uses them as they are.
+static func formation_to_json(layout: Array) -> Array:
+	var out := []
+	for entry in layout:
+		out.append({
+			"cell": cell_to_json(entry["cell"]),
+			"role": String(entry.get("role", "")),
+			"number": int(entry.get("number", 0)),
+		})
+	return out
+
+
+static func formation_from_json(data) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if not (data is Array):
+		return out
+	for entry in data:
+		if not (entry is Dictionary):
+			continue
+		out.append({
+			"cell": cell_from_json(entry.get("cell", null)),
+			"role": String(entry.get("role", "")),
+			"number": int(entry.get("number", 0)),
+		})
+	return out
+
+
 static func combo(chain: Array, shoot: Vector2i) -> Dictionary:
 	var out := []
 	for c in chain:

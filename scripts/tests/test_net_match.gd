@@ -188,6 +188,32 @@ func _run() -> void:
 	_check(fresh.current == _state_a.current and fresh.score == _state_a.score,
 		"...and lands in the same position as the players")
 
+	# --- formations must survive the swap intact ---
+	# Each client only ever places its OWN six figures. Without exchanging them
+	# both sides fill the opponent's half with the default layout, and the two
+	# boards differ before anyone has moved — which is a desync dressed up as a
+	# working match.
+	var layout: Array[Dictionary] = Formations.home()
+	var wrote: Dictionary = await _net_a.db_put("rooms/%s/formations/%s" % [_room, _net_a.uid],
+		NetAction.formation_to_json(layout))
+	_check(wrote["ok"], "a player can publish their own formation%s"
+		% ("" if wrote["ok"] else " -> " + wrote["error"]))
+
+	var read_back: Dictionary = await _net_b.db_get("rooms/%s/formations/%s" % [_room, _net_a.uid])
+	var parsed := NetAction.formation_from_json(read_back["data"])
+	_check(parsed.size() == layout.size(),
+		"opponent reads back all %d figures (got %d)" % [layout.size(), parsed.size()])
+	var cells_match := parsed.size() == layout.size()
+	for i in mini(parsed.size(), layout.size()):
+		if parsed[i]["cell"] != layout[i]["cell"]:
+			cells_match = false
+	_check(cells_match, "every cell survived the round trip unchanged")
+
+	var forge: Dictionary = await _net_b.db_put("rooms/%s/formations/%s" % [_room, _net_a.uid],
+		NetAction.formation_to_json(Formations.away()))
+	_check(not forge["ok"],
+		"nobody can overwrite somebody else's formation (code %d)" % forge["code"])
+
 	# --- presence: a live opponent registers, a silent one is noticed ---
 	# Written directly rather than by running the 10s timer, so the test checks
 	# the LOGIC (does a changed stamp read as alive) without waiting a minute.

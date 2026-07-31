@@ -351,6 +351,11 @@ const FIGURE_HEIGHT := 1.6 # a bit over the model's real height (~1.45 @ scale 1
 
 # The camera transform you tuned in the editor — used as the fit reference.
 var _cam_ref := Transform3D.IDENTITY
+## The transform tuned in the editor, captured ONCE and never overwritten.
+## _cam_ref is derived from it every fit, because the away-side flip depends on
+## which side we turn out to be — and online, that isn't known until an opponent
+## accepts, long after the first fit has run.
+var _cam_authored := Transform3D.IDENTITY
 var _cam_ref_set := false
 # Two STATIC cinematic cameras used only during goal celebrations — see the
 # "Goal Cinematic" export group's comment. Neither ever moves/rotates once
@@ -552,12 +557,16 @@ func _spawn_ball() -> void:
 func _home_formation() -> Array[Dictionary]:
 	if GameFlow.player_side == "HomeTeam" and not GameFlow.player_formation.is_empty():
 		return GameFlow.player_formation
+	if GameFlow.player_side != "HomeTeam" and not _remote_formation.is_empty():
+		return _remote_formation
 	return Formations.home()
 
 
 func _away_formation() -> Array[Dictionary]:
 	if GameFlow.player_side == "AwayTeam" and not GameFlow.player_formation.is_empty():
 		return GameFlow.player_formation
+	if GameFlow.player_side != "AwayTeam" and not _remote_formation.is_empty():
+		return _remote_formation
 	return Formations.away()
 
 
@@ -979,6 +988,9 @@ const NetAction := preload("res://scripts/net/net_action.gd")
 
 var _online_overlay: CanvasLayer = null
 var _net_match: Node = null
+## The opponent's placed figures, fetched once before kick-off so both clients
+## build an identical board. Empty offline.
+var _remote_formation: Array[Dictionary] = []
 ## True while we are replaying the OPPONENT's action locally. Without it, every
 ## remote action would be echoed straight back as if we had played it — the two
 ## clients would keep bouncing the same turn at each other forever.
@@ -1042,9 +1054,52 @@ func _on_online_match_ready(room: String, opponent_name: String, opponent_countr
 	GameFlow.home_country = home_country
 	GameFlow.away_country = away_country
 
+	# Swap formations before anything is built. Without this each client fills
+	# the opponent's half with the default layout and the two boards differ from
+	# the very first move.
+	if not await _exchange_formations(room):
+		return
+
 	_hide_online_overlay()
+	# The side is only known now, so the camera has to be refitted: the first fit
+	# ran back in _ready, when this client still assumed it was the home side.
+	_fit_camera()
 	_start_net_match(room)
 	_start_coin_toss()
+
+
+## Publishes our formation and waits for the opponent's.
+##
+## Both sides write at almost the same moment (one on accepting, the other on
+## noticing the guest joined), so this normally resolves in a poll or two. If it
+## never arrives we ABANDON rather than fall back to a default layout: playing on
+## against a board the opponent isn't looking at is worse than not starting.
+func _exchange_formations(room: String) -> bool:
+	const FORMATION_WAIT_SECONDS := 20.0
+	const FORMATION_POLL := 1.0
+
+	var mine := NetAction.formation_to_json(GameFlow.player_formation)
+	var put: Dictionary = await Net.db_put("rooms/%s/formations/%s" % [room, Net.uid], mine)
+	if not put["ok"]:
+		_net_opponent_left("Could not start the match: %s" % put["error"])
+		return false
+
+	var waited := 0.0
+	while waited < FORMATION_WAIT_SECONDS:
+		var res: Dictionary = await Net.db_get("rooms/%s/formations" % room)
+		if res["ok"] and res["data"] is Dictionary:
+			for uid in res["data"]:
+				if String(uid) == Net.uid:
+					continue
+				var parsed := NetAction.formation_from_json(res["data"][uid])
+				if not parsed.is_empty():
+					_remote_formation = parsed
+					return true
+		await get_tree().create_timer(FORMATION_POLL).timeout
+		waited += FORMATION_POLL
+
+	_net_opponent_left("Opponent never finished setting up.")
+	return false
 
 
 func _start_net_match(room: String) -> void:
@@ -1175,9 +1230,26 @@ func _start_coin_toss() -> void:
 	_busy = true
 	var home_code := CountryKits.get_code(home_country)
 	var away_code := CountryKits.get_code(away_country)
-	var winner: String = await _hud.play_coin_toss(home_code, away_code, home_country, away_country)
+	var winner: String = await _hud.play_coin_toss(home_code, away_code, home_country,
+		away_country, _online_kickoff())
 	_busy = false
 	_build_match(winner)
+
+
+## Who kicks off in an online match — derived from the room code so BOTH clients
+## reach the same answer without exchanging anything.
+##
+## The toss used to be a plain randi() on each device, which meant host and guest
+## began with different teams to move and the first turn played was already
+## illegal by the other's rules. Hashing the room code keeps it unpredictable per
+## match while being identical on both sides, and needs no extra field in the
+## room (so the database rules stay as they are).
+##
+## Empty string offline: the toss stays a real roll there.
+func _online_kickoff() -> String:
+	if not GameFlow.online_mode or GameFlow.online_room == "":
+		return ""
+	return "HomeTeam" if absi(GameFlow.online_room.hash()) % 2 == 0 else "AwayTeam"
 
 
 # --- Input: tap vs drag -------------------------------------------------------
@@ -2702,19 +2774,26 @@ func _fit_camera() -> void:
 	var cam := get_node_or_null("Camera3D") as Camera3D
 	if cam == null or _fit_meshes.is_empty():
 		return
-	# Capture the transform you tuned in the editor as the fixed reference.
+	# Capture the transform you tuned in the editor ONCE, before any fit has
+	# slid the camera along its own axis.
 	if not _cam_ref_set:
-		_cam_ref = cam.global_transform
-		# Everyone sees their OWN figures at the bottom. The board logic is NOT
-		# mirrored for this — only the camera is spun 180 degrees about the
-		# pitch centre (which is the world origin, see Board). That matters:
-		# taps are raycast against the real 3D world, so a genuinely turned
-		# camera keeps every bit of the tap/drag hit-testing working untouched,
-		# whereas mirroring coordinates would have broken all of it
-		# (GAME_DESIGN.md §11).
-		if GameFlow.player_side == "AwayTeam":
-			_cam_ref = Transform3D(Basis(Vector3.UP, PI), Vector3.ZERO) * _cam_ref
+		_cam_authored = cam.global_transform
 		_cam_ref_set = true
+
+	# Everyone sees their OWN figures at the bottom. The board logic is NOT
+	# mirrored for this — only the camera is spun 180 degrees about the pitch
+	# centre (the world origin, see Board). That matters: taps are raycast
+	# against the real 3D world, so a genuinely turned camera keeps every bit of
+	# the tap/drag hit-testing working untouched, whereas mirroring coordinates
+	# would have broken all of it (GAME_DESIGN.md §11).
+	#
+	# Recomputed on EVERY fit rather than once at capture time. Online, the side
+	# isn't known until an opponent accepts — which happens long after the first
+	# fit — so deciding this once left the guest looking at the board upside
+	# down for the whole match.
+	_cam_ref = _cam_authored
+	if GameFlow.player_side == "AwayTeam":
+		_cam_ref = Transform3D(Basis(Vector3.UP, PI), Vector3.ZERO) * _cam_ref
 
 	var cam_basis := _cam_ref.basis.orthonormalized()
 	var p0 := _cam_ref.origin

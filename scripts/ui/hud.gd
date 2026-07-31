@@ -262,8 +262,15 @@ func _breathe_shield(side: String) -> void:
 ## just-landed shield upward; landing on the winner's flag/code already
 ## reads as the result. Returns the winning side once it's held long enough
 ## to read, then hidden.
-func play_coin_toss(home_code: String, away_code: String, home_country: String, away_country: String) -> String:
-	var winner: String = "HomeTeam" if randi() % 2 == 0 else "AwayTeam"
+## `forced_winner` makes the outcome an input rather than a roll. Online MUST
+## pass it: each device running its own randi() means host and guest start with
+## different teams to move, and the very first turn one of them plays is illegal
+## by the other's rules — a desync before anyone has touched the ball.
+func play_coin_toss(home_code: String, away_code: String, home_country: String,
+		away_country: String, forced_winner: String = "") -> String:
+	var winner: String = forced_winner
+	if winner != "HomeTeam" and winner != "AwayTeam":
+		winner = "HomeTeam" if randi() % 2 == 0 else "AwayTeam"
 	var codes := {"HomeTeam": home_code, "AwayTeam": away_code}
 	var flags := {
 		"HomeTeam": load(CountryKits.get_flag(home_country)) as Texture2D,
