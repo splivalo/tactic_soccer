@@ -226,7 +226,7 @@ func db_delete(path: String) -> Dictionary:
 ## Server-side clock. Written as the RTDB sentinel {".sv": "timestamp"} so the
 ## SERVER stamps it, not the device — two phones with skewed clocks would
 ## otherwise disagree about turn deadlines and presence freshness.
-static func server_timestamp() -> Dictionary:
+func server_timestamp() -> Dictionary:
 	return {".sv": "timestamp"}
 
 

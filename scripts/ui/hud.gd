@@ -115,15 +115,6 @@ func _exit_to_menu() -> void:
 	GameFlow.goto(GameFlow.Screen.MAIN_MENU)
 
 
-## side = "HomeTeam" / "AwayTeam". Fills the shield with the country's own
-## flag (always visually distinct, unlike jersey colours which can still
-## clash across two DIFFERENT match-ups even after resolve_match — see
-## shield_flag.gdshader) and sets the 3-letter code. `kit` is still the
-## clash-resolved kit (used for the 3D players elsewhere); only its primary
-## colour is kept here, for the footer's turn-dot tint — falling back to the
-## kit's secondary colour when primary is white/near-white, since a white
-## dot has no contrast against its own white outline (see set_footer_text's
-## comment on the dot's border).
 ## Longest player name the shield label will show. It is sized for a 3-letter
 ## country code, and a name may be up to 16 characters.
 const MAX_NAME_CHARS := 9
@@ -135,7 +126,7 @@ const MAX_NAME_CHARS := 9
 ## The name is truncated AND sanitized: it was typed by a stranger and lands in
 ## this HUD mid-match, so a line break would wreck the layout no matter how few
 ## characters were kept. Settings.sanitize_name removes those; this caps width.
-static func display_label(raw_name: String, fallback_code: String) -> String:
+func display_label(raw_name: String, fallback_code: String) -> String:
 	var clean := Settings.sanitize_name(raw_name)
 	if clean == "":
 		return fallback_code
@@ -144,6 +135,17 @@ static func display_label(raw_name: String, fallback_code: String) -> String:
 	return clean.left(MAX_NAME_CHARS - 1) + "…"
 
 
+## side = "HomeTeam" / "AwayTeam". Fills the shield with the country's own
+## flag (always visually distinct, unlike jersey colours which can still
+## clash across two DIFFERENT match-ups even after resolve_match — see
+## shield_flag.gdshader) and sets the 3-letter code. `kit` is still the
+## clash-resolved kit (used for the 3D players elsewhere); only its primary
+## colour is kept here, for the footer's turn-dot tint — falling back to the
+## kit's secondary colour when primary is white/near-white, since a white
+## dot has no contrast against its own white outline (see set_footer_text's
+## comment on the dot's border).
+##
+## `label_override` replaces the country code with a player name (online only).
 func set_team(side: String, country: String, kit: Dictionary, label_override: String = "") -> void:
 	var code := CountryKits.get_code(country)
 	if label_override != "":

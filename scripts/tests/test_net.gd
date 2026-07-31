@@ -78,7 +78,7 @@ func _run() -> void:
 		"name": "probe",
 		"status": "idle",
 		"country": "Croatia",
-		"last_seen": NetScript.server_timestamp(),
+		"last_seen": _net.server_timestamp(),
 	}
 	var put: Dictionary = await _net.db_put(me, record)
 	_check(put["ok"], "write own player record%s" % ("" if put["ok"] else " -> " + put["error"]))
@@ -99,7 +99,7 @@ func _run() -> void:
 	var bogus: Dictionary = await _net.db_put(me, {
 		"name": "probe",
 		"status": "idle",
-		"last_seen": NetScript.server_timestamp(),
+		"last_seen": _net.server_timestamp(),
 		"is_admin": true,
 	})
 	_check(not bogus["ok"], "rules reject an unknown field (got code %d)" % bogus["code"])
@@ -108,7 +108,7 @@ func _run() -> void:
 	var intruder: Dictionary = await _net.db_put("players/somebody-else", {
 		"name": "intruder",
 		"status": "idle",
-		"last_seen": NetScript.server_timestamp(),
+		"last_seen": _net.server_timestamp(),
 	})
 	_check(not intruder["ok"], "rules reject writing another player's node (got code %d)" % intruder["code"])
 
@@ -124,7 +124,7 @@ func _run() -> void:
 	var code := "T%05d" % (randi() % 100000)
 	var room_patch: Dictionary = await _net.db_patch("rooms/%s" % code, {
 		"host": _net.uid,
-		"created_at": NetScript.server_timestamp(),
+		"created_at": _net.server_timestamp(),
 		"state": "lobby",
 	})
 	_check(room_patch["ok"], "room created field-by-field via PATCH%s"
@@ -141,7 +141,7 @@ func _run() -> void:
 	var invite: Dictionary = await _net.db_put("invites/some-other-uid/%s" % _net.uid, {
 		"from_name": "probe",
 		"room": code,
-		"created_at": NetScript.server_timestamp(),
+		"created_at": _net.server_timestamp(),
 	})
 	_check(invite["ok"], "invite written to another player's inbox%s"
 		% ("" if invite["ok"] else " -> " + invite["error"]))
@@ -171,7 +171,7 @@ func _run() -> void:
 	# finished matches could be swept up would also let a client rewrite
 	# history. Integrity wins; see TODO.md Faza 8E for what that costs.
 	var a_turn: Dictionary = await _net.db_put("rooms/%s/turns/0" % code, {
-		"by": _net.uid, "action": {"t": "resign"}, "at": NetScript.server_timestamp()})
+		"by": _net.uid, "action": {"t": "resign"}, "at": _net.server_timestamp()})
 	_check(a_turn["ok"], "a turn can be appended")
 	var rewrite: Dictionary = await _net.db_delete("rooms/%s/turns/0" % code)
 	_check(not rewrite["ok"],

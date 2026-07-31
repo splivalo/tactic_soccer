@@ -64,13 +64,6 @@ func set_player_country(value: String) -> void:
 	_save()
 
 
-## Strips line breaks and control characters out of a display name.
-##
-## Not paranoia: online, this text is typed by a STRANGER and ends up in the
-## other player's HUD mid-match. Truncating to a few characters fixes width but
-## does nothing about a newline, which breaks the layout regardless of length.
-## Applied both when a player sets their own name and before showing someone
-## else's.
 ## Words refused in a player name. Deliberately small and English/Croatian only:
 ## a blocklist can never be complete, and pretending otherwise invites relying on
 ## it. It stops the lazy cases at the door; anything past that is what the
@@ -87,7 +80,7 @@ const BLOCKED_WORDS := [
 
 ## True when a name is fit to show to strangers. Length is checked here too, so
 ## the caller has one question to ask instead of three.
-static func name_is_acceptable(value: String) -> bool:
+func name_is_acceptable(value: String) -> bool:
 	var clean := sanitize_name(value)
 	if clean.length() < 2 or clean.length() > 16:
 		return false
@@ -100,7 +93,7 @@ static func name_is_acceptable(value: String) -> bool:
 
 ## Reduces a name to bare lowercase letters so the obvious evasions collapse
 ## onto the word they were hiding: "P1zd@ !!" -> "pizda".
-static func _fold_for_matching(value: String) -> String:
+func _fold_for_matching(value: String) -> String:
 	var lowered := value.to_lower()
 	var swaps := {"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", "$": "s"}
 	var out := ""
@@ -112,7 +105,14 @@ static func _fold_for_matching(value: String) -> String:
 	return out
 
 
-static func sanitize_name(value: String) -> String:
+## Strips line breaks and control characters out of a display name.
+##
+## Not paranoia: online, this text is typed by a STRANGER and ends up in the
+## other player's HUD mid-match. Truncating to a few characters fixes width but
+## does nothing about a newline, which breaks the layout regardless of length.
+## Applied both when a player sets their own name and before showing someone
+## else's.
+func sanitize_name(value: String) -> String:
 	var out := ""
 	for c in value:
 		# Everything below space is a control character (newline, tab, NUL...);

@@ -1012,7 +1012,9 @@ func _mirror_formation(layout: Array) -> Array:
 	var out: Array[Dictionary] = []
 	for entry in layout:
 		var c: Vector2i = entry["cell"]
-		var flipped := entry.duplicate()
+		# Explicitly typed: `layout` is an untyped Array, so its elements are
+		# Variant and duplicate() has nothing to infer from.
+		var flipped: Dictionary = entry.duplicate()
 		flipped["cell"] = Vector2i(Board.COLS - 1 - c.x, Board.ROWS - 1 - c.y)
 		out.append(flipped)
 	return out

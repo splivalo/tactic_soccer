@@ -131,7 +131,7 @@ func _ready() -> void:
 
 # --- Stage handling ------------------------------------------------------------
 
-func _set_stage(stage: int) -> void:
+func _set_stage(stage: Stage) -> void:
 	_stage = stage
 	_name_panel.visible = stage == Stage.NAME
 	_list_buttons.visible = stage == Stage.LIST
@@ -162,8 +162,9 @@ func _process(_delta: float) -> void:
 	var window_h := float(DisplayServer.window_get_size().y)
 	if window_h <= 0.0:
 		return
-	var scale := get_viewport_rect().size.y / window_h
-	var inset := int(round(DisplayServer.virtual_keyboard_get_height() * scale))
+	# Not named `scale` — Control already has a property by that name.
+	var viewport_scale := get_viewport_rect().size.y / window_h
+	var inset := int(round(DisplayServer.virtual_keyboard_get_height() * viewport_scale))
 	_safe_area.add_theme_constant_override("margin_bottom", BASE_MARGIN_BOTTOM + inset)
 
 

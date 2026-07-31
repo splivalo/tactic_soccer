@@ -13,3 +13,16 @@ build_out/
 # Copy scripts/net/net_secrets.gd.example to create it; see net_config.gd.
 scripts/net/net_secrets.gd
 scripts/net/net_secrets.gd.uid
+
+# Keystore passwords. Godot keeps export credentials in this file rather than in
+# export_presets.cfg exactly so the presets (permissions, architectures, package
+# name) can be versioned while the secrets are not.
+export_credentials.cfg
+
+# Signing keys, if one ever ends up here by accident. The keystore itself lives
+# OUTSIDE the project folder (C:\Programiranje\keys) and must stay there:
+# anything inside the project gets packed INTO the exported APK, which would
+# ship the signing key to every player. Unlike the Firebase API key, this one is
+# a real secret — lose it and the app can never be updated on Play again.
+*.keystore
+*.jks
