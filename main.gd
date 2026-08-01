@@ -1016,6 +1016,11 @@ var _timer_dash_shown := false
 ## When the opponent's turn runs out, in SERVER epoch ms. Both clients count
 ## down to this same instant, so the two displays can't drift apart.
 var _remote_deadline_ms := 0.0
+## Set when the player hits Leave in the moment between an opponent accepting
+## and play starting. Starting a match is not instant (formations have to be
+## swapped), so the abort has to be checked after those awaits rather than
+## assumed impossible.
+var _online_aborted := false
 
 
 func _show_online_overlay() -> void:
@@ -1025,6 +1030,7 @@ func _show_online_overlay() -> void:
 	var ui := ONLINE_OVERLAY_SCENE.instantiate()
 	ui.match_ready.connect(_on_online_match_ready)
 	ui.cancelled.connect(_on_online_cancelled)
+	ui.left_room.connect(func(): _online_aborted = true)
 	_online_overlay.add_child(ui)
 	add_child(_online_overlay)
 
@@ -1054,6 +1060,7 @@ func _mirror_formation(layout: Array) -> Array:
 
 
 func _on_online_match_ready(room: String, opponent_name: String, opponent_country: String, is_host: bool) -> void:
+	_online_aborted = false
 	GameFlow.online_room = room
 	GameFlow.online_opponent_name = opponent_name
 	GameFlow.online_is_host = is_host
@@ -1080,6 +1087,12 @@ func _on_online_match_ready(room: String, opponent_name: String, opponent_countr
 	# the opponent's half with the default layout and the two boards differ from
 	# the very first move.
 	if not await _exchange_formations(room):
+		return
+	# Leave may have been pressed while those round trips were in flight — the
+	# overlay is already back on the player list, so don't start a match behind
+	# it.
+	if _online_aborted:
+		GameFlow.clear_online_match()
 		return
 
 	_hide_online_overlay()

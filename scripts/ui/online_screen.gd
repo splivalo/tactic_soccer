@@ -34,6 +34,11 @@ const NetConfig := preload("res://scripts/net/net_config.gd")
 signal match_ready(room: String, opponent_name: String, opponent_country: String, is_host: bool)
 ## The player backed out before finding anyone.
 signal cancelled
+## Leave pressed after an opponent was found but before play begins. main.gd is
+## already busy starting the match at that point, so it has to be told to stop —
+## otherwise the button changed this screen and nothing else, and the match
+## started anyway.
+signal left_room
 
 ## No I/O/0/1 — codes get read aloud and typed by hand.
 const CODE_ALPHABET := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -75,8 +80,8 @@ enum Stage { NAME, LIST, WAITING, ROOM }
 @onready var _invite_label: Label = %InviteLabel
 @onready var _accept_button: Button = %AcceptButton
 @onready var _decline_button: Button = %DeclineButton
+@onready var _title: Label = %Title
 @onready var _room_panel: Control = %RoomPanel
-@onready var _room_label: Label = %RoomLabel
 @onready var _leave_button: Button = %LeaveButton
 @onready var _back_button: Button = %BackButton
 
@@ -138,6 +143,15 @@ func _set_stage(stage: Stage) -> void:
 	_list_panel.visible = stage == Stage.LIST
 	_invite_panel.visible = false  # overlays LIST/WAITING when one arrives
 	_room_panel.visible = stage == Stage.ROOM
+
+	# Once an opponent is found the heading itself becomes the news — "YOU VS
+	# MARKO" in the same big type, with "Starting..." under it. A separate
+	# "Match found" line said the same thing twice, and "Online" is only worth
+	# the space while you are still looking.
+	_title.text = "You vs %s" % _room_opponent if stage == Stage.ROOM else "Online"
+	# Back and Leave both meant "get me out of here". Only Leave stays here, and
+	# it goes back to the player list rather than out of online altogether.
+	_back_button.visible = stage != Stage.ROOM
 
 	# Only the name field ever raises the on-screen keyboard, so only that stage
 	# needs to watch for it.
@@ -518,8 +532,7 @@ func _clear_incoming() -> void:
 func _enter_room(code: String, opponent: String, opponent_uid: String, is_host: bool) -> void:
 	_room_code = code
 	_room_opponent = opponent
-	_set_stage(Stage.ROOM)
-	_room_label.text = "Match found\nYou vs %s" % opponent
+	_set_stage(Stage.ROOM)  # the heading becomes "You vs <opponent>"
 	_status.text = "Starting..."
 
 	# Marks us busy so nobody invites a player who is already in a match.
@@ -543,13 +556,15 @@ func _enter_room(code: String, opponent: String, opponent_uid: String, is_host: 
 	match_ready.emit(code, Settings.sanitize_name(shown), country, is_host)
 
 
+## Straight back to the list of players, which is where someone pressing Leave
+## wants to be — not out of online entirely.
 func _on_leave_pressed() -> void:
-	# The room record itself is left behind: database.rules.json makes host and
-	# created_at write-once, so it cannot be deleted yet. Harmless (a few dozen
-	# bytes) and noted for when the room rules get tightened in Faza B.
+	left_room.emit()
 	_room_code = ""
 	_room_opponent = ""
 	_set_stage(Stage.LIST)
+	_heartbeat.start()
+	_poll.start()
 	await _publish_me("idle")
 	await _refresh_list()
 
