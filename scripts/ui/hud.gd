@@ -277,12 +277,21 @@ func _breathe_shield(side: String) -> void:
 ## pass it: each device running its own randi() means host and guest start with
 ## different teams to move, and the very first turn one of them plays is illegal
 ## by the other's rules — a desync before anyone has touched the ball.
+## `home_label` / `away_label` replace the country codes with player names,
+## exactly as the shields do during the match. Online needs it for the same
+## reason: duplicate countries are allowed, so a coin landing on "CRO" would say
+## nothing about who won it. Passing them also keeps the toss and the HUD
+## reading the same way instead of one saying CRO and the other Marko.
 func play_coin_toss(home_code: String, away_code: String, home_country: String,
-		away_country: String, forced_winner: String = "") -> String:
+		away_country: String, forced_winner: String = "",
+		home_label: String = "", away_label: String = "") -> String:
 	var winner: String = forced_winner
 	if winner != "HomeTeam" and winner != "AwayTeam":
 		winner = "HomeTeam" if randi() % 2 == 0 else "AwayTeam"
-	var codes := {"HomeTeam": home_code, "AwayTeam": away_code}
+	var codes := {
+		"HomeTeam": display_label(home_label, home_code) if home_label != "" else home_code,
+		"AwayTeam": display_label(away_label, away_code) if away_label != "" else away_code,
+	}
 	var flags := {
 		"HomeTeam": load(CountryKits.get_flag(home_country)) as Texture2D,
 		"AwayTeam": load(CountryKits.get_flag(away_country)) as Texture2D,

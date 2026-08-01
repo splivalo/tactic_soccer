@@ -600,16 +600,8 @@ func _build_match(kickoff_team: String) -> void:
 # Single call point that mirrors MatchState (shields/names/score/cards) onto the HUD.
 func _refresh_hud() -> void:
 	if _hud != null:
-		# Online labels the shields with the two players' names — with duplicate
-		# countries allowed, two "CRO" shields would be indistinguishable.
-		var home_label := ""
-		var away_label := ""
-		if GameFlow.online_mode:
-			var mine := Settings.player_name
-			var theirs := GameFlow.online_opponent_name
-			home_label = mine if GameFlow.player_side == "HomeTeam" else theirs
-			away_label = theirs if GameFlow.player_side == "HomeTeam" else mine
-		_hud.refresh(_state, home_country, away_country, home_label, away_label)
+		var labels := _online_labels()
+		_hud.refresh(_state, home_country, away_country, labels["home"], labels["away"])
 
 
 func _build_team(team_name: String, pieces: Array[Dictionary], kit: Dictionary, facing: float) -> void:
@@ -999,6 +991,8 @@ var _applying_remote := false
 ## Actions MUST be applied one at a time and in order — see _on_remote_action.
 var _remote_queue: Array = []
 var _remote_busy := false
+## Whether the HUD is currently showing the "not your clock" dash.
+var _timer_dash_shown := false
 
 
 func _show_online_overlay() -> void:
@@ -1261,10 +1255,26 @@ func _start_coin_toss() -> void:
 	_busy = true
 	var home_code := CountryKits.get_code(home_country)
 	var away_code := CountryKits.get_code(away_country)
+	var labels := _online_labels()
 	var winner: String = await _hud.play_coin_toss(home_code, away_code, home_country,
-		away_country, _online_kickoff())
+		away_country, _online_kickoff(), labels["home"], labels["away"])
 	_busy = false
 	_build_match(winner)
+
+
+## Player names for the two sides, or empty strings offline.
+##
+## Used by BOTH the coin toss and the match shields so the two never disagree —
+## and needed at all because duplicate countries are allowed online, where two
+## "CRO" labels would identify nobody.
+func _online_labels() -> Dictionary:
+	if not GameFlow.online_mode:
+		return {"home": "", "away": ""}
+	var mine := Settings.player_name
+	var theirs := GameFlow.online_opponent_name
+	if GameFlow.player_side == "HomeTeam":
+		return {"home": mine, "away": theirs}
+	return {"home": theirs, "away": mine}
 
 
 ## Who kicks off in an online match — derived from the room code so BOTH clients
@@ -1787,10 +1797,16 @@ func _update_turn_timer_display() -> void:
 	# _refresh_turn_view) — show a dash rather than leaving the opponent's last
 	# number frozen on screen looking like a stalled timer.
 	if _turn_timer.is_stopped():
-		if GameFlow.online_mode and _is_remote_turn() and _shown_time_left != -1:
-			_shown_time_left = -1
+		# Tracked with its own flag, NOT by parking _shown_time_left at -1:
+		# _refresh_turn_view already sets that to -1 to force the next redraw, so
+		# reusing it here meant the condition never held and the last number
+		# stayed frozen on screen — a stuck "1 SEC" while the turn had in fact
+		# already passed to the opponent.
+		if GameFlow.online_mode and _is_remote_turn() and not _timer_dash_shown:
+			_timer_dash_shown = true
 			_hud.update_timer(-1)
 		return
+	_timer_dash_shown = false
 	var seconds_left: int = ceili(_turn_timer.time_left)
 	if seconds_left != _shown_time_left:
 		_shown_time_left = seconds_left
