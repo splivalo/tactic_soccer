@@ -116,6 +116,19 @@ func _run() -> void:
 	var list: Dictionary = await _net.db_get("players")
 	_check(list["ok"], "player list is readable%s" % ("" if list["ok"] else " -> " + list["error"]))
 
+	# --- 6b. the clock offset, which the shared turn deadline rests on ---
+	# Stored deadlines are in SERVER time, so a device has to know how far its
+	# own clock is out or it reads them wrong by exactly that much.
+	var synced: Dictionary = await _net.sync_clock()
+	_check(synced["ok"], "clock sync round trip%s"
+		% ("" if synced["ok"] else " -> " + synced["error"]))
+	if synced["ok"]:
+		var drift: float = absf(_net.server_now_ms() - Time.get_unix_time_from_system() * 1000.0)
+		_check(drift < 600000.0,
+			"device clock is within 10 min of the server (off by %.1fs)" % (drift / 1000.0))
+		var ahead: float = _net.server_now_ms() - Time.get_unix_time_from_system() * 1000.0
+		print("        (this machine is %.0f ms off the server)" % ahead)
+
 	# --- 7. rooms: a PATCH of individual fields must pass, a PUT of the whole
 	# room must NOT. database.rules.json grants .write on the room's FIELDS and
 	# deliberately never on the room node itself, because in RTDB a .write on a

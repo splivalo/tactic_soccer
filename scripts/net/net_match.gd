@@ -34,6 +34,11 @@ signal sync_failed(reason: String)
 ## The opponent stopped showing up. Not the same as resigning: this is the
 ## player who closes the app, loses signal, or walks into a lift.
 signal opponent_lost(reason: String)
+## The shared moment (epoch ms, SERVER time) the current turn runs out. Both
+## clients count down to the same instant instead of each timing from whenever
+## it happened to learn the turn had started — which is what made one show 18
+## seconds while the other showed 10.
+signal deadline_changed(deadline_ms: float)
 
 ## How often we announce that we are still here, and how long an opponent may go
 ## quiet before the match is called off. The window is deliberately generous —
@@ -47,6 +52,11 @@ const OPPONENT_TIMEOUT_SECONDS := 45.0
 ## unlike the player list, a match genuinely wants push, so this is a stopgap
 ## rather than a design choice.
 const POLL_SECONDS := 2.0
+## Tighter interval used only in the last few seconds of a turn, where lag is
+## the difference between "the clock hit zero and play moved on" and "the clock
+## hit zero and sat there".
+const POLL_NEAR_DEADLINE := 0.5
+const NEAR_DEADLINE_SECONDS := 4.0
 
 var room := ""
 ## How many entries of the log we have already dealt with — ours included.
@@ -77,6 +87,9 @@ var _live := false
 ## elapsed seconds, makes both clocks irrelevant.
 var _last_opponent_stamp := ""
 var _opponent_quiet_for := 0.0
+
+## Last deadline seen, so the signal only fires on a genuine change.
+var _deadline_ms := 0.0
 
 
 func start(room_code: String, client: Node = null, watch_uid: String = "") -> void:
@@ -185,6 +198,53 @@ func _tick() -> void:
 		sync_failed.emit(res["error"])
 		return
 	_drain(normalize_log(res["data"]))
+	await _read_deadline()
+	_pace_poll()
+
+
+## Polls faster as the deadline approaches.
+##
+## A turn ending is the one moment where two seconds of lag is actually visible:
+## the countdown reaches zero and then nothing happens until the forfeit is
+## fetched. Tightening the interval only in that window cuts the stall to well
+## under a second without polling hard for the rest of the match.
+func _pace_poll() -> void:
+	if _poll == null:
+		return
+	var wanted := POLL_SECONDS
+	if _deadline_ms > 0.0:
+		# Typed explicitly: `net` is a plain Node, so the call gives back a
+		# Variant and there is nothing to infer from.
+		var left: float = (_deadline_ms - net.server_now_ms()) / 1000.0
+		if left < NEAR_DEADLINE_SECONDS:
+			wanted = POLL_NEAR_DEADLINE
+	if not is_equal_approx(_poll.wait_time, wanted):
+		_poll.wait_time = wanted
+
+
+## Piggybacks on the turn poll. One tiny extra read rather than fetching the
+## whole room node, which would drag the entire turn log along with it every
+## couple of seconds.
+func _read_deadline() -> void:
+	if not _live or room == "":
+		return
+	var res: Dictionary = await net.db_get("rooms/%s/deadline_at" % room)
+	if not res["ok"] or res["data"] == null:
+		return
+	var ms := float(res["data"])
+	if ms != _deadline_ms:
+		_deadline_ms = ms
+		deadline_changed.emit(ms)
+
+
+## Publishes when the current turn runs out. Called by whoever is ON the clock —
+## they are the one who decides expiry (see main.gd's _on_turn_timeout), so they
+## are also the one who says when it falls due.
+func publish_deadline(deadline_ms: float) -> Dictionary:
+	if room == "":
+		return {"ok": false, "error": "no room"}
+	_deadline_ms = deadline_ms
+	return await net.db_put("rooms/%s/deadline_at" % room, deadline_ms)
 
 
 ## Firebase hands the log back as a JSON ARRAY rather than an object whenever

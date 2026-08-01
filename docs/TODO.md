@@ -264,6 +264,16 @@
       se žig PROMIJENIO i mjeri se vlastito proteklo vrijeme. Oba sata postaju nebitna.
 - [ ] Reconnect kroz replay append-only loga
 - [ ] Protivnik otišao: "napustio je meč — uzmi pobjedu / čekaj"
+- [x] **Prikaz protivnikovog sata preko dijeljenog roka** (2026-08-01). ODLUKA o isteku i dalje je
+      samo na uređaju koji je na potezu (vidi ispod) — ovo je isključivo PRIKAZ. Igrač na potezu
+      objavi `deadline_at` kao apsolutni trenutak u SERVERSKOM vremenu, oba uređaja odbrojavaju
+      prema njemu. Vlastita štoperica pokrenuta od trenutka kad si *ti* saznao da je red počeo je
+      ono što je davalo 18 s na jednom i 10 s na drugom.
+      **Jedan sat, ne dva** — uvijek pokazuje onoga tko je na potezu; tko je to, ionako piše u
+      footeru. `Net.sync_clock()` jednom po sesiji izmjeri pomak sata (izmjereno na razvojnom
+      stroju: 347 ms), jer se rok čita u serverskom vremenu.
+      Poll se u zadnje 4 s ubrza na 0.5 s, pa nula ne visi — bez toga bi se vidjelo do 2 s praznine
+      između "0" i promjene reda. Ostatak kašnjenja uklonio bi tek SSE, svjesno odgođen.
 - [x] **Istek poteza — riješen BEZ serverskog vremena.** Plan je bio `deadline_at` sa serverskim
       timestampom; ispalo je da se problem može ukloniti umjesto ublažiti. Istek sad odlučuje
       **isključivo uređaj koji je na potezu** i šalje ga kao akciju (`NetAction.forfeit`), a

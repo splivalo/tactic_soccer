@@ -996,6 +996,9 @@ var _remote_queue: Array = []
 var _remote_busy := false
 ## Whether the HUD is currently showing the "not your clock" dash.
 var _timer_dash_shown := false
+## When the opponent's turn runs out, in SERVER epoch ms. Both clients count
+## down to this same instant, so the two displays can't drift apart.
+var _remote_deadline_ms := 0.0
 
 
 func _show_online_overlay() -> void:
@@ -1111,7 +1114,12 @@ func _start_net_match(room: String) -> void:
 	# Resigning arrives as an action; somebody who just closes the app doesn't
 	# send anything at all, and only presence catches that.
 	_net_match.opponent_lost.connect(_net_opponent_left)
+	_net_match.deadline_changed.connect(func(ms: float): _remote_deadline_ms = ms)
 	_net_match.start(room, null, GameFlow.online_opponent_uid)
+	# Measured once, before any deadline is read: the shared deadline is stored
+	# in SERVER time, and a device whose clock is a minute out would otherwise
+	# read it as a minute of extra thinking time.
+	Net.sync_clock()
 
 
 ## True when the networked opponent, not this player, is the one to act. Mirrors
@@ -1793,21 +1801,30 @@ func _process(_delta: float) -> void:
 
 # Pushes the whole-seconds countdown to the HUD, only when it actually ticks
 # over (avoid poking the label every frame for no reason).
+## Tells the opponent when this turn falls due, as an absolute moment in SERVER
+## time. Only the player on the clock publishes it — they are the one who rules
+## that time is up (see _on_turn_timeout), so they are also the one who says when
+## it falls due.
+func _publish_turn_deadline(seconds: float) -> void:
+	if _net_match == null:
+		return
+	_net_match.publish_deadline(Net.server_now_ms() + seconds * 1000.0)
+
+
 func _update_turn_timer_display() -> void:
 	if _hud == null:
 		return
-	# Online, the waiting player has no clock of their own (see
-	# _refresh_turn_view) — show a dash rather than leaving the opponent's last
-	# number frozen on screen looking like a stalled timer.
 	if _turn_timer.is_stopped():
-		# Tracked with its own flag, NOT by parking _shown_time_left at -1:
-		# _refresh_turn_view already sets that to -1 to force the next redraw, so
-		# reusing it here meant the condition never held and the last number
-		# stayed frozen on screen — a stuck "1 SEC" while the turn had in fact
-		# already passed to the opponent.
-		if GameFlow.online_mode and _is_remote_turn() and not _timer_dash_shown:
-			_timer_dash_shown = true
-			_hud.update_timer(-1)
+		# One clock, always showing whoever is actually on the move — there is no
+		# need to label it, since the footer already says whose turn it is.
+		#
+		# While the opponent is on the clock this counts down to the deadline
+		# THEY published rather than to a stopwatch we started ourselves. Both
+		# devices are then watching the same instant approach; timing it locally
+		# from whenever we learned their turn began is exactly what produced 18
+		# seconds here and 10 there.
+		if GameFlow.online_mode and _is_remote_turn():
+			_show_remote_countdown()
 		return
 	_timer_dash_shown = false
 	var seconds_left: int = ceili(_turn_timer.time_left)
@@ -2435,6 +2452,23 @@ func _announce_stalling_card() -> void:
 
 
 ## Name (online) or country code (offline) of whoever the card belongs to.
+## Counts down the opponent's turn from the shared deadline.
+##
+## Shows a dash only until their first deadline arrives (the very start of a
+## match, before anyone has published one) — a number would be a guess there.
+func _show_remote_countdown() -> void:
+	if _remote_deadline_ms <= 0.0:
+		if not _timer_dash_shown:
+			_timer_dash_shown = true
+			_hud.update_timer(-1)
+		return
+	_timer_dash_shown = false
+	var left := maxi(ceili((_remote_deadline_ms - Net.server_now_ms()) / 1000.0), 0)
+	if left != _shown_time_left:
+		_shown_time_left = left
+		_hud.update_timer(left)
+
+
 func _carded_label() -> String:
 	var team := _state.last_card_team
 	if team == "":
@@ -2538,17 +2572,13 @@ func _refresh_turn_view() -> void:
 		# hatch, so there's simply nothing to wait out.
 		_turn_timer.stop()
 	elif GameFlow.online_mode and _is_remote_turn():
-		# The waiting player runs NO clock at all.
+		# No LOCAL timer while the opponent is on the clock — running our own
+		# stopwatch from whenever we happened to learn their turn began is what
+		# made one device read 18 seconds and the other 10.
 		#
-		# Two devices counting the same turn can never agree: the opponent's
-		# action arrives up to a poll late, then plays out an animation, so this
-		# side starts its countdown seconds behind and the numbers drift apart —
-		# 18 here, 10 there. Worse, when the waiting side hit zero it just sat
-		# there, because only the player actually on the clock may rule that time
-		# is up (see _on_turn_timeout).
-		#
-		# A countdown that isn't yours and doesn't match theirs is worse than no
-		# countdown, so there isn't one.
+		# The display still counts down: it uses the shared deadline they
+		# published, so both of us are watching the same instant approach rather
+		# than two independent stopwatches. See _update_turn_timer_display.
 		_pool_team = _state.current
 		_turn_timer.stop()
 	elif _state.current != _pool_team:
@@ -2557,8 +2587,11 @@ func _refresh_turn_view() -> void:
 		# resumes whatever was left of theirs (see _do_combo's snapshot above).
 		_pool_team = _state.current
 		_turn_timer.start(turn_time_limit)
+		_publish_turn_deadline(turn_time_limit)
 	else:
-		_turn_timer.start(maxf(_pool_seconds_left, 0.05))
+		var carried := maxf(_pool_seconds_left, 0.05)
+		_turn_timer.start(carried)
+		_publish_turn_deadline(carried)
 	if _hud != null:
 		_hud.update_turn_hint(_state.current, _state.phase, "", _state.moves_left)
 	_holding = false

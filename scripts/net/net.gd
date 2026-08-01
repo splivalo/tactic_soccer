@@ -230,6 +230,43 @@ func server_timestamp() -> Dictionary:
 	return {".sv": "timestamp"}
 
 
+## server_time - local_time, in milliseconds. Measured once per session.
+var server_offset_ms := 0.0
+var clock_synced := false
+
+
+## Works out how far this device's clock is from the server's.
+##
+## Needed because a shared deadline is stored in SERVER time, and a phone set a
+## minute fast would read it as a minute of extra thinking. Writes the timestamp
+## sentinel, reads back what the server actually stamped, and compares it with
+## the MIDPOINT of the round trip — so the remaining error is roughly half the
+## latency, i.e. tenths of a second rather than whatever the device clock is
+## wrong by.
+func sync_clock() -> Dictionary:
+	if uid == "":
+		return _err(401, "not signed in")
+	var before := Time.get_unix_time_from_system() * 1000.0
+	var wrote := await db_put("players/%s/last_seen" % uid, server_timestamp())
+	if not wrote["ok"]:
+		return wrote
+	var res := await db_get("players/%s/last_seen" % uid)
+	var after := Time.get_unix_time_from_system() * 1000.0
+	if not res["ok"] or res["data"] == null:
+		return _err(res["code"], "could not read the server clock back")
+
+	server_offset_ms = float(res["data"]) - (before + after) * 0.5
+	clock_synced = true
+	return _ok(200, {"offset_ms": server_offset_ms})
+
+
+## This device's best guess at the server's current time, in epoch ms. Falls
+## back to the raw local clock if the sync never happened — wrong by whatever
+## the device is off by, but never worse than having no clock at all.
+func server_now_ms() -> float:
+	return Time.get_unix_time_from_system() * 1000.0 + server_offset_ms
+
+
 func _db_call(method: int, path: String, value) -> Dictionary:
 	var auth := await _ensure_token()
 	if not auth["ok"]:
