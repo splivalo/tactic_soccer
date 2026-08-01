@@ -47,6 +47,13 @@ func _ready() -> void:
 	_settings_close_button.pressed.connect(func(): _settings_modal.visible = false)
 
 
+## The main menu is the one screen where back SHOULD leave the game — it is the
+## top of the stack, and quit_on_go_back is off now so nothing else does it.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		get_tree().quit()
+
+
 func _open_settings() -> void:
 	_music_slider.value = Settings.music_volume
 	_sfx_slider.value = Settings.sfx_volume

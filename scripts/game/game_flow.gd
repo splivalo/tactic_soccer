@@ -58,6 +58,18 @@ var online_opponent_uid: String = ""
 var online_is_host: bool = false
 
 
+## Forgets the match but STAYS in online mode, so the player lands back on the
+## opponent list instead of the main menu. Their country and placed formation
+## are kept, which is the whole point: finding another opponent shouldn't mean
+## picking a flag and laying out six figures again.
+func clear_online_match() -> void:
+	online_room = ""
+	online_opponent_name = ""
+	online_opponent_uid = ""
+	online_is_host = false
+	player_side = "HomeTeam"
+
+
 func reset_online() -> void:
 	online_mode = false
 	online_room = ""

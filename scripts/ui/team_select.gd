@@ -100,6 +100,13 @@ func _on_back_pressed() -> void:
 	GameFlow.goto(GameFlow.Screen.MAIN_MENU)
 
 
+## Android's back mirrors the on-screen Back button (quit_on_go_back is off, so
+## otherwise it would do nothing at all here).
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		_on_back_pressed()
+
+
 func _on_next_pressed() -> void:
 	var picked_country := _picked_country()
 	if picked_country == "":

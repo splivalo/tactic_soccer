@@ -542,6 +542,11 @@ func _spawn_teams() -> void:
 	_state = MatchState.new()
 	if GameFlow.player_formation.is_empty():
 		_start_placement()
+	elif GameFlow.online_mode and GameFlow.online_room == "":
+		# Online with a formation already laid out but no opponent yet — this is
+		# the "find another one" case after a match ended. Straight back to the
+		# overlay, skipping both the country picker and the placement phase.
+		_show_online_overlay()
 	else:
 		_start_coin_toss()
 
@@ -554,17 +559,21 @@ func _spawn_ball() -> void:
 ## Whichever side is GameFlow.player_side uses the formation they just placed
 ## (see _start_placement); the other side (and both, before any placement has
 ## happened — e.g. local test runs) falls back to the fixed Formations layout.
+func _my_layout() -> Array[Dictionary]:
+	return _my_formation if not _my_formation.is_empty() else GameFlow.player_formation
+
+
 func _home_formation() -> Array[Dictionary]:
-	if GameFlow.player_side == "HomeTeam" and not GameFlow.player_formation.is_empty():
-		return GameFlow.player_formation
+	if GameFlow.player_side == "HomeTeam" and not _my_layout().is_empty():
+		return _my_layout()
 	if GameFlow.player_side != "HomeTeam" and not _remote_formation.is_empty():
 		return _remote_formation
 	return Formations.home()
 
 
 func _away_formation() -> Array[Dictionary]:
-	if GameFlow.player_side == "AwayTeam" and not GameFlow.player_formation.is_empty():
-		return GameFlow.player_formation
+	if GameFlow.player_side == "AwayTeam" and not _my_layout().is_empty():
+		return _my_layout()
 	if GameFlow.player_side != "AwayTeam" and not _remote_formation.is_empty():
 		return _remote_formation
 	return Formations.away()
@@ -986,6 +995,14 @@ var _net_match: Node = null
 ## The opponent's placed figures, fetched once before kick-off so both clients
 ## build an identical board. Empty offline.
 var _remote_formation: Array[Dictionary] = []
+## OUR figures as used for THIS match — the same layout the player placed, but
+## rotated when we turn out to be the guest.
+##
+## Kept apart from GameFlow.player_formation, which stays the canonical
+## home-half layout the player actually drew. Overwriting that with the mirrored
+## copy looked harmless until a second match: play once as guest, then host, and
+## the saved layout would already be on the wrong half.
+var _my_formation: Array[Dictionary] = []
 ## True while we are replaying the OPPONENT's action locally. Without it, every
 ## remote action would be echoed straight back as if we had played it — the two
 ## clients would keep bouncing the same turn at each other forever.
@@ -1046,6 +1063,7 @@ func _on_online_match_ready(room: String, opponent_name: String, opponent_countr
 	# already puts the away side in its alternative strip whenever the two
 	# primaries clash — which two identical countries always do.
 	GameFlow.player_side = "HomeTeam" if is_host else "AwayTeam"
+	_my_formation = GameFlow.player_formation.duplicate()
 	if is_host:
 		home_country = Settings.player_country
 		if opponent_country != "":
@@ -1054,7 +1072,7 @@ func _on_online_match_ready(room: String, opponent_name: String, opponent_countr
 		away_country = Settings.player_country
 		if opponent_country != "":
 			home_country = opponent_country
-		GameFlow.player_formation = _mirror_formation(GameFlow.player_formation)
+		_my_formation = _mirror_formation(GameFlow.player_formation)
 	GameFlow.home_country = home_country
 	GameFlow.away_country = away_country
 
@@ -1082,7 +1100,9 @@ func _exchange_formations(room: String) -> bool:
 	const FORMATION_WAIT_SECONDS := 20.0
 	const FORMATION_POLL := 1.0
 
-	var mine := NetAction.formation_to_json(GameFlow.player_formation)
+	# The layout as it will actually stand on the board, already rotated if we
+	# are the guest — the opponent uses these cells as they arrive.
+	var mine := NetAction.formation_to_json(_my_layout())
 	var put: Dictionary = await Net.db_put("rooms/%s/formations/%s" % [room, Net.uid], mine)
 	if not put["ok"]:
 		_net_opponent_left("Could not start the match: %s" % put["error"])
@@ -1241,14 +1261,25 @@ func _net_opponent_left(message: String) -> void:
 	if _hud != null:
 		_hud.set_footer_text(message, Color.WHITE)
 	await get_tree().create_timer(2.5).timeout
-	GameFlow.reset_online()
-	GameFlow.goto(GameFlow.Screen.MAIN_MENU)
+
+	# Back to looking for an opponent, NOT out to the main menu. Losing your
+	# opponent shouldn't cost you the country you picked and the formation you
+	# laid out — reloading the match scene with the room cleared drops straight
+	# onto the player list again (see _spawn_teams).
+	GameFlow.clear_online_match()
+	if GameFlow.online_mode:
+		GameFlow.goto(GameFlow.Screen.MATCH)
+	else:
+		GameFlow.goto(GameFlow.Screen.MAIN_MENU)
 
 
+## Back from the overlay: this one DOES leave online for good, so it clears the
+## mode as well and returns to the country picker the player came through.
 func _on_online_cancelled() -> void:
 	_hide_online_overlay()
 	GameFlow.reset_online()
-	GameFlow.goto(GameFlow.Screen.MAIN_MENU)
+	GameFlow.online_country_picker = true
+	GameFlow.goto(GameFlow.Screen.TEAM_SELECT)
 
 
 ## Pre-match coin toss deciding who kicks off first (mirrors the original

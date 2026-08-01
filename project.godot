@@ -12,6 +12,11 @@ config_version=5
 
 config/name="Tactic Soccer"
 run/main_scene="res://scenes/ui/splash_screen.tscn"
+; Android's back button/gesture. Left at its default (true) the engine QUITS the
+; app on back before any handler is consulted — so hud.gd's pause modal, which
+; was written and correct, could never run, and back killed a match in progress.
+; Screens that want back now handle NOTIFICATION_WM_GO_BACK_REQUEST themselves.
+config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="uid://dhcjhonjcf81y"
 
