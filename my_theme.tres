@@ -128,6 +128,23 @@ corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lineedit"]
+content_margin_left = 34.0
+content_margin_top = 12.0
+content_margin_right = 34.0
+content_margin_bottom = 12.0
+bg_color = Color(0.05, 0.1, 0.06, 0.75)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.22352941, 0.5137255, 0.32941177, 1)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+corner_detail = 1
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_minicard"]
 bg_color = Color(0.05, 0.1, 0.06, 0.5)
 border_width_left = 2
@@ -185,6 +202,11 @@ CheckBox/styles/hover_pressed = SubResource("StyleBoxEmpty_checkbox")
 CheckBox/styles/normal = SubResource("StyleBoxEmpty_checkbox")
 CheckBox/styles/pressed = SubResource("StyleBoxEmpty_checkbox")
 HSlider/icons/grabber = ExtResource("4_slider_grabber")
+LineEdit/colors/font_color = Color(1, 1, 1, 1)
+LineEdit/colors/font_placeholder_color = Color(1, 1, 1, 0.45)
+LineEdit/styles/normal = SubResource("StyleBoxFlat_lineedit")
+LineEdit/styles/focus = SubResource("StyleBoxFlat_lineedit")
+LineEdit/styles/read_only = SubResource("StyleBoxFlat_lineedit")
 HSlider/icons/grabber_disabled = ExtResource("4_slider_grabber")
 HSlider/icons/grabber_highlight = ExtResource("4_slider_grabber")
 HSlider/styles/grabber_area = SubResource("StyleBoxFlat_slider_fill")
