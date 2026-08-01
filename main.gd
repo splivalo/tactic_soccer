@@ -600,6 +600,9 @@ func _build_match(kickoff_team: String) -> void:
 # Single call point that mirrors MatchState (shields/names/score/cards) onto the HUD.
 func _refresh_hud() -> void:
 	if _hud != null:
+		# Told before refresh: it decides which side owns the LEFT shield, so the
+		# local player's crest sits on the same side as their own figures.
+		_hud.set_local_side(GameFlow.player_side)
 		var labels := _online_labels()
 		_hud.refresh(_state, home_country, away_country, labels["home"], labels["away"])
 
@@ -2413,18 +2416,33 @@ func _move_click(screen_pos: Vector2) -> void:
 ## hold_and_move's doc comment. Exactly one offence is bookable: letting a
 ## MOVE's clock run out (MatchState.forfeit).
 func _announce_stalling_card() -> void:
+	# Both devices show this banner, so it has to say WHO was booked. Unnamed, a
+	# player who had merely been waiting out the opponent's clock could easily
+	# read it as their own card.
+	var who := _carded_label()
 	if _state.last_move_card == "yellow":
 		print("YELLOW CARD: %s" % _state.last_card_team)
 		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
 		Settings.vibrate()
 		if _hud != null:
-			await _hud.play_announcement("yellow")
+			await _hud.play_announcement("yellow", who)
 	elif _state.last_move_card == "red":
 		print("RED CARD: %s" % _state.last_card_team)
 		_play_sfx(WHISTLE_SOUND, whistle_sfx_volume_db)
 		Settings.vibrate(90) # a notch stronger than yellow — matches the higher severity
 		if _hud != null:
-			await _hud.play_announcement("red")
+			await _hud.play_announcement("red", who)
+
+
+## Name (online) or country code (offline) of whoever the card belongs to.
+func _carded_label() -> String:
+	var team := _state.last_card_team
+	if team == "":
+		return ""
+	if GameFlow.online_mode:
+		var labels := _online_labels()
+		return String(labels["home"] if team == "HomeTeam" else labels["away"])
+	return CountryKits.get_code(home_country if team == "HomeTeam" else away_country)
 
 
 ## `as_hold`: use MatchState.hold_and_move (declining to shoot, see there)

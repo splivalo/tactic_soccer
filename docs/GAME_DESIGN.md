@@ -83,6 +83,21 @@ tko trenutno ima loptu:
 pravilo "nadjačavanja" — tim koji ju je upravo dosegnuo reaktivnim potezom morao bi imati pravo
 igrati loptom bez obzira koliko protivnika stoji uz nju, jer ionako nije njihov red.)
 **Gol:** samo s protivničke polovice. **Zaleđe:** ako su sve protivničke terenske figurice (golman isključen) strogo iza napadača — nema gola. Ako protivnik nema više nijednu terensku figuricu, zaleđe se ne može dogoditi.
+**Kartoni — trenutno stanje (2026-08-01):** jedini prekršaj je **ODUGOVLAČENJE** — pustiš da ti
+istekne vrijeme umjesto da odigraš potez (`MatchState.forfeit(timed_out=true)`). **Kažnjava se u
+BILO KOJOJ fazi.** Do 2026-08-01 se bookao samo istekli MOVE, pa su dva isteka koja igraču izgledaju
+identično davala različit ishod, a ništa na ekranu nije objašnjavalo razliku — čitalo se kao bug.
+Jedno pravilo koje uvijek vrijedi vrijedi više od finije podjele koju nitko ne vidi.
+Eskalacija: 1. prekršaj = žuti, 2. i svaki sljedeći = crveni **I odmah obavezno uklanjanje figurice**
+(`Phase.REMOVE`; timer tada stoji). Kartoni traju cijelu partiju (`foul_count` se resetira samo na
+`setup()`).
+**Banner mora imenovati kažnjenog** (`HUD.play_announcement(kind, who)`): oba uređaja prikazuju isti
+banner, pa je neimenovani "YELLOW CARD" značio da igrač koji je samo čekao protivnikov sat lako
+pomisli da je kartoniran on. Ime dolazi iz istog `_online_labels()` izvora kao grbovi i kocka
+(offline: kratica države).
+
+*Povijest, da se mrtva pravila ne izmišljaju ponovno* — **kontestirani 50-50 duel** (opis ispod) bio
+je prethodni okidač i uklonjen je:
 **Kartoni (kontestirani 50-50 duel):** prekršaj VIŠE NIJE zadržavanje/vrtnja lopte — taj okidač je **uklonjen** (2026-07-21, vidi `docs/CHANGELOG.md`). Umjesto toga: kad reaktivni potez (tim koji NIJE imao loptu) doseže loptu i pritom sleti u ćeliju koja je **točno nasuprot** protivničkoj figurici preko lopte (bilo koja od 4 osi kroz centar — okomito, vodoravno, obje dijagonale — vidi `MatchState.is_contested_recovery`), to je "izgubljen duel za loptu": prekršaj. Razlog promjene: s uvedenim reaktivnim potezima i pravilom "2 akcije po redu", tim praktički više nikad nije mogao stvarno zadržavati loptu (izmjereno empirijski ~0.5% šutova u AI-vs-AI partijama) dok samo preuzimanje lopte nije nosilo nikakav rizik — pa je stari okidač postao gotovo mrtvo pravilo, a novi unosi stvaran, čitljiv rizik točno tamo gdje ga i treba biti (borba za loptu, ne mirno posjedovanje). Nagrada za prekršaj se **oduzima**: čak i žuti karton poništava nadogradnju u combo tog poteza (potez se potroši kao običan pomak, bez šuta) — kao u pravom nogometu, faul nikad ne donosi prednost onome tko ga je napravio. Eskalacija ostaje ista kao i prije (namjerno odstupa od originala iz 2006., 2026-07-19): 1. prekršaj = samo žuti karton, 2. i svaki sljedeći = crveni karton **I odmah obavezno uklanjanje figurice u istom potezu** (`Phase.REMOVE`, timer se tijekom te faze zaustavlja). Kartoni traju cijelu partiju (`foul_count` se NE resetira na kickoff, samo na `setup()`).
 
 ## 4. Tehnička arhitektura
@@ -335,6 +350,11 @@ prođe li, to je desync i meč se prekida s greškom umjesto da dva uređaja tih
 stanja. Modificiran klijent može varati; za igru s prijateljima prihvatljivo, za rang ljestvicu
 nije. Host je "sudac" **samo za dvosmislene zapise** (istek timera, protivnik nestao) da ne pišu
 oba — nikad za pravila.
+
+**HUD prati perspektivu: vlastiti grb je UVIJEK lijevo** (`HUD.set_local_side`, odluka 2026-08-01).
+Ako su ti figure uvijek dolje na terenu, a grb ti stoji desno u sučelju, vlastita momčad ti je na dva
+mjesta odjednom. Lijevi grb, lijevi rezultat i lijevi brojač kartona zato uvijek pripadaju igraču
+koji drži uređaj; protivnik na svom uređaju vidi zrcalnu sliku, što i jest smisao.
 
 **Perspektiva: svatko vidi svoje figure dolje.** Ploča ostaje apsolutna (`MatchState` se ne mijenja
 ni za slovo); okreće se **samo kamera za 180°** oko centra terena + zamjena grbova u HUD-u. Ovo je

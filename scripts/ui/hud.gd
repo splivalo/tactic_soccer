@@ -55,6 +55,26 @@ var _breath_tween: Tween = null
 var _home_color := Color.WHITE # kit primary colour, kept for the footer turn dot (shield itself is a flag now)
 var _away_color := Color.WHITE
 
+## Which logical side the person holding this device plays.
+##
+## The LEFT shield always belongs to them, mirroring the pitch: their own
+## figures are always at the bottom (the camera is spun for the away player, see
+## main.gd's _fit_camera), so having their crest on the right would put their
+## team in two different places at once. The opponent sees the mirror image on
+## their own device, which is the point.
+##
+## "HomeTeam" offline and for the host, so nothing changes for either of them.
+var _local_side := "HomeTeam"
+
+
+func set_local_side(side: String) -> void:
+	_local_side = side
+
+
+## True when `side` occupies the left-hand slot on THIS device.
+func _is_left(side: String) -> bool:
+	return side == _local_side
+
 
 func _ready() -> void:
 	_pause_button.pressed.connect(_open_pause_modal)
@@ -150,14 +170,14 @@ func set_team(side: String, country: String, kit: Dictionary, label_override: St
 	var code := CountryKits.get_code(country)
 	if label_override != "":
 		code = display_label(label_override, code)
-	var primary: TextureRect = _home_primary if side == "HomeTeam" else _away_primary
-	var name_label: Label = _home_name if side == "HomeTeam" else _away_name
+	var primary: TextureRect = _home_primary if _is_left(side) else _away_primary
+	var name_label: Label = _home_name if _is_left(side) else _away_name
 	var flag_path := CountryKits.get_flag(country)
 	if flag_path != "":
 		primary.material.set_shader_parameter("flag_texture", load(flag_path))
 	name_label.text = code
 	var dot_color: Color = kit["secondary"] if CountryKits.is_near_white(kit["primary"]) else kit["primary"]
-	if side == "HomeTeam":
+	if _is_left(side):
 		_home_color = dot_color
 	else:
 		_away_color = dot_color
@@ -165,16 +185,21 @@ func set_team(side: String, country: String, kit: Dictionary, label_override: St
 
 ## score = MatchState.score ({"HomeTeam": int, "AwayTeam": int}).
 func update_score(score: Dictionary) -> void:
-	_score_label.text = "%d : %d" % [score.get("HomeTeam", 0), score.get("AwayTeam", 0)]
+	# Left number is always the local player's, matching their shield.
+	var left := _local_side
+	var right := "AwayTeam" if left == "HomeTeam" else "HomeTeam"
+	_score_label.text = "%d : %d" % [score.get(left, 0), score.get(right, 0)]
 
 
 ## yellow / red = MatchState.yellow_card / red_card (bool per team — at most
 ## one of each before a mandatory figure removal kicks in, see rules).
 func update_cards(yellow: Dictionary, red: Dictionary) -> void:
-	_home_yellow.text = str(int(yellow.get("HomeTeam", false)))
-	_home_red.text = str(int(red.get("HomeTeam", false)))
-	_away_yellow.text = str(int(yellow.get("AwayTeam", false)))
-	_away_red.text = str(int(red.get("AwayTeam", false)))
+	var left := _local_side
+	var right := "AwayTeam" if left == "HomeTeam" else "HomeTeam"
+	_home_yellow.text = str(int(yellow.get(left, false)))
+	_home_red.text = str(int(red.get(left, false)))
+	_away_yellow.text = str(int(yellow.get(right, false)))
+	_away_red.text = str(int(red.get(right, false)))
 
 
 ## Whole seconds left in the current player's decision (see main.gd's turn
@@ -225,8 +250,8 @@ func set_footer_text(text: String, dot_color: Color) -> void:
 ## (2026-07-22 "1 action per turn" redesign), so there's nothing left to
 ## call out differently there.
 func update_turn_hint(side: String, phase: int, intro: String = "", _moves_left: int = 1) -> void:
-	var code: String = _home_name.text if side == "HomeTeam" else _away_name.text
-	var dot_color: Color = _home_color if side == "HomeTeam" else _away_color
+	var code: String = _home_name.text if _is_left(side) else _away_name.text
+	var dot_color: Color = _home_color if _is_left(side) else _away_color
 	var verb := "plays"
 	match phase:
 		MatchState.Phase.COMBO:
@@ -255,7 +280,7 @@ func _breathe_shield(side: String) -> void:
 		_breath_tween.kill()
 	_home_frame.modulate = Color.WHITE
 	_away_frame.modulate = Color.WHITE
-	var target: Control = _home_frame if side == "HomeTeam" else _away_frame
+	var target: Control = _home_frame if _is_left(side) else _away_frame
 	var gone := Color(1.0, 1.0, 1.0, 0.0)
 	_breath_tween = create_tween().set_loops()
 	_breath_tween.tween_property(target, "modulate", gone, BREATH_LEG_TIME) \
@@ -344,7 +369,13 @@ const ANNOUNCE_TEXT := {"yellow": "YELLOW CARD", "red": "RED CARD", "offside": "
 ## overlap the next action. kind = "yellow" | "red" | "offside" (anything else
 ## is a no-op). Safe to await even when a card and something else coincide —
 ## calls are serialised by the caller.
-func play_announcement(kind: String) -> void:
+## `who` names the punished side on the banner ("MARKO — YELLOW CARD").
+##
+## Without it both players saw an identical, unattributed "YELLOW CARD" and the
+## one who had merely been waiting had no way to tell it wasn't theirs. On a
+## shared hot-seat screen that was obvious from who was holding the phone;
+## online it is not, so the banner has to say.
+func play_announcement(kind: String, who: String = "") -> void:
 	if not ANNOUNCE_TEXT.has(kind):
 		return
 	var color: Color = ANNOUNCE_COLOR[kind]
@@ -356,6 +387,8 @@ func play_announcement(kind: String) -> void:
 	if is_card:
 		_announce_card_style.bg_color = color
 	_announce_label.text = ANNOUNCE_TEXT[kind]
+	if who != "":
+		_announce_label.text = "%s — %s" % [who, ANNOUNCE_TEXT[kind]]
 	_announce_label.add_theme_color_override("font_color", Color.WHITE if is_card else color)
 	_announce.visible = true
 	_announce.modulate = Color(1, 1, 1, 0)

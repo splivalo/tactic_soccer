@@ -390,6 +390,25 @@ func _initialize() -> void:
 	_check(ms.phase == MatchState.Phase.COMBO,
 		"...but AwayTeam correctly opens Phase.COMBO on its own following turn (now adjacent)")
 
+	# --- time-wasting is booked in EVERY phase (2026-08-01) ---
+	# It used to card only an expired MOVE, so two timeouts that looked identical
+	# to the player could give different outcomes. One rule now: run out of time,
+	# get booked, whatever you were doing.
+	var tw := MatchState.new()
+	tw.setup(Formations.home(), Formations.away(), Vector2i(3, 8), "HomeTeam", 2)
+	_check(tw.phase == MatchState.Phase.COMBO, "time-waste test opens in COMBO")
+	tw.forfeit(true)
+	_check(tw.last_move_card == "yellow", "a COMBO that times out is booked")
+	_check(tw.last_card_team == "HomeTeam", "...against the team that was on the clock")
+	_check(tw.yellow_card["HomeTeam"], "...and the yellow is recorded on them")
+
+	# A forfeit that is NOT a clock expiry still books nobody — that path exists
+	# for an AI that finds no legal action (see main.gd's _maybe_ai_turn).
+	var nf := MatchState.new()
+	nf.setup(Formations.home(), Formations.away(), Vector2i(3, 8), "HomeTeam", 2)
+	nf.forfeit()
+	_check(nf.last_move_card == "", "a non-timeout forfeit books nobody")
+
 	if _fail == 0:
 		print("TEST_MATCH: ALL PASSED")
 	else:

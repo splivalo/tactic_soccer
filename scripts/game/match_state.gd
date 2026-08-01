@@ -75,7 +75,10 @@ const MAX_MOVE_RANGE := 2
 
 # --- cards -------------------------------------------------------------------
 # There is exactly ONE bookable offence: TIME-WASTING — letting the clock run
-# out on a MOVE instead of playing it (see forfeit).
+# out instead of playing your turn (see forfeit). Any phase: until 2026-08-01
+# only an expired MOVE was booked, so two identical-looking timeouts could give
+# different outcomes with nothing on screen to explain why, and it read as a
+# bug. One rule that always applies beats a finer one nobody can see.
 #
 # History, so nobody re-invents a dead rule: three different stalling triggers
 # were tried and all three were removed. "Ball returned to the figure that
@@ -191,7 +194,13 @@ func clone_for_query() -> MatchState:
 ## genuinely thought too long than anyone playing for time (2026-07-28).
 ## Callers that forfeit for any other reason must leave it false.
 func forfeit(timed_out: bool = false) -> void:
-	var carding: bool = timed_out and phase == Phase.MOVE
+	# EVERY clock expiry is booked, whatever phase it happened in (2026-08-01).
+	# It used to card only a MOVE that ran out, which meant identical-looking
+	# timeouts sometimes carded and sometimes didn't, with nothing on screen
+	# explaining the difference — players simply read it as broken. A single
+	# rule, "run out of time and you are booked", is worth more than the finer
+	# distinction it replaces.
+	var carding: bool = timed_out
 	var offender := current
 	pending_removal = ""
 	if carding:
