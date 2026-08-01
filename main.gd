@@ -1626,6 +1626,45 @@ func _combo_tap(screen_pos: Vector2) -> void:
 		_move_from = hold_fig
 		_draw_move(hold_fig)
 		_play_sfx(SELECT_SOUND, select_sfx_volume_db)
+		return
+	_hint_ball_carriers(screen_pos)
+
+
+## Tapping the BALL answers "so how do I get it?" instead of doing nothing.
+##
+## Watching a first-time player, the very first thing they did was tap the ball —
+## and the game replied with silence, which reads as broken rather than as
+## wrong. It now blinks the same orange used for a chosen chain figure under
+## every player who can actually play it: same colour because it means the same
+## thing ("the ball goes through this one"), blinking because nothing has been
+## chosen yet.
+##
+## In COMBO that's whoever may start the chain. In MOVE it's every own figure
+## that could still reach a square beside the ball this turn — which is the real
+## answer to the question being asked.
+func _hint_ball_carriers(screen_pos: Vector2) -> void:
+	if _state == null:
+		return
+	if _resolve_target(screen_pos, [_state.ball], TAP_HIT_RADIUS) == NO_CELL:
+		return
+
+	var hint: Array[Vector2i] = []
+	if _state.phase == MatchState.Phase.COMBO:
+		hint = _state.combo_starters()
+	else:
+		for cell in _state.own_cells():
+			for target in _state.move_targets(cell):
+				# Adjacent in any of the 8 directions == possession.
+				if maxi(absi(target.x - _state.ball.x), absi(target.y - _state.ball.y)) <= 1:
+					hint.append(cell)
+					break
+
+	if hint.is_empty():
+		return
+	_fx.clear()
+	for cell in hint:
+		_fx.add_tile(_cell_world(cell.x, cell.y), color_chain, -1.0, true)
+	_play_sfx(SELECT_SOUND, select_sfx_volume_db)
 
 
 # A combo plays as ONE continuous ball motion through the whole chain — the ball
@@ -2420,6 +2459,10 @@ func _move_click(screen_pos: Vector2) -> void:
 			_move_from = fig_cell
 			_draw_move(fig_cell)
 			_play_sfx(FIELD_TAP_SOUND, field_tap_volume_db)
+			return
+		# Nothing picked and the tap landed on the ball — this is the "how do I
+		# get it?" moment, and it deserves an answer rather than silence.
+		_hint_ball_carriers(screen_pos)
 		return
 	var fig_hit := _resolve_target(screen_pos, pickable, TAP_HIT_RADIUS)
 	if fig_hit != NO_CELL:
