@@ -135,6 +135,20 @@ func _exit_to_menu() -> void:
 	GameFlow.goto(GameFlow.Screen.MAIN_MENU)
 
 
+## Strips the HUD down to the footer for the tutorial.
+##
+## Shields, score, cards and the clock mean nothing while you are learning what
+## a straight line is, and they are four more things competing with the one
+## sentence you are meant to read. The footer stays because it is already the
+## game's way of talking to the player — the placement phase uses it too, so the
+## tutorial isn't inventing a second voice.
+func show_match_chrome(on: bool) -> void:
+	for node_name in ["Bar", "Background", "PauseButton"]:
+		var node := get_node_or_null(node_name) as CanvasItem
+		if node != null:
+			node.visible = on
+
+
 ## Longest player name the shield label will show. It is sized for a 3-letter
 ## country code, and a name may be up to 16 characters.
 const MAX_NAME_CHARS := 9

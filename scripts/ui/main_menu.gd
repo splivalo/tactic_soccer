@@ -37,7 +37,17 @@ func _ready() -> void:
 		GameFlow.online_country_picker = true
 		GameFlow.goto(GameFlow.Screen.TEAM_SELECT))
 	_options_button.pressed.connect(_open_settings)
-	_instructions_button.pressed.connect(func(): GameFlow.goto(GameFlow.Screen.INSTRUCTIONS))
+	# "Instructions" now runs the tutorial. The cards it replaced described the
+	# same three things in words, and words are exactly what a first-time player
+	# doesn't read — the tutorial ends on the one card that survived, the general
+	# rules, which no single turn can teach.
+	_instructions_button.pressed.connect(func():
+		GameFlow.reset_online()
+		GameFlow.single_player = false
+		GameFlow.tutorial_mode = true
+		GameFlow.player_formation = []
+		GameFlow.player_side = "HomeTeam"
+		GameFlow.goto(GameFlow.Screen.MATCH))
 	_credits_button.pressed.connect(func(): GameFlow.goto(GameFlow.Screen.LEGAL))
 	_quit_button.pressed.connect(func(): get_tree().quit())
 

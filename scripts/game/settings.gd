@@ -24,6 +24,11 @@ var player_name := ""
 ## choosing per match in team_select.
 var player_country := ""
 
+## Whether the tutorial has been completed once. It runs by itself on a first
+## launch — the player who most needs it is exactly the one who would never go
+## looking for it — and after that only when asked for from the menu.
+var tutorial_seen := false
+
 
 func _ready() -> void:
 	_load()
@@ -61,6 +66,11 @@ func has_valid_player_name() -> bool:
 
 func set_player_country(value: String) -> void:
 	player_country = value
+	_save()
+
+
+func mark_tutorial_seen() -> void:
+	tutorial_seen = true
 	_save()
 
 
@@ -151,6 +161,7 @@ func _save() -> void:
 	cfg.set_value("audio", "vibration_enabled", vibration_enabled)
 	cfg.set_value("online", "player_name", player_name)
 	cfg.set_value("online", "player_country", player_country)
+	cfg.set_value("online", "tutorial_seen", tutorial_seen)
 	cfg.save(SAVE_PATH)
 
 
@@ -163,3 +174,4 @@ func _load() -> void:
 	vibration_enabled = cfg.get_value("audio", "vibration_enabled", vibration_enabled)
 	player_name = cfg.get_value("online", "player_name", player_name)
 	player_country = cfg.get_value("online", "player_country", player_country)
+	tutorial_seen = cfg.get_value("online", "tutorial_seen", tutorial_seen)

@@ -40,6 +40,19 @@ var ai_difficulty: String = "Medium" # "Easy" / "Medium" / "Hard"
 ## moment an invite is accepted (GAME_DESIGN.md §11).
 var online_country_picker: bool = false
 
+## Runs the match scene as the interactive tutorial instead of a game.
+##
+## It replaced the first three instruction cards, which said in words what the
+## tutorial now has you do — watching a first-time player, none of it had landed,
+## because nobody reads rules before playing. The fourth card (scoring, offside,
+## keeper, cards) survives as the tutorial's closing screen, since none of that
+## can be taught in a single turn.
+var tutorial_mode: bool = false
+
+## Which card the instructions screen opens on. The tutorial ends by sending the
+## player to the rules card rather than back to page one.
+var instructions_page: int = 0
+
 ## True for a networked match. There is deliberately no separate "online screen"
 ## any more: finding an opponent happens as an OVERLAY on the match scene, on
 ## top of the pitch you just placed your formation on (GAME_DESIGN.md §11). When

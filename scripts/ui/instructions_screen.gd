@@ -52,7 +52,12 @@ func _ready() -> void:
 		max_h = maxf(max_h, p.get_combined_minimum_size().y)
 	var page4_natural_h: float = _pages[3].get_combined_minimum_size().y
 	stage.custom_minimum_size.y = max_h
-	_go_to_page(0, 0)
+	# Arriving from the tutorial opens straight on the rules card: the first
+	# three pages are what the tutorial just walked through. They stay in the
+	# carousel rather than being deleted — anyone curious can swipe back — but
+	# nobody is made to read them twice.
+	_go_to_page(clampi(GameFlow.instructions_page, 0, PAGE_COUNT - 1), 0)
+	GameFlow.instructions_page = 0
 	_scale_rules_list(page4_natural_h)
 
 

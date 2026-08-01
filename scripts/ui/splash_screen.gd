@@ -25,4 +25,13 @@ func _input(event: InputEvent) -> void:
 	if is_continue:
 		_going = true
 		get_viewport().set_input_as_handled()
+		# First launch goes straight into the tutorial. The player who most needs
+		# it is exactly the one who would never go looking for it — the whole
+		# reason the written instructions failed was that nobody opens them.
+		if not Settings.tutorial_seen:
+			GameFlow.tutorial_mode = true
+			GameFlow.player_formation = []
+			GameFlow.player_side = "HomeTeam"
+			GameFlow.goto(GameFlow.Screen.MATCH)
+			return
 		GameFlow.goto(GameFlow.Screen.MAIN_MENU)

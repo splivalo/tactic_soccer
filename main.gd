@@ -540,7 +540,9 @@ func _spawn_teams() -> void:
 		push_warning("No player_scene assigned — cannot spawn teams.")
 		return
 	_state = MatchState.new()
-	if GameFlow.player_formation.is_empty():
+	if GameFlow.tutorial_mode:
+		_start_tutorial()
+	elif GameFlow.player_formation.is_empty():
 		_start_placement()
 	elif GameFlow.online_mode and GameFlow.online_room == "":
 		# Online with a formation already laid out but no opponent yet — this is
@@ -564,6 +566,8 @@ func _my_layout() -> Array[Dictionary]:
 
 
 func _home_formation() -> Array[Dictionary]:
+	if GameFlow.tutorial_mode:
+		return Tutorial.home_formation()
 	if GameFlow.player_side == "HomeTeam" and not _my_layout().is_empty():
 		return _my_layout()
 	if GameFlow.player_side != "HomeTeam" and not _remote_formation.is_empty():
@@ -572,6 +576,8 @@ func _home_formation() -> Array[Dictionary]:
 
 
 func _away_formation() -> Array[Dictionary]:
+	if GameFlow.tutorial_mode:
+		return Tutorial.away_formation()
 	if GameFlow.player_side == "AwayTeam" and not _my_layout().is_empty():
 		return _my_layout()
 	if GameFlow.player_side != "AwayTeam" and not _remote_formation.is_empty():
@@ -982,6 +988,99 @@ func _finish_placement() -> void:
 		_show_online_overlay()
 		return
 	_start_coin_toss()
+
+
+# --- Tutorial ------------------------------------------------------------------
+# Learning by doing, on the real board, through the real rules. The lesson
+# itself (steps, what may be tapped, what advances) lives in Tutorial — this is
+# only the view side: build the small scenario, strip the HUD to its footer, and
+# refuse taps that aren't part of the current step.
+
+## How long a step may go nowhere before an escape hatch appears. Deliberately
+## not a Next button from the start: a step that can be clicked past is a step
+## that gets clicked past, and then the tutorial teaches nothing — which is
+## exactly how the written instructions failed.
+const TUTORIAL_STUCK_SECONDS := 8.0
+
+var _tutorial: Tutorial = null
+var _tutorial_stuck := 0.0
+
+
+func _start_tutorial() -> void:
+	_tutorial = Tutorial.new()
+	ball_start_cell = Tutorial.BALL
+	if _hud != null:
+		_hud.show_match_chrome(false)
+	_build_match("HomeTeam")
+	_tutorial_refresh()
+
+
+## Only the cells the current step is about. A stray tap during a lesson must not
+## produce a result, because an unexplained result is exactly what the tutorial
+## exists to prevent.
+func _tutorial_blocks(cell: Vector2i) -> bool:
+	if _tutorial == null or _tutorial.finished():
+		return false
+	if not _tutorial.allows(cell):
+		return true
+	var why := _tutorial.refusal(cell)
+	if why == "":
+		return false
+	# Refused ON PURPOSE, with the reason — the risky square is offered rather
+	# than hidden, because "don't leave it there" only lands if you could have.
+	if _hud != null:
+		_hud.set_footer_text(why, Color.WHITE)
+	_tutorial_stuck = 0.0
+	return true
+
+
+func _tutorial_did(kind: String, cell: Vector2i) -> void:
+	if _tutorial == null:
+		return
+	if _tutorial.on_action(kind, cell):
+		_tutorial_refresh()
+
+
+func _tutorial_refresh() -> void:
+	_tutorial_stuck = 0.0
+	if _hud != null:
+		_hud.set_footer_text(_tutorial.prompt(), Color.WHITE)
+	if _tutorial.finished():
+		await get_tree().create_timer(1.6).timeout
+		_finish_tutorial()
+		return
+	_draw_tutorial_rays()
+
+
+## The eight straight lines out of whoever holds the ball, each stopping at the
+## first thing in the way.
+##
+## This is the one picture the whole tutorial is built around. Watching someone
+## play for the first time, three of their four mistakes came from not knowing
+## the ball travels only in straight lines — without that, the highlighted
+## squares look arbitrary and stop being read as information at all. Drawing the
+## rays turns "why that teammate and not this one" into something visible rather
+## than something explained.
+func _draw_tutorial_rays() -> void:
+	var origin := _tutorial.ray_origin()
+	if origin == Vector2i(-1, -1):
+		return
+	var occupied := {}
+	for cell in _state.pieces:
+		occupied[cell] = true
+	for cell in Board.reachable_from(origin, occupied):
+		_fx.add_tile(_cell_world(cell.x, cell.y), color_trail, 0.5, false)
+
+
+func _finish_tutorial() -> void:
+	_tutorial = null
+	GameFlow.tutorial_mode = false
+	Settings.mark_tutorial_seen()
+	# Ends on the rules card — scoring, offside, the keeper, cards. None of that
+	# fits in one turn, and it is the only instruction page the tutorial didn't
+	# make redundant.
+	GameFlow.instructions_page = 3
+	GameFlow.goto(GameFlow.Screen.INSTRUCTIONS)
 
 
 # --- Online: finding an opponent, without leaving the pitch -------------------
@@ -1599,11 +1698,17 @@ func _combo_tap(screen_pos: Vector2) -> void:
 			return
 		var pass_cell := _resolve_target(screen_pos, _state.combo_pass_targets(), TAP_HIT_RADIUS)
 		if pass_cell != NO_CELL:
+			if _tutorial_blocks(pass_cell):
+				return
 			_state.extend(pass_cell) # tap-to-pass — connects the chain, same as a drag
 			_draw_combo()
+			_tutorial_did("extend", pass_cell)
 			return
 		var shoot_cell := _resolve_target(screen_pos, _state.combo_shoot_targets(), TAP_HIT_RADIUS)
 		if shoot_cell != NO_CELL:
+			if _tutorial_blocks(shoot_cell):
+				return
+			_tutorial_did("shoot", shoot_cell)
 			_do_combo(shoot_cell) # direct tap-to-shoot still works, no ambiguity
 			return
 		return
@@ -1616,10 +1721,14 @@ func _combo_tap(screen_pos: Vector2) -> void:
 	# (see _on_motion/_on_release/_move_click) — `_holding` just means
 	# "resolve the eventual move via hold_and_move, not do_move".
 	var starter := _resolve_target(screen_pos, _state.combo_starters(), TAP_HIT_RADIUS)
-	if starter != NO_CELL and _state.begin(starter):
-		_play_sfx(SELECT_SOUND, select_sfx_volume_db)
-		_draw_combo()
-		return
+	if starter != NO_CELL:
+		if _tutorial_blocks(starter):
+			return
+		if _state.begin(starter):
+			_play_sfx(SELECT_SOUND, select_sfx_volume_db)
+			_draw_combo()
+			_tutorial_did("begin", starter)
+			return
 	var hold_fig := _resolve_target(screen_pos, _state.own_cells(), TAP_HIT_RADIUS)
 	if hold_fig != NO_CELL:
 		_holding = true
@@ -2594,6 +2703,7 @@ func _apply_move(from: Vector2i, to: Vector2i, as_hold: bool = false) -> void:
 	# bug a human reported.
 	_pool_seconds_left = _turn_timer.time_left
 	_turn_timer.stop()
+	_tutorial_did("move", to)
 	var fig: Node3D = _node_at[from]
 	_node_at.erase(from)
 	_node_at[to] = fig
