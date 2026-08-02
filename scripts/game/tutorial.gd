@@ -62,21 +62,38 @@ static func away_formation() -> Array[Dictionary]:
 	return out
 
 
-## One sentence at a time, shown in the footer the placement phase already uses.
-## Never a paragraph: this is read mid-action, not studied.
+## Split in two on purpose. The RULE goes up top where there is room to wrap;
+## the ACTION goes in the footer, which is a single narrow strip — one long
+## sentence there simply ran off both edges of the screen.
+func lesson() -> String:
+	match step:
+		Step.PICK:
+			return "You have the ball while one of your players stands next to it."
+		Step.CONNECT:
+			return "The ball travels only in straight lines, until something blocks it."
+		Step.CHAIN:
+			return "You can connect as many players as you like."
+		Step.SHOOT:
+			return "The last player must kick the ball away."
+		Step.MOVE:
+			return "A turn is two things: play the ball, then move a player."
+	return "That's it — the rest you'll pick up playing."
+
+
+## Short enough for the footer. Imperative, one line, no explanation.
 func prompt() -> String:
 	match step:
 		Step.PICK:
-			return "You have the ball while a player stands next to it. Tap that player."
+			return "Tap that player"
 		Step.CONNECT:
-			return "The ball only travels in straight lines, until something blocks it. Tap the teammate it can reach."
+			return "Tap the teammate it can reach"
 		Step.CHAIN:
-			return "Keep going — connect as many players as you like."
+			return "Tap the next one"
 		Step.SHOOT:
-			return "The last player must kick the ball away. Don't leave it next to an opponent."
+			return "Pick an empty square, not next to an opponent"
 		Step.MOVE:
-			return "Every turn is two things: play the ball, then move one player."
-	return "That's it. The rest you'll pick up playing."
+			return "Move any player"
+	return ""
 
 
 ## Cells the player may act on right now. Everything else is ignored, so a

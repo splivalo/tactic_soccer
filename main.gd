@@ -1004,6 +1004,8 @@ const TUTORIAL_STUCK_SECONDS := 8.0
 
 var _tutorial: Tutorial = null
 var _tutorial_stuck := 0.0
+var _tutorial_layer: CanvasLayer = null
+var _tutorial_lesson: Label = null
 
 
 func _start_tutorial() -> void:
@@ -1011,8 +1013,44 @@ func _start_tutorial() -> void:
 	ball_start_cell = Tutorial.BALL
 	if _hud != null:
 		_hud.show_match_chrome(false)
+	_build_tutorial_banner()
 	_build_match("HomeTeam")
 	_tutorial_refresh()
+
+
+## A heading and a wrapped explanation, built in code so hud.tscn stays as the
+## author left it — same approach as the online overlay.
+##
+## The heading exists because the tutorial otherwise just... starts, with no
+## indication of what this screen suddenly is. And the explanation lives up here
+## rather than in the footer because the footer is one narrow strip: a full
+## sentence there ran off both edges of the screen.
+func _build_tutorial_banner() -> void:
+	_tutorial_layer = CanvasLayer.new()
+	_tutorial_layer.layer = 9
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	for side in ["margin_left", "margin_right"]:
+		margin.add_theme_constant_override(side, 70)
+	margin.add_theme_constant_override("margin_top", 70)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 18)
+	margin.add_child(box)
+
+	var heading := Label.new()
+	heading.text = "How to play"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", 78)
+	box.add_child(heading)
+
+	_tutorial_lesson = Label.new()
+	_tutorial_lesson.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tutorial_lesson.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tutorial_lesson.add_theme_font_size_override("font_size", 40)
+	box.add_child(_tutorial_lesson)
+
+	_tutorial_layer.add_child(margin)
+	add_child(_tutorial_layer)
 
 
 ## Only the cells the current step is about. A stray tap during a lesson must not
@@ -1043,6 +1081,8 @@ func _tutorial_did(kind: String, cell: Vector2i) -> void:
 
 func _tutorial_refresh() -> void:
 	_tutorial_stuck = 0.0
+	if _tutorial_lesson != null:
+		_tutorial_lesson.text = _tutorial.lesson()
 	if _hud != null:
 		_hud.set_footer_text(_tutorial.prompt(), Color.WHITE)
 	if _tutorial.finished():
@@ -1074,6 +1114,10 @@ func _draw_tutorial_rays() -> void:
 
 func _finish_tutorial() -> void:
 	_tutorial = null
+	if _tutorial_layer != null:
+		_tutorial_layer.queue_free()
+		_tutorial_layer = null
+		_tutorial_lesson = null
 	GameFlow.tutorial_mode = false
 	Settings.mark_tutorial_seen()
 	# Ends on the rules card — scoring, offside, the keeper, cards. None of that
@@ -2790,7 +2834,14 @@ func _refresh_turn_view() -> void:
 		_turn_timer.start(carried)
 		_publish_turn_deadline(carried)
 	if _hud != null:
-		_hud.update_turn_hint(_state.current, _state.phase, "", _state.moves_left)
+		# During the tutorial the footer belongs to the lesson. The normal
+		# "BRA: move a player" hint was overwriting it the moment the turn view
+		# refreshed, so the instruction the player was meant to follow vanished
+		# and was replaced by something about a country they aren't playing.
+		if _tutorial != null and not _tutorial.finished():
+			_hud.set_footer_text(_tutorial.prompt(), Color.WHITE)
+		else:
+			_hud.update_turn_hint(_state.current, _state.phase, "", _state.moves_left)
 	_holding = false
 	_maybe_ai_turn()
 
