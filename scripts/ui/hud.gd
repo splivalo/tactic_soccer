@@ -105,6 +105,12 @@ func _ready() -> void:
 	# resource would follow the last colour set.
 	_announce_card_style = (_announce_card.get_theme_stylebox("panel") as StyleBoxFlat).duplicate()
 	_announce_card.add_theme_stylebox_override("panel", _announce_card_style)
+	# Inset the footer row off both edges. Done here rather than in hud.tscn so
+	# the scene stays as authored — see _fit_footer for the rest of the story.
+	var strip := _footer_label.get_parent() as Control
+	if strip != null:
+		strip.offset_left = FOOTER_PADDING
+		strip.offset_right = -FOOTER_PADDING
 
 
 ## Android/system back gesture: open the same pause+confirm modal instead of
@@ -255,7 +261,39 @@ func update_timer(seconds_left: int) -> void:
 ## way update_turn_hint below does.
 func set_footer_text(text: String, dot_color: Color) -> void:
 	_footer_label.text = text
+	_fit_footer()
 	_dot_style.bg_color = dot_color
+
+
+## Breathing room at the edges, and a font that gives way before the text does.
+##
+## The footer is one line on a phone-width strip and its content is not fixed:
+## a turn hint is short, a tutorial correction is a sentence, and an online name
+## is whatever a stranger typed. Anything long ran flat into both edges. Padding
+## alone would only move where it collides, so the size steps down until the
+## line actually fits — the label never wraps (the strip has no room for a second
+## line) and never gets clipped.
+const FOOTER_PADDING := 44.0
+const FOOTER_FONT_MAX := 56
+const FOOTER_FONT_MIN := 28
+
+func _fit_footer() -> void:
+	var strip := _footer_label.get_parent() as Control
+	if strip == null:
+		return
+	# strip is already inset by FOOTER_PADDING on each side (see _ready); what is
+	# left to account for is the turn dot and the gap beside it.
+	var available := strip.size.x - _footer_dot.size.x - strip.get_theme_constant("separation")
+	if available <= 0.0:
+		return
+	var font := _footer_label.get_theme_font("font")
+	if font == null:
+		return
+	var size := FOOTER_FONT_MAX
+	while size > FOOTER_FONT_MIN \
+			and font.get_string_size(_footer_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > available:
+		size -= 2
+	_footer_label.add_theme_font_size_override("font_size", size)
 
 
 ## side = "HomeTeam"/"AwayTeam", phase = MatchState.Phase — bottom hint bar
@@ -279,6 +317,7 @@ func update_turn_hint(side: String, phase: int, intro: String = "", _moves_left:
 			verb = "remove a player (red card)"
 	var hint := "%s: %s" % [code, verb]
 	_footer_label.text = "%s   —   %s" % [intro, hint] if intro != "" else hint
+	_fit_footer()
 	_dot_style.bg_color = dot_color
 	_breathe_shield(side)
 

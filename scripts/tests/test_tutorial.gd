@@ -76,6 +76,16 @@ func _initialize() -> void:
 			safe_count += 1
 	_check(safe_count > 0, "there is somewhere safe to put the ball")
 	_check(risky_count > 0, "...and somewhere that hands it straight over")
+
+	# And NONE of them may be a goal. Step 4 accepts any square away from the
+	# opponent, so a reachable goalmouth ends the tutorial three steps early —
+	# ball in, cinematic, kickoff, lesson over. The position has to rule it out,
+	# since "don't score" is not a lesson worth teaching.
+	var scoring := 0
+	for s in shots:
+		if ms.is_goal_cell(s):
+			scoring += 1
+	_check(scoring == 0, "no shot from here can find a goal and cut the lesson short")
 	_check(Tutorial.SAFE_SHOT in shots, "the named safe square is a legal shot")
 	_check(Tutorial.RISKY_SHOT in shots, "the named risky square is a legal shot too")
 	_check(t.refusal(Tutorial.RISKY_SHOT) != "", "the risky one is refused with a reason")

@@ -41,20 +41,28 @@ const MINE := [
 	{"cell": Vector2i(5, 6), "number": 5, "role": "field"},   # B — straight right of A
 	{"cell": Vector2i(5, 3), "number": 6, "role": "field"},   # C — straight up from B
 ]
-## One opponent, standing where some of C's shooting squares fall beside him and
-## others don't — that contrast is the whole of step 4.
+## One opponent, doing two jobs. Some of C's shooting squares fall beside him and
+## others don't — that contrast is the whole of step 4. And he stands on the one
+## diagonal out of C that runs into the goalmouth, corking it.
 ##
-## C is deliberately NOT on a straight line from A: with one, A could pass
-## straight past B to C, and the chaining step would have nothing left to teach.
+## That second job matters more than it sounds. Step 4 accepts any square away
+## from him, and one of those squares was a goal: the ball went in, the goal
+## cinematic played, the sides kicked off again, and the lesson was over three
+## steps early with nothing taught. Scoring is not something to forbid with a
+## message — it is the whole point of the game — so the position simply doesn't
+## offer it here.
+##
+## C is likewise NOT on a straight line from A: with one, A could pass straight
+## past B to C, and the chaining step would have nothing left to teach.
 const THEIRS := [
-	{"cell": Vector2i(3, 2), "number": 1, "role": "gk"},
+	{"cell": Vector2i(4, 2), "number": 1, "role": "gk"},
 ]
 
 const FIRST := Vector2i(3, 6)   # A
 const SECOND := Vector2i(5, 6)  # B
 const THIRD := Vector2i(5, 3)   # C
-const SAFE_SHOT := Vector2i(5, 2)
-const RISKY_SHOT := Vector2i(4, 3)  # next to the opponent on (3,2)
+const SAFE_SHOT := Vector2i(5, 0)
+const RISKY_SHOT := Vector2i(4, 3)  # right below the opponent on (4,2)
 
 enum Step { PICK, CONNECT, CHAIN, SHOOT, MOVE, DONE }
 
@@ -189,18 +197,3 @@ func on_action(kind: String, cell: Vector2i) -> bool:
 
 func finished() -> bool:
 	return step == Step.DONE
-
-
-## Which cell the ray drawing should fan out from, or (-1,-1) for none. Showing
-## the eight straight lines from whoever holds the ball is the single most
-## useful thing on screen during the middle steps — it turns "why is that one
-## lit and not that one" into something you can see rather than be told.
-func ray_origin() -> Vector2i:
-	match step:
-		Step.CONNECT:
-			return FIRST
-		Step.CHAIN:
-			return SECOND
-		Step.SHOOT:
-			return THIRD
-	return Vector2i(-1, -1)

@@ -1128,29 +1128,15 @@ func _tutorial_refresh() -> void:
 		await get_tree().create_timer(1.6).timeout
 		_finish_tutorial()
 		return
-	_draw_tutorial_rays()
 
 
-## The eight straight lines out of whoever holds the ball, each stopping at the
-## first thing in the way.
-##
-## This is the one picture the whole tutorial is built around. Watching someone
-## play for the first time, three of their four mistakes came from not knowing
-## the ball travels only in straight lines — without that, the highlighted
-## squares look arbitrary and stop being read as information at all. Drawing the
-## rays turns "why that teammate and not this one" into something visible rather
-## than something explained.
-func _draw_tutorial_rays() -> void:
-	var origin := _tutorial.ray_origin()
-	if origin == Vector2i(-1, -1):
-		return
-	var occupied := {}
-	for cell in _state.pieces:
-		occupied[cell] = true
-	for cell in Board.reachable_from(origin, occupied):
-		_fx.add_tile(_cell_world(cell.x, cell.y), color_trail, 0.5, false)
-
-
+## The tutorial used to fan the eight straight lines out of the ball-carrier in
+## the trail colour, on top of whatever the match had already drawn. It was the
+## picture the lesson was built around — and it was still a tile painted in a
+## colour that means nothing anywhere else in the game, which is the one thing
+## this screen must not do. The board teaches straight lines on its own: the
+## position is arranged so exactly one teammate lights up, which is the same
+## fact shown in the game's own language.
 func _finish_tutorial() -> void:
 	_tutorial = null
 	if _tutorial_layer != null:
