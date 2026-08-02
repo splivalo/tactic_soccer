@@ -1886,6 +1886,12 @@ func _hint_ball_carriers(screen_pos: Vector2) -> void:
 	_fx.clear()
 	for cell in hint:
 		_fx.add_tile(_cell_world(cell.x, cell.y), color_chain, -1.0, true)
+	# Clearing the board took the tiles away but left every own figure's glow
+	# suppressed, because the draw before this one had reported those cells as
+	# covered. The result was a team standing on nothing until the next redraw —
+	# the blink answered the question and blanked the rest of the answer. Hand
+	# the markers back to everyone the hint isn't already sitting on.
+	_update_own_team_markers(hint)
 	_play_sfx(SELECT_SOUND, select_sfx_volume_db)
 
 
@@ -2731,6 +2737,10 @@ func _move_click(screen_pos: Vector2) -> void:
 		return
 	_move_from = NO_CELL # cancel selection
 	_fx.clear()
+	# Same as the ball hint above: the figure that was selected had its glow
+	# suppressed while it wore an FX tile, and clearing the tile has to hand it
+	# back or cancelling leaves that one player standing on bare grass.
+	_update_own_team_markers()
 
 
 ## Shared by every action that can end a turn (execute_combo/do_move/
