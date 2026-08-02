@@ -31,6 +31,24 @@ func _initialize() -> void:
 	_check(Tutorial.FIRST in ms.combo_starters(), "the player the prompt points at can start")
 	_check(t.step == Tutorial.Step.PICK, "starts on the first lesson")
 
+	# The heading is what lets the refusals stop arguing: under PASS THE BALL,
+	# turning away an early kick is obviously "not this part" rather than a claim
+	# that kicking is against the rules. That only works if the three passing
+	# steps share one heading and the others don't — a heading that changed every
+	# step would say nothing about which idea you are still on.
+	var titles := {}
+	for s in Tutorial.Step.values():
+		t.step = s
+		titles[s] = t.title()
+		_check(t.title() != "", "step %s is named" % Tutorial.Step.keys()[s])
+	t.step = Tutorial.Step.PICK
+	_check(titles[Tutorial.Step.CONNECT] == titles[Tutorial.Step.CHAIN] \
+		and titles[Tutorial.Step.CHAIN] == titles[Tutorial.Step.SHOOT],
+		"the three passing steps share one heading")
+	_check(titles[Tutorial.Step.PICK] != titles[Tutorial.Step.CONNECT] \
+		and titles[Tutorial.Step.MOVE] != titles[Tutorial.Step.SHOOT],
+		"...and the heading changes when the idea does")
+
 	# Step 1 — pick him up.
 	#
 	# The board is drawn EXACTLY as a real match draws it (the tutorial hides no

@@ -83,6 +83,29 @@ static func away_formation() -> Array[Dictionary]:
 	return out
 
 
+## The section the player is in, and the reason the refusals no longer have to
+## argue. Under a heading that says PASS THE BALL, turning away an early kick
+## isn't a claim that kicking is against the rules — it is obviously just not
+## what this part is about. Before, every "not yet" read as a rule, and it wasn't
+## one: in a real game you may shoot whenever you like, or decline the ball
+## entirely and simply move someone (the closing card's HOLD THE BALL).
+##
+## The names are the ones the game already owns — the titles of the three
+## instruction cards this tutorial replaced. PASS THE BALL covers three steps
+## because card 1 does ("Chain unlimited passes, then kick into any empty
+## square"); a heading that DOESN'T change is how the player knows they are still
+## on the same idea.
+func title() -> String:
+	match step:
+		Step.PICK:
+			return "TAKE POSSESSION"
+		Step.CONNECT, Step.CHAIN, Step.SHOOT:
+			return "PASS THE BALL"
+		Step.MOVE:
+			return "MOVE A PLAYER"
+	return "THAT'S A TURN"
+
+
 ## Split in two on purpose. The RULE goes up top where there is room to wrap;
 ## the ACTION goes in the footer, which is a single narrow strip — one long
 ## sentence there simply ran off both edges of the screen.
@@ -98,10 +121,14 @@ func lesson() -> String:
 		Step.CHAIN:
 			return "A pass can carry on through more players."
 		Step.SHOOT:
-			return "The last player must kick it away."
+			# Not "must": a chain can be stepped back out of, and the ball can be
+			# declined altogether. Describe the shape instead of imposing it.
+			return "A chain ends with a kick into space."
 		Step.MOVE:
-			return "Every turn: play the ball, then move a player."
-	return "That's it. The rest comes with playing."
+			# Was "Every turn: play the ball, then move a player", which made
+			# playing the ball sound compulsory. It isn't.
+			return "Finish the turn by moving a player."
+	return "The rest you'll pick up as you play."
 
 
 ## Short enough for the footer. Imperative, one line, no explanation.
@@ -119,7 +146,7 @@ func prompt() -> String:
 			return "Move any player"
 	# DONE still needs a line: the footer stays on screen for a beat after the
 	# last move, and left empty the match's own turn hint filled the gap.
-	return "That's a turn"
+	return "Nice one"
 
 
 ## Cells the player may act on right now. Everything else is ignored, so a
@@ -177,7 +204,10 @@ func nudge(cell: Vector2i) -> String:
 		Step.CONNECT, Step.CHAIN:
 			if is_mine(cell):
 				return "That player is not in line with the ball"
-			return "Not yet — pass to a teammate first"
+			# The heading above already says PASS THE BALL, so this can simply be
+			# the next thing to do rather than a defence of why the kick was
+			# turned away.
+			return "One more pass first"
 	return ""
 
 

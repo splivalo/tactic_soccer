@@ -1023,6 +1023,7 @@ const BODY_FONT_SIZE := 34
 var _tutorial: Tutorial = null
 var _tutorial_stuck := 0.0
 var _tutorial_layer: CanvasLayer = null
+var _tutorial_title: Label = null
 var _tutorial_lesson: Label = null
 
 
@@ -1065,14 +1066,17 @@ func _build_tutorial_banner() -> void:
 	box.add_theme_constant_override("separation", 6)
 	margin.add_child(box)
 
-	var heading := Label.new()
-	heading.text = "How to play"
-	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# The heading is the SECTION, not the screen. "How to play" told the player
+	# what they were looking at once and then said nothing for the rest of the
+	# lesson; the section name answers that AND tells them where they are inside
+	# it — and it is what lets the refusals stop arguing (see Tutorial.title).
+	#
 	# 96 is what every other screen titles itself at — Choose Difficulty, Choose
-	# Country, the rules cards, Legal, the result screens. This one was 56 and
-	# read as a caption rather than as the name of where you are.
-	heading.add_theme_font_size_override("font_size", TITLE_FONT_SIZE)
-	box.add_child(heading)
+	# Country, the rules cards, Legal, the result screens.
+	_tutorial_title = Label.new()
+	_tutorial_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tutorial_title.add_theme_font_size_override("font_size", TITLE_FONT_SIZE)
+	box.add_child(_tutorial_title)
 
 	# Body text, not display text — so the same system font the rules cards set
 	# their prose in, at the same 34 (see instructions_screen.tscn's Page4).
@@ -1140,6 +1144,8 @@ func _tutorial_did(kind: String, cell: Vector2i) -> void:
 
 func _tutorial_refresh() -> void:
 	_tutorial_stuck = 0.0
+	if _tutorial_title != null:
+		_tutorial_title.text = _tutorial.title()
 	if _tutorial_lesson != null:
 		_tutorial_lesson.text = _tutorial.lesson()
 	if _hud != null:
@@ -1162,6 +1168,7 @@ func _finish_tutorial() -> void:
 	if _tutorial_layer != null:
 		_tutorial_layer.queue_free()
 		_tutorial_layer = null
+		_tutorial_title = null
 		_tutorial_lesson = null
 	GameFlow.tutorial_mode = false
 	Settings.mark_tutorial_seen()
