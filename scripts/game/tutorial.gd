@@ -152,24 +152,42 @@ func allows(cell: Vector2i) -> bool:
 ## Only one kind exists: a shot that parks the ball beside an opponent. Those are
 ## offered rather than hidden, because "don't leave it there" only means
 ## something if leaving it there was possible.
-## "He" said nothing about WHICH he — the player kicking or the one waiting. Say
-## whose it is.
+## "He is standing right there" said nothing about WHICH he — the player kicking
+## or the one waiting. Name the consequence instead of the geometry: the player
+## can see who is standing where, what they can't see is what happens next.
 func refusal(cell: Vector2i) -> String:
 	if step == Step.SHOOT and beside_opponent(cell):
-		return "Too close to their player — they'd win it."
+		return "Land it there and they take it off you"
 	return ""
 
 
 ## Said when a tap lands on something real but not part of this step. The board
 ## is the game's own board, so a wrong tap is a fair mistake — answering with
 ## silence is what made the game feel broken in the first place.
-func nudge(_cell: Vector2i) -> String:
+##
+## Mid-chain there are two different wrong taps and they need different answers.
+## An empty square in a straight line is a SHOT: the player read the board
+## correctly and just kicked the ball away a step early. Telling them that isn't
+## in line is simply false, and a correction that is wrong about what you did is
+## worse than none.
+func nudge(cell: Vector2i) -> String:
 	match step:
 		Step.PICK:
 			return "Only a player beside the ball can play it"
 		Step.CONNECT, Step.CHAIN:
-			return "That one is not in line with the ball"
+			if is_mine(cell):
+				return "That player is not in line with the ball"
+			return "Not yet — pass to a teammate first"
 	return ""
+
+
+## Nobody has moved yet at the steps this is asked about — the tutorial's only
+## move is its last step — so the starting layout is still the live one.
+func is_mine(cell: Vector2i) -> bool:
+	for p in MINE:
+		if p["cell"] == cell:
+			return true
+	return false
 
 
 func beside_opponent(cell: Vector2i) -> bool:

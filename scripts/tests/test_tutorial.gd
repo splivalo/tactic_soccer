@@ -51,6 +51,16 @@ func _initialize() -> void:
 	_check(Tutorial.SECOND in first_targets,
 		"the teammate the prompt points at IS reachable in a straight line")
 	_check(first_targets.size() == 1, "...and he is the ONLY one reachable")
+	# Mid-chain, an empty square IS reachable in a straight line — it's a shot.
+	# Answering that with "not in line with the ball" is factually wrong about
+	# what the player just did, which is worse than saying nothing.
+	var early_shot := ms.combo_shoot_targets()
+	_check(not early_shot.is_empty(), "a shot is available mid-chain, so the mistake is reachable")
+	if not early_shot.is_empty():
+		_check(t.nudge(early_shot[0]) != t.nudge(Tutorial.THIRD),
+			"kicking early and picking an off-line player get different answers")
+		_check(not t.is_mine(early_shot[0]), "...because one of them is an empty square")
+
 	_check(ms.extend(Tutorial.SECOND), "connect to him")
 	_check(t.on_action("extend", Tutorial.SECOND), "lesson advances to chaining")
 

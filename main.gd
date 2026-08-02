@@ -1016,6 +1016,10 @@ const UI_THEME := preload("res://my_theme.tres")
 ## team_select.tscn, legal_screen.tscn, the instructions cards, win/lose.
 const TITLE_FONT_SIZE := 96
 
+## And what the rules cards set their PROSE at — instructions_screen.tscn's
+## Page4 CardBody, in the system font rather than the theme's display face.
+const BODY_FONT_SIZE := 34
+
 var _tutorial: Tutorial = null
 var _tutorial_stuck := 0.0
 var _tutorial_layer: CanvasLayer = null
@@ -1070,14 +1074,19 @@ func _build_tutorial_banner() -> void:
 	heading.add_theme_font_size_override("font_size", TITLE_FONT_SIZE)
 	box.add_child(heading)
 
-	# Which leaves the lesson roughly one line's worth of room under it — hence
-	# the one-line lessons in tutorial.gd. Wrapping is still on, because a longer
-	# translation must push down rather than run off the sides, and two lines
-	# still clear the footer.
+	# Body text, not display text — so the same system font the rules cards set
+	# their prose in, at the same 34 (see instructions_screen.tscn's Page4).
+	# The theme's Bebas is a condensed display face: right for the title above,
+	# wrong for a sentence, which is why this read as small and cramped at a size
+	# that would have been fine in the card's font.
+	#
+	# Wrapping stays on, because a longer translation must push down rather than
+	# run off the sides, and two lines still clear the footer.
 	_tutorial_lesson = Label.new()
 	_tutorial_lesson.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_tutorial_lesson.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_tutorial_lesson.add_theme_font_size_override("font_size", 30)
+	_tutorial_lesson.add_theme_font_override("font", SystemFont.new())
+	_tutorial_lesson.add_theme_font_size_override("font_size", BODY_FONT_SIZE)
 	box.add_child(_tutorial_lesson)
 
 	_tutorial_layer.add_child(margin)
