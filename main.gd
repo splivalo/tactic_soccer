@@ -1089,6 +1089,27 @@ func _tutorial_blocks(cell: Vector2i) -> bool:
 	return true
 
 
+## Keeps only what the current step is about. Refusing a tap is not enough on its
+## own: the board lit up every own figure and every legal target, so the tutorial
+## was inviting taps with one hand and refusing them with the other. Nothing
+## outside the lesson gets highlighted now, and a highlight means what it always
+## means — this responds.
+##
+## An empty allowed-list is "no restriction" (the closing MOVE step hands the
+## whole board back), so it passes everything through untouched.
+func _tutorial_highlights(cells: Array[Vector2i]) -> Array[Vector2i]:
+	if _tutorial == null or _tutorial.finished():
+		return cells
+	var allowed := _tutorial.allowed_cells()
+	if allowed.is_empty():
+		return cells
+	var out: Array[Vector2i] = []
+	for cell in cells:
+		if cell in allowed:
+			out.append(cell)
+	return out
+
+
 func _tutorial_did(kind: String, cell: Vector2i) -> void:
 	if _tutorial == null:
 		return
@@ -1792,6 +1813,12 @@ func _combo_tap(screen_pos: Vector2) -> void:
 			return
 	var hold_fig := _resolve_target(screen_pos, _state.own_cells(), TAP_HIT_RADIUS)
 	if hold_fig != NO_CELL:
+		# The tutorial has to gate this branch too. It was the one way into a real
+		# action that wasn't checked, so "tap that player" could be answered by
+		# tapping a DIFFERENT one and walking him off — declining the ball, which
+		# is a rule the tutorial hasn't got to yet and never asked for.
+		if _tutorial_blocks(hold_fig):
+			return
 		_holding = true
 		_move_from = hold_fig
 		_draw_move(hold_fig)
@@ -1829,6 +1856,9 @@ func _hint_ball_carriers(screen_pos: Vector2) -> void:
 					hint.append(cell)
 					break
 
+	# The keeper stands beside the tutorial's ball too, so untrimmed this would
+	# blink two answers to a question whose whole point is that there is one.
+	hint = _tutorial_highlights(hint)
 	if hint.is_empty():
 		return
 	_fx.clear()
@@ -2980,7 +3010,7 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 		# opens the hold-move target pick) — see combo_shoot_targets/
 		# _draw_move below for where the actual risky targets get flagged,
 		# right at the point an actual card-triggering action is on offer.
-		var own := _state.own_cells()
+		var own := _tutorial_highlights(_state.own_cells())
 		for cell in own:
 			_fx.add_tile(_cell_world(cell.x, cell.y), color_tap)
 		_update_own_team_markers(own)
@@ -2998,14 +3028,14 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 	_fx.set_trail(pts, color_trail)
 	for c in _state.chain:
 		_fx.add_tile(_cell_world(c.x, c.y), color_chain) # orange = chosen chain (active receiver)
-	var pass_targets := _state.combo_pass_targets()
+	var pass_targets := _tutorial_highlights(_state.combo_pass_targets())
 	for c in pass_targets:
 		_fx.add_tile(_cell_world(c.x, c.y), color_tap) # blue = next pass
 	# No target can be flagged as "this one books you" any more: the only
 	# bookable offence left is time-wasting (see MatchState.forfeit), which is
 	# about the clock, not about where the ball goes — so every shoot target
 	# is just a shoot target.
-	for c in _state.combo_shoot_targets():
+	for c in _tutorial_highlights(_state.combo_shoot_targets()):
 		_fx.add_tile(_cell_world(c.x, c.y), color_shoot)
 	if preview != NO_CELL:
 		var col := color_chain
