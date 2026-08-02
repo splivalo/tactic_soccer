@@ -142,8 +142,11 @@ func _exit_to_menu() -> void:
 ## sentence you are meant to read. The footer stays because it is already the
 ## game's way of talking to the player — the placement phase uses it too, so the
 ## tutorial isn't inventing a second voice.
+##
+## Background deliberately STAYS: the tutorial's heading takes over the strip the
+## bar vacates, and on bare pitch green that text had nothing behind it.
 func show_match_chrome(on: bool) -> void:
-	for node_name in ["Bar", "Background", "PauseButton"]:
+	for node_name in ["Bar", "PauseButton"]:
 		var node := get_node_or_null(node_name) as CanvasItem
 		if node != null:
 			node.visible = on

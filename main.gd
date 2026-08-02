@@ -1002,6 +1002,13 @@ func _finish_placement() -> void:
 ## exactly how the written instructions failed.
 const TUTORIAL_STUCK_SECONDS := 8.0
 
+## Height of the HUD's top strip — hud.tscn's Background ends and its Footer
+## begins at exactly this y. The tutorial heading takes that strip over once the
+## bar is hidden, and must not spill past it into the footer.
+const HUD_TOP_STRIP := 241.0
+
+const UI_THEME := preload("res://my_theme.tres")
+
 var _tutorial: Tutorial = null
 var _tutorial_stuck := 0.0
 var _tutorial_layer: CanvasLayer = null
@@ -1030,23 +1037,33 @@ func _build_tutorial_banner() -> void:
 	_tutorial_layer.layer = 9
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	# Bounded to the strip the HUD bar normally fills, and no further. Left free
+	# to grow, the second wrapped line of a lesson ran straight down into the
+	# footer and printed on top of the prompt sitting there.
+	margin.offset_bottom = HUD_TOP_STRIP
 	for side in ["margin_left", "margin_right"]:
-		margin.add_theme_constant_override(side, 70)
-	margin.add_theme_constant_override("margin_top", 70)
+		margin.add_theme_constant_override(side, 60)
+	for side in ["margin_top", "margin_bottom"]:
+		margin.add_theme_constant_override(side, 14)
+	# Built in code, so it inherits nothing — without the game's theme these two
+	# labels came out in Godot's default font while every other word on screen
+	# was Bebas.
+	margin.theme = UI_THEME
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 18)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 6)
 	margin.add_child(box)
 
 	var heading := Label.new()
 	heading.text = "How to play"
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	heading.add_theme_font_size_override("font_size", 78)
+	heading.add_theme_font_size_override("font_size", 56)
 	box.add_child(heading)
 
 	_tutorial_lesson = Label.new()
 	_tutorial_lesson.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_tutorial_lesson.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_tutorial_lesson.add_theme_font_size_override("font_size", 40)
+	_tutorial_lesson.add_theme_font_size_override("font_size", 34)
 	box.add_child(_tutorial_lesson)
 
 	_tutorial_layer.add_child(margin)
@@ -2805,7 +2822,15 @@ func _refresh_turn_view() -> void:
 		_update_own_team_markers(own)
 	print("TURN: %s  phase=%s" % [_state.current, MatchState.Phase.keys()[_state.phase]])
 	_shown_time_left = -1
-	if _state.phase == MatchState.Phase.REMOVE:
+	if _tutorial != null and not _tutorial.finished():
+		# No clock while you are being taught. A countdown here books you for
+		# time-wasting for reading the instructions — the tutorial asks you to
+		# stop and take in a sentence, then punishes you for doing it. There is
+		# also nothing to be fair about: no opponent is waiting on you.
+		_turn_timer.stop()
+		if _hud != null:
+			_hud.update_timer(-1)  # also clears the big centre-pitch countdown
+	elif _state.phase == MatchState.Phase.REMOVE:
 		# No timer here, on purpose: REMOVE is the actual PENALTY for a 3rd
 		# stalling violation, not a normal decision — if it timed out like
 		# every other phase, forfeit() would just cancel pending_removal and
