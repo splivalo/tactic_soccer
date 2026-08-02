@@ -1012,6 +1012,10 @@ const HUD_TOP_STRIP := 241.0
 
 const UI_THEME := preload("res://my_theme.tres")
 
+## What every screen in the game titles itself at — see difficulty_screen.tscn,
+## team_select.tscn, legal_screen.tscn, the instructions cards, win/lose.
+const TITLE_FONT_SIZE := 96
+
 var _tutorial: Tutorial = null
 var _tutorial_stuck := 0.0
 var _tutorial_layer: CanvasLayer = null
@@ -1047,7 +1051,7 @@ func _build_tutorial_banner() -> void:
 	for side in ["margin_left", "margin_right"]:
 		margin.add_theme_constant_override(side, 60)
 	for side in ["margin_top", "margin_bottom"]:
-		margin.add_theme_constant_override(side, 14)
+		margin.add_theme_constant_override(side, 12)
 	# Built in code, so it inherits nothing — without the game's theme these two
 	# labels came out in Godot's default font while every other word on screen
 	# was Bebas.
@@ -1060,13 +1064,20 @@ func _build_tutorial_banner() -> void:
 	var heading := Label.new()
 	heading.text = "How to play"
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	heading.add_theme_font_size_override("font_size", 56)
+	# 96 is what every other screen titles itself at — Choose Difficulty, Choose
+	# Country, the rules cards, Legal, the result screens. This one was 56 and
+	# read as a caption rather than as the name of where you are.
+	heading.add_theme_font_size_override("font_size", TITLE_FONT_SIZE)
 	box.add_child(heading)
 
+	# Which leaves the lesson roughly one line's worth of room under it — hence
+	# the one-line lessons in tutorial.gd. Wrapping is still on, because a longer
+	# translation must push down rather than run off the sides, and two lines
+	# still clear the footer.
 	_tutorial_lesson = Label.new()
 	_tutorial_lesson.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_tutorial_lesson.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_tutorial_lesson.add_theme_font_size_override("font_size", 34)
+	_tutorial_lesson.add_theme_font_size_override("font_size", 30)
 	box.add_child(_tutorial_lesson)
 
 	_tutorial_layer.add_child(margin)

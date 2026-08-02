@@ -86,19 +86,22 @@ static func away_formation() -> Array[Dictionary]:
 ## Split in two on purpose. The RULE goes up top where there is room to wrap;
 ## the ACTION goes in the footer, which is a single narrow strip — one long
 ## sentence there simply ran off both edges of the screen.
+## Each of these has to fit the strip the HUD bar vacates, at a heading size that
+## matches every other screen in the game — so one line, and no clause that is
+## only there for rhythm.
 func lesson() -> String:
 	match step:
 		Step.PICK:
-			return "You have the ball while one of your players stands next to it."
+			return "You hold the ball if a player stands beside it."
 		Step.CONNECT:
-			return "The ball travels only in straight lines, until something blocks it."
+			return "The ball only moves in straight lines."
 		Step.CHAIN:
-			return "You can connect as many players as you like."
+			return "A pass can carry on through more players."
 		Step.SHOOT:
-			return "The last player must kick the ball away."
+			return "The last player must kick it away."
 		Step.MOVE:
-			return "A turn is two things: play the ball, then move a player."
-	return "That's it — the rest you'll pick up playing."
+			return "Every turn: play the ball, then move a player."
+	return "That's it. The rest comes with playing."
 
 
 ## Short enough for the footer. Imperative, one line, no explanation.
@@ -107,11 +110,11 @@ func prompt() -> String:
 		Step.PICK:
 			return "Tap that player"
 		Step.CONNECT:
-			return "Tap the teammate it can reach"
+			return "Tap the teammate in line"
 		Step.CHAIN:
 			return "Tap the next one"
 		Step.SHOOT:
-			return "Pick an empty square, not next to an opponent"
+			return "Kick it to an empty square"
 		Step.MOVE:
 			return "Move any player"
 	# DONE still needs a line: the footer stays on screen for a beat after the
@@ -149,9 +152,11 @@ func allows(cell: Vector2i) -> bool:
 ## Only one kind exists: a shot that parks the ball beside an opponent. Those are
 ## offered rather than hidden, because "don't leave it there" only means
 ## something if leaving it there was possible.
+## "He" said nothing about WHICH he — the player kicking or the one waiting. Say
+## whose it is.
 func refusal(cell: Vector2i) -> String:
 	if step == Step.SHOOT and beside_opponent(cell):
-		return "He is standing right there — he'd take it straight off you."
+		return "Too close to their player — they'd win it."
 	return ""
 
 
@@ -161,9 +166,9 @@ func refusal(cell: Vector2i) -> String:
 func nudge(_cell: Vector2i) -> String:
 	match step:
 		Step.PICK:
-			return "Not him — only a player standing beside the ball can play it."
+			return "Only a player beside the ball can play it"
 		Step.CONNECT, Step.CHAIN:
-			return "Not there — follow the straight line out of the ball."
+			return "That one is not in line with the ball"
 	return ""
 
 
