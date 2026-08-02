@@ -10,6 +10,7 @@ const PAGE_COUNT := 4
 const COLOR_DOT_ACTIVE := Color(0.97, 0.76, 0.15, 1)  # yellow, matches theme's button/selection color
 const COLOR_DOT_INACTIVE := Color(0.55, 0.85, 0.4, 1)  # light green
 const SLIDE_DURATION := 0.32
+const REVEAL_DURATION := 0.14 # fade in once the card has finished sizing itself
 const SWIPE_THRESHOLD := 60.0 # px of horizontal drag before it counts as a page swipe
 
 @onready var _pages: Array[Control] = [%Page1, %Page2, %Page3, %Page4]
@@ -53,6 +54,13 @@ func _ready() -> void:
 	# even though it looked fine in the editor — the concrete bug behind a
 	# user having to fight a RichTextLabel's own tiny internal scrollbar
 	# (mouse-only, not touch-drag-friendly) instead of the page just fitting.
+	# Held invisible (not hidden — a hidden Control's size never settles, and
+	# settling is the whole point) until the measuring below has finished moving
+	# things about. It isn't an animation that makes this card judder on arrival:
+	# it is five frames of deferred layout. Frame 2 reserves the tallest page's
+	# height, then frame 5 rescales every icon, font size and row gap in the
+	# rules list at once. All of that is correct and none of it should be watched.
+	_card_panel.modulate.a = 0.0
 	await get_tree().process_frame
 	await get_tree().process_frame
 	# PageStage (a plain Control) doesn't propagate its children's minimum size
@@ -73,7 +81,11 @@ func _ready() -> void:
 	# nobody is made to read them twice.
 	_go_to_page(clampi(GameFlow.instructions_page, 0, PAGE_COUNT - 1), 0)
 	GameFlow.instructions_page = 0
-	_scale_rules_list(page4_natural_h)
+	await _scale_rules_list(page4_natural_h)
+	# Everything has stopped moving — now show it. A short fade rather than a
+	# hard cut, so arriving reads as the card appearing rather than as a frame
+	# that was dropped.
+	create_tween().tween_property(_card_panel, "modulate:a", 1.0, REVEAL_DURATION)
 
 
 ## Page4 ("SPECIAL RULES") is the TALLEST page — its natural size is what
