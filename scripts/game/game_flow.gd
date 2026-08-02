@@ -53,6 +53,15 @@ var tutorial_mode: bool = false
 ## player to the rules card rather than back to page one.
 var instructions_page: int = 0
 
+## True when the instructions screen is being used as the tutorial's LAST SCREEN
+## rather than as a browsable book.
+##
+## Arriving that way, the other three cards are the ones the tutorial just had
+## the player do, so paging back to them is offering to explain in words what
+## they have already done with their hands. The carousel collapses to the single
+## rules card and the only thing left to press is Done.
+var instructions_closing: bool = false
+
 ## True for a networked match. There is deliberately no separate "online screen"
 ## any more: finding an opponent happens as an OVERLAY on the match scene, on
 ## top of the pitch you just placed your formation on (GAME_DESIGN.md §11). When

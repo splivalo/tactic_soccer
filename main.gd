@@ -1147,8 +1147,10 @@ func _finish_tutorial() -> void:
 	Settings.mark_tutorial_seen()
 	# Ends on the rules card — scoring, offside, the keeper, cards. None of that
 	# fits in one turn, and it is the only instruction page the tutorial didn't
-	# make redundant.
+	# make redundant. Closing mode drops the arrows and the other three cards
+	# with them: they describe in words what the player has just done.
 	GameFlow.instructions_page = 3
+	GameFlow.instructions_closing = true
 	GameFlow.goto(GameFlow.Screen.INSTRUCTIONS)
 
 
@@ -2886,7 +2888,12 @@ func _refresh_turn_view() -> void:
 		# "BRA: move a player" hint was overwriting it the moment the turn view
 		# refreshed, so the instruction the player was meant to follow vanished
 		# and was replaced by something about a country they aren't playing.
-		if _tutorial != null and not _tutorial.finished():
+		#
+		# Including the finished step: the closing line stays up for a beat
+		# before the screen changes, and the move that ended the lesson triggers
+		# one more refresh in that window — which is exactly when the turn hint
+		# was slipping back in with the last word.
+		if _tutorial != null:
 			_hud.set_footer_text(_tutorial.prompt(), Color.WHITE)
 		else:
 			_hud.update_turn_hint(_state.current, _state.phase, "", _state.moves_left)

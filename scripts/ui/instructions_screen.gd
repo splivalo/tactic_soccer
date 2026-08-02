@@ -25,11 +25,26 @@ var _drag_start := Vector2.ZERO
 var _dragging := false
 
 
+## True when this screen is the tutorial's closing card rather than the book.
+var _closing := false
+
+
 func _ready() -> void:
+	_closing = GameFlow.instructions_closing
+	GameFlow.instructions_closing = false
 	_back_button.pressed.connect(func(): GameFlow.goto(GameFlow.Screen.MAIN_MENU))
 	_prev_button.pressed.connect(func(): _go_to_page(_page - 1, -1))
 	_next_button.pressed.connect(func(): _go_to_page(_page + 1, 1))
 	_card_panel.gui_input.connect(_on_card_gui_input)
+	if _closing:
+		# One card, one way out. The other three describe in words what the
+		# player has just done with their hands, so offering to page back to them
+		# is offering to explain the thing they already understand — and arrows
+		# on a screen with one page are an invitation to nowhere.
+		_back_button.text = "Done"
+		_prev_button.visible = false
+		_next_button.visible = false
+		_dots.visible = false
 	# Wait for layout (and, on real devices, the SystemFont resources — those
 	# resolve to the OS's actual font and can load a frame or two late on
 	# Android, unlike the editor where it's already cached) to settle before
@@ -110,6 +125,11 @@ func _scale_rules_list(natural_h: float) -> void:
 ## direction: -1 = came from Prev (new page slides in from the left),
 ## +1 = came from Next (slides in from the right), 0 = first page, no animation.
 func _go_to_page(index: int, direction: int) -> void:
+	# Closing mode has one card, so a swipe is the one remaining way to reach the
+	# three that were deliberately taken away — hiding the arrows alone wouldn't
+	# have been enough.
+	if _closing and direction != 0:
+		return
 	var new_page := wrapi(index, 0, PAGE_COUNT)
 	if direction == 0:
 		_page = new_page

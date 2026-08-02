@@ -114,7 +114,9 @@ func prompt() -> String:
 			return "Pick an empty square, not next to an opponent"
 		Step.MOVE:
 			return "Move any player"
-	return ""
+	# DONE still needs a line: the footer stays on screen for a beat after the
+	# last move, and left empty the match's own turn hint filled the gap.
+	return "That's a turn"
 
 
 ## Cells the player may act on right now. Everything else is ignored, so a
