@@ -1002,6 +1002,9 @@ func _finish_placement() -> void:
 ## exactly how the written instructions failed.
 const TUTORIAL_STUCK_SECONDS := 8.0
 
+## How long a correction stays in the footer before the instruction comes back.
+const TUTORIAL_SAY_SECONDS := 2.5
+
 ## Height of the HUD's top strip — hud.tscn's Background ends and its Footer
 ## begins at exactly this y. The tutorial heading takes that strip over once the
 ## bar is hidden, and must not spill past it into the footer.
@@ -1077,37 +1080,35 @@ func _tutorial_blocks(cell: Vector2i) -> bool:
 	if _tutorial == null or _tutorial.finished():
 		return false
 	if not _tutorial.allows(cell):
+		# Say why. The board is the game's REAL board here — every own figure is
+		# lit, because in a real match every one of them is a choice — so tapping
+		# the wrong one is a fair mistake, and answering it with nothing is
+		# exactly what made the game feel broken to a first-time player.
+		_tutorial_say(_tutorial.nudge(cell))
 		return true
 	var why := _tutorial.refusal(cell)
 	if why == "":
 		return false
 	# Refused ON PURPOSE, with the reason — the risky square is offered rather
 	# than hidden, because "don't leave it there" only lands if you could have.
-	if _hud != null:
-		_hud.set_footer_text(why, Color.WHITE)
-	_tutorial_stuck = 0.0
+	_tutorial_say(why)
 	return true
 
 
-## Keeps only what the current step is about. Refusing a tap is not enough on its
-## own: the board lit up every own figure and every legal target, so the tutorial
-## was inviting taps with one hand and refusing them with the other. Nothing
-## outside the lesson gets highlighted now, and a highlight means what it always
-## means — this responds.
-##
-## An empty allowed-list is "no restriction" (the closing MOVE step hands the
-## whole board back), so it passes everything through untouched.
-func _tutorial_highlights(cells: Array[Vector2i]) -> Array[Vector2i]:
-	if _tutorial == null or _tutorial.finished():
-		return cells
-	var allowed := _tutorial.allowed_cells()
-	if allowed.is_empty():
-		return cells
-	var out: Array[Vector2i] = []
-	for cell in cells:
-		if cell in allowed:
-			out.append(cell)
-	return out
+## Answers a wrong tap in the footer, then puts the instruction back. Without the
+## second half the player reads why they were wrong and is left staring at it,
+## with the thing they were actually asked to do now gone from the screen.
+func _tutorial_say(text: String) -> void:
+	_tutorial_stuck = 0.0
+	if text == "" or _hud == null:
+		return
+	_hud.set_footer_text(text, Color.WHITE)
+	var said_at := _tutorial.step
+	await get_tree().create_timer(TUTORIAL_SAY_SECONDS).timeout
+	# Only if they haven't since got it right — otherwise this would overwrite
+	# the NEXT step's instruction with the previous one's.
+	if _tutorial != null and _tutorial.step == said_at and _hud != null:
+		_hud.set_footer_text(_tutorial.prompt(), Color.WHITE)
 
 
 func _tutorial_did(kind: String, cell: Vector2i) -> void:
@@ -1586,7 +1587,7 @@ func _on_motion(screen_pos: Vector2) -> void:
 		if _state.phase == MatchState.Phase.MOVE or _holding:
 			var pickable := _state.own_cells() if _holding else _state.move_from_cells()
 			var picked := _resolve_target(_press_screen_pos, pickable, TAP_HIT_RADIUS)
-			if picked != NO_CELL:
+			if picked != NO_CELL and not _tutorial_blocks(picked):
 				_move_from = picked
 				_draw_move(_move_from)
 	if not _dragging:
@@ -1613,9 +1614,12 @@ func _on_motion(screen_pos: Vector2) -> void:
 	var arrived := _resolve_target(screen_pos, connectable, DRAG_COMMIT_RADIUS)
 	if arrived != NO_CELL and arrived != _state.chain[-1]:
 		if arrived in _state.chain:
-			_state.rewind(arrived)
+			_state.rewind(arrived) # stepping back is never wrong, tutorial or not
+		elif _tutorial_blocks(arrived):
+			return
 		else:
 			_state.extend(arrived)
+			_tutorial_did("extend", arrived)
 		_drag_candidate = NO_CELL
 		_draw_combo()
 		return # re-evaluate fresh candidates on the next motion event
@@ -1731,9 +1735,15 @@ func _commit_combo_target(cell: Vector2i) -> void:
 		_state.rewind(cell)
 		_draw_combo()
 	elif cell in _state.combo_pass_targets():
+		if _tutorial_blocks(cell):
+			return
 		_state.extend(cell)
 		_draw_combo()
+		_tutorial_did("extend", cell)
 	elif cell in _state.combo_shoot_targets():
+		if _tutorial_blocks(cell):
+			return
+		_tutorial_did("shoot", cell)
 		_do_combo(cell)
 
 
@@ -1856,9 +1866,6 @@ func _hint_ball_carriers(screen_pos: Vector2) -> void:
 					hint.append(cell)
 					break
 
-	# The keeper stands beside the tutorial's ball too, so untrimmed this would
-	# blink two answers to a question whose whole point is that there is one.
-	hint = _tutorial_highlights(hint)
 	if hint.is_empty():
 		return
 	_fx.clear()
@@ -3010,7 +3017,7 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 		# opens the hold-move target pick) — see combo_shoot_targets/
 		# _draw_move below for where the actual risky targets get flagged,
 		# right at the point an actual card-triggering action is on offer.
-		var own := _tutorial_highlights(_state.own_cells())
+		var own := _state.own_cells()
 		for cell in own:
 			_fx.add_tile(_cell_world(cell.x, cell.y), color_tap)
 		_update_own_team_markers(own)
@@ -3028,14 +3035,14 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 	_fx.set_trail(pts, color_trail)
 	for c in _state.chain:
 		_fx.add_tile(_cell_world(c.x, c.y), color_chain) # orange = chosen chain (active receiver)
-	var pass_targets := _tutorial_highlights(_state.combo_pass_targets())
+	var pass_targets := _state.combo_pass_targets()
 	for c in pass_targets:
 		_fx.add_tile(_cell_world(c.x, c.y), color_tap) # blue = next pass
 	# No target can be flagged as "this one books you" any more: the only
 	# bookable offence left is time-wasting (see MatchState.forfeit), which is
 	# about the clock, not about where the ball goes — so every shoot target
 	# is just a shoot target.
-	for c in _tutorial_highlights(_state.combo_shoot_targets()):
+	for c in _state.combo_shoot_targets():
 		_fx.add_tile(_cell_world(c.x, c.y), color_shoot)
 	if preview != NO_CELL:
 		var col := color_chain

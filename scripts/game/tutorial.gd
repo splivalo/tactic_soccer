@@ -24,24 +24,37 @@ extends RefCounted
 ## Deliberately few figures. The lesson competes with everything else on screen,
 ## and a full twelve-piece board is mostly noise while you are learning what a
 ## straight line means.
-const BALL := Vector2i(3, 8)
+## Every placement here is load-bearing, and the constraint is stricter than it
+## looks: the board is drawn EXACTLY as it is in a real match, so the scenario
+## cannot lean on the tutorial hiding inconvenient options. At each step the
+## game's own highlighting must already point at one answer, or the prompt asks
+## a question the board answers twice.
+##
+## That rules out two arrangements that look fine on paper. The keeper may not
+## stand beside the ball (he would be a second legal way to start), and he may
+## not sit on any straight line out of A or B (he would be a second legal pass).
+## Hence (1,9) rather than the goalmouth — off his line, but out of the lesson.
+const BALL := Vector2i(3, 7)
 const MINE := [
-	{"cell": Vector2i(3, 9), "number": 1, "role": "gk"},
-	{"cell": Vector2i(3, 7), "number": 4, "role": "field"},   # A — beside the ball
-	{"cell": Vector2i(5, 7), "number": 5, "role": "field"},   # B — straight right of A
-	{"cell": Vector2i(5, 5), "number": 6, "role": "field"},   # C — straight up from B
+	{"cell": Vector2i(1, 9), "number": 1, "role": "gk"},
+	{"cell": Vector2i(3, 6), "number": 4, "role": "field"},   # A — beside the ball
+	{"cell": Vector2i(5, 6), "number": 5, "role": "field"},   # B — straight right of A
+	{"cell": Vector2i(5, 3), "number": 6, "role": "field"},   # C — straight up from B
 ]
-## One opponent, placed so that exactly one of the shooting squares sits beside
-## him — that contrast is the whole of step 4.
+## One opponent, standing where some of C's shooting squares fall beside him and
+## others don't — that contrast is the whole of step 4.
+##
+## C is deliberately NOT on a straight line from A: with one, A could pass
+## straight past B to C, and the chaining step would have nothing left to teach.
 const THEIRS := [
-	{"cell": Vector2i(3, 4), "number": 1, "role": "gk"},
+	{"cell": Vector2i(3, 2), "number": 1, "role": "gk"},
 ]
 
-const FIRST := Vector2i(3, 7)   # A
-const SECOND := Vector2i(5, 7)  # B
-const THIRD := Vector2i(5, 5)   # C
-const SAFE_SHOT := Vector2i(5, 4)
-const RISKY_SHOT := Vector2i(4, 4)  # next to the opponent on (3,4)
+const FIRST := Vector2i(3, 6)   # A
+const SECOND := Vector2i(5, 6)  # B
+const THIRD := Vector2i(5, 3)   # C
+const SAFE_SHOT := Vector2i(5, 2)
+const RISKY_SHOT := Vector2i(4, 3)  # next to the opponent on (3,2)
 
 enum Step { PICK, CONNECT, CHAIN, SHOOT, MOVE, DONE }
 
@@ -108,7 +121,11 @@ func allowed_cells() -> Array[Vector2i]:
 		Step.CHAIN:
 			return [THIRD]
 		Step.SHOOT:
-			return [SAFE_SHOT, RISKY_SHOT]
+			# No shortlist. Every square the rules allow is on offer, and the ones
+			# beside the opponent are turned away by refusal() with the reason.
+			# Naming one correct square would teach that square; this teaches the
+			# rule, which is the only part that survives leaving the tutorial.
+			return []
 	return []
 
 
@@ -119,13 +136,33 @@ func allows(cell: Vector2i) -> bool:
 
 ## Why a permitted-but-wrong choice was refused. Empty = let it through.
 ##
-## Only one exists: the shot that parks the ball beside an opponent. It is
+## Only one kind exists: a shot that parks the ball beside an opponent. Those are
 ## offered rather than hidden, because "don't leave it there" only means
 ## something if leaving it there was possible.
 func refusal(cell: Vector2i) -> String:
-	if step == Step.SHOOT and cell == RISKY_SHOT:
+	if step == Step.SHOOT and beside_opponent(cell):
 		return "He is standing right there — he'd take it straight off you."
 	return ""
+
+
+## Said when a tap lands on something real but not part of this step. The board
+## is the game's own board, so a wrong tap is a fair mistake — answering with
+## silence is what made the game feel broken in the first place.
+func nudge(_cell: Vector2i) -> String:
+	match step:
+		Step.PICK:
+			return "Not him — only a player standing beside the ball can play it."
+		Step.CONNECT, Step.CHAIN:
+			return "Not there — follow the straight line out of the ball."
+	return ""
+
+
+func beside_opponent(cell: Vector2i) -> bool:
+	for p in THEIRS:
+		var c: Vector2i = p["cell"]
+		if maxi(absi(cell.x - c.x), absi(cell.y - c.y)) <= 1:
+			return true
+	return false
 
 
 ## Told what the player just did. Returns true if the lesson moved on.
@@ -142,7 +179,7 @@ func on_action(kind: String, cell: Vector2i) -> bool:
 			if kind == "extend" and cell == THIRD:
 				step = Step.SHOOT
 		Step.SHOOT:
-			if kind == "shoot" and cell == SAFE_SHOT:
+			if kind == "shoot" and not beside_opponent(cell):
 				step = Step.MOVE
 		Step.MOVE:
 			if kind == "move":

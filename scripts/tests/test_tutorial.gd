@@ -32,26 +32,52 @@ func _initialize() -> void:
 	_check(t.step == Tutorial.Step.PICK, "starts on the first lesson")
 
 	# Step 1 — pick him up.
+	#
+	# The board is drawn EXACTLY as a real match draws it (the tutorial hides no
+	# options — see tutorial.gd's layout note), so "one answer" has to be true of
+	# the position itself, not of what the tutorial chooses to highlight. If the
+	# keeper also stood beside the ball, the prompt would point at one player
+	# while the game lit two.
+	_check(ms.combo_starters().size() == 1,
+		"exactly one player can start — the board answers the prompt once")
 	_check(t.allows(Tutorial.BALL), "tapping the ball is allowed, so the mistake can be answered")
 	_check(not t.allows(Vector2i(0, 0)), "an unrelated square is ignored")
+	_check(t.nudge(Vector2i(0, 0)) != "", "a wrong tap is answered, not met with silence")
 	_check(ms.begin(Tutorial.FIRST), "begin the chain")
 	_check(t.on_action("begin", Tutorial.FIRST), "lesson advances to the straight-line step")
 
-	# Step 2 — the straight line.
-	_check(Tutorial.SECOND in ms.combo_pass_targets(),
+	# Step 2 — the straight line. Same rule: one blue option, or the prompt lies.
+	var first_targets := ms.combo_pass_targets()
+	_check(Tutorial.SECOND in first_targets,
 		"the teammate the prompt points at IS reachable in a straight line")
+	_check(first_targets.size() == 1, "...and he is the ONLY one reachable")
 	_check(ms.extend(Tutorial.SECOND), "connect to him")
 	_check(t.on_action("extend", Tutorial.SECOND), "lesson advances to chaining")
 
-	# Step 3 — keep going.
+	# Step 3 — keep going. The third player must NOT have been reachable from the
+	# first, or the player could have skipped straight to him and this step would
+	# have had nothing left to teach.
+	_check(not (Tutorial.THIRD in first_targets),
+		"the third player was NOT reachable from the first — the chain is needed")
 	_check(Tutorial.THIRD in ms.combo_pass_targets(), "a third player is reachable from the second")
 	_check(ms.extend(Tutorial.THIRD), "connect to him too")
 	_check(t.on_action("extend", Tutorial.THIRD), "lesson advances to the shot")
 
-	# Step 4 — both shots must be legal, and one must be the bad one.
+	# Step 4 — the shot teaches a RULE, not a square: any target away from the
+	# opponent is accepted, any target beside him is refused with the reason. So
+	# the position has to offer both kinds.
 	var shots := ms.combo_shoot_targets()
-	_check(Tutorial.SAFE_SHOT in shots, "the safe square is a legal shot")
-	_check(Tutorial.RISKY_SHOT in shots, "the risky square is a legal shot too")
+	var safe_count := 0
+	var risky_count := 0
+	for s in shots:
+		if t.beside_opponent(s):
+			risky_count += 1
+		else:
+			safe_count += 1
+	_check(safe_count > 0, "there is somewhere safe to put the ball")
+	_check(risky_count > 0, "...and somewhere that hands it straight over")
+	_check(Tutorial.SAFE_SHOT in shots, "the named safe square is a legal shot")
+	_check(Tutorial.RISKY_SHOT in shots, "the named risky square is a legal shot too")
 	_check(t.refusal(Tutorial.RISKY_SHOT) != "", "the risky one is refused with a reason")
 	_check(t.refusal(Tutorial.SAFE_SHOT) == "", "the safe one goes through")
 
