@@ -261,6 +261,25 @@ func _cheby(a: Vector2i, b: Vector2i) -> int:
 ## simply isn't visible enough to play from. Measurements and the whole
 ## implementation are in git around this date if it is ever worth revisiting; the
 ## visibility is the thing that would have to be solved first, not the rule.
+## ON for playtesting (2026-08-03). A turn is ONE action: play the ball, or move
+## a player two squares. Nothing follows a kick.
+##
+## What it answers, from a human-vs-human log rather than a simulation. The
+## defender reached the ball on all six of his turns — perfect approach, never
+## late, never in the wrong place — and it never once mattered, because the
+## attacker was adjacent too and moved first. The attacker's post-kick move
+## landed him next to the new ball position 7 times out of 7: kick far, then
+## close the last square. That move is the whole reason he is always first.
+##
+## So this removes it rather than adding anything to counter it — the rules get
+## SHORTER, and the defender gets the one thing he never had, which is the tempo
+## to arrive before the ball is played again. It is also close to what the game
+## did originally, before the post-shot move was introduced.
+##
+## Set false to get the shipped two-part turn back.
+static var experiment_single_action := true
+
+
 func team_has_ball(team: String) -> bool:
 	return _adjacent_count(team) >= 1
 
@@ -486,6 +505,10 @@ func execute_combo(shoot_cell: Vector2i) -> Dictionary:
 		res["scorer"] = scorer
 		res["win"] = score[scorer] >= goals_to_win
 		res["kickoff"] = opponent(scorer)  # the team scored against restarts
+	elif experiment_single_action:
+		# One action per turn, no exception: you played the ball, so your turn is
+		# over. See the flag's own note for why this is the shape being tried.
+		next_turn()
 	else:
 		# Didn't score (including offside) — the shooting team stays
 		# `current` and gets ONE bonus move (do_move, same MAX_MOVE_RANGE)

@@ -2948,7 +2948,7 @@ func _refresh_turn_view() -> void:
 		_update_own_team_markers(own)
 	print("TURN: %s  phase=%s" % [_state.current, MatchState.Phase.keys()[_state.phase]])
 	_shown_time_left = -1
-	if _tutorial != null and not _tutorial.finished():
+	if _tutorial != null:
 		# No clock while you are being taught. A countdown here books you for
 		# time-wasting for reading the instructions — the tutorial asks you to
 		# stop and take in a sentence, then punishes you for doing it. There is

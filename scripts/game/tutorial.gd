@@ -124,6 +124,12 @@ func lesson() -> String:
 			# Not "must": a chain can be stepped back out of, and the ball can be
 			# declined altogether. Describe the shape instead of imposing it.
 			return "A chain ends with a kick into space."
+		Step.DONE:
+			if MatchState.experiment_single_action:
+				# The one thing this scenario no longer gets to demonstrate, so
+				# it is at least said: a turn is one action, and moving a player
+				# is the other one.
+				return "That's your turn. Or move a player instead."
 		Step.MOVE:
 			# Was "Every turn: play the ball, then move a player", which made
 			# playing the ball sound compulsory. It isn't.
@@ -243,7 +249,11 @@ func on_action(kind: String, cell: Vector2i) -> bool:
 				step = Step.SHOOT
 		Step.SHOOT:
 			if kind == "shoot" and not beside_opponent(cell):
-				step = Step.MOVE
+				# One action per turn means nothing follows the kick — the turn
+				# is the opponent's now, and in this scenario the opponent is a
+				# lone keeper with nobody to play him, so the lesson has to end
+				# here rather than wait for a move that can never come.
+				step = Step.DONE if MatchState.experiment_single_action else Step.MOVE
 		Step.MOVE:
 			if kind == "move":
 				step = Step.DONE
