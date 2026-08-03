@@ -1341,6 +1341,12 @@ func _exchange_formations(room: String) -> bool:
 
 
 func _start_net_match(room: String) -> void:
+	# Without this line a frozen-match report is unreadable: every TURN: printed
+	# afterwards names a side, and nothing says which of them is the person
+	# holding the phone — so "it was their turn and I waited" and "it was my turn
+	# and I was locked out" look identical in the log.
+	print("NET START room=%s  I am %s  opponent=%s" \
+		% [room, GameFlow.player_side, GameFlow.online_opponent_uid])
 	_net_match = NET_MATCH_SCENE.new()
 	add_child(_net_match)
 	_net_match.action_received.connect(_on_remote_action)
