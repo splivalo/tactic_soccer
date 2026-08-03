@@ -29,6 +29,14 @@ const LOCK_MESSAGE_SECONDS := 2.0
 const LOCK_DIM := 0.45
 const BREATH_LEG_TIME := 1.0 # matches hud.gd's breathing shield
 
+## The breath brightens PAST white and comes back, never below it.
+##
+## It used to fade the alpha down to 0.55 instead — a tenth of the 0.45 the
+## locked buttons sit at, so the one open button spent half its cycle wearing
+## the look of the closed ones and read as switching itself on and off. Alpha
+## carries a meaning on this screen now, so the animation can't borrow it.
+const BREATH_HIGHLIGHT := Color(1.18, 1.18, 1.18)
+
 var _locked := false
 var _refusing: Button = null
 var _refusing_text := ""
@@ -97,9 +105,8 @@ func _ready() -> void:
 func _apply_lock() -> void:
 	for b in [_one_player_button, _online_button]:
 		b.modulate.a = LOCK_DIM
-	var faded := Color(1.0, 1.0, 1.0, 0.55)
 	var breath := create_tween().set_loops()
-	breath.tween_property(_instructions_button, "modulate", faded, BREATH_LEG_TIME) \
+	breath.tween_property(_instructions_button, "modulate", BREATH_HIGHLIGHT, BREATH_LEG_TIME) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	breath.tween_property(_instructions_button, "modulate", Color.WHITE, BREATH_LEG_TIME) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
