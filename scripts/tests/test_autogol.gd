@@ -5,6 +5,10 @@ extends SceneTree
 ##   godot --headless -s res://scripts/tests/test_autogol.gd
 
 func _initialize() -> void:
+	# Shipped rule, same as test_match — the scenario places the ball beside a
+	# figure and expects him to be able to play it. See test_match's note.
+	MatchState.experiment_ball_underfoot = false
+	MatchState.experiment_no_self_collect = false
 	var ms := MatchState.new()
 	ms.setup(Formations.home(), Formations.away(), Vector2i(3, 8), "HomeTeam", 2)
 

@@ -280,7 +280,17 @@ func _cheby(a: Vector2i, b: Vector2i) -> int:
 ## Underfoot alone still lets you kick one square and step on: that now costs
 ## your whole bonus move and leaves the ball exposed for a turn, which may
 ## already be enough of a price without banning it outright.
-static var experiment_ball_underfoot := false
+##
+## ON for playtesting (2026-08-03). Measured against the current rule over 40
+## matches: possession runs 27.1 -> 3.5, longest 134 -> 18, recovery 17.4% ->
+## 35.9%, match length 337 -> 67 turns, goals unchanged. The self-collect ban is
+## OFF because measuring it separately showed it made every one of those worse —
+## nudging the ball a square and stepping back onto it is still legal, it just
+## costs the whole bonus move and gains no ground, so it limits itself.
+##
+## Turn this off to get the shipped rule back. The instruction cards still
+## describe the old one, and the AI's scoring was written around it.
+static var experiment_ball_underfoot := true
 static var experiment_no_self_collect := false
 
 
