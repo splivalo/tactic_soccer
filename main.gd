@@ -717,23 +717,8 @@ func _place_ball(cell: Vector2i) -> void:
 	_ball_last_pos = _ball.position
 
 
-## How far in front of a holder's feet the ball sits when he is standing on its
-## square. A tile is 1.0 across and the ball 0.3, so this stays well inside the
-## square while reading as a ball under control rather than one clipping through
-## a pair of legs.
-const BALL_HOLD_OFFSET := 0.28
-
-
 func _ball_world(cell: Vector2i) -> Vector3:
-	var pos := _cell_world(cell.x, cell.y) + Vector3(0, BALL_RADIUS * ball_scale, 0)
-	# Under the underfoot rule a figure can be standing ON the ball's square, and
-	# both centred on the same point would put the ball inside him. Nudged toward
-	# the goal he is attacking — which also means the ball is already on the far
-	# side of him when he plays it forward.
-	if _state != null and _state.pieces.has(cell):
-		var team: String = _state.pieces[cell]["team"]
-		pos.z += -BALL_HOLD_OFFSET if team == "HomeTeam" else BALL_HOLD_OFFSET
-	return pos
+	return _cell_world(cell.x, cell.y) + Vector3(0, BALL_RADIUS * ball_scale, 0)
 
 
 # --- Match SFX -----------------------------------------------------------------
@@ -1049,7 +1034,7 @@ func _start_tutorial() -> void:
 	# whose one live button is the thing they just walked away from.
 	Settings.mark_tutorial_seen()
 	_tutorial = Tutorial.new()
-	ball_start_cell = Tutorial.ball_start()
+	ball_start_cell = Tutorial.BALL
 	if _hud != null:
 		_hud.show_match_chrome(false)
 	_build_tutorial_banner()
@@ -1946,12 +1931,8 @@ func _hint_ball_carriers(screen_pos: Vector2) -> void:
 	else:
 		for cell in _state.own_cells():
 			for target in _state.move_targets(cell):
-				# What counts as reaching it depends on what possession means:
-				# standing ON the ball under the underfoot rule, adjacent in any
-				# of the 8 directions under the original one.
-				var reaches := target == _state.ball if MatchState.experiment_ball_underfoot \
-					else maxi(absi(target.x - _state.ball.x), absi(target.y - _state.ball.y)) <= 1
-				if reaches:
+				# Adjacent in any of the 8 directions == possession.
+				if maxi(absi(target.x - _state.ball.x), absi(target.y - _state.ball.y)) <= 1:
 					hint.append(cell)
 					break
 
@@ -2937,14 +2918,6 @@ func _apply_move(from: Vector2i, to: Vector2i, as_hold: bool = false) -> void:
 		(fig as PlayerRig).jog(lerpf(jog_speed_scale_min, jog_speed_scale_max, jog_t))
 	var tween := create_tween()
 	tween.tween_property(fig, "position", _cell_world(to.x, to.y), move_duration).set_trans(Tween.TRANS_SINE)
-	# Arriving on the ball's square — or walking off it — slides the ball into or
-	# out of the holder's offset alongside him. Without this it snaps sideways the
-	# instant he lands, which reads as the ball being kicked by nobody.
-	if _ball != null and (_state.ball == to or _state.ball == from):
-		var ball_rest := _ball_world(_state.ball)
-		if not _ball.position.is_equal_approx(ball_rest):
-			tween.parallel().tween_property(_ball, "position", ball_rest, move_duration) \
-				.set_trans(Tween.TRANS_SINE)
 	if fig is PlayerRig:
 		tween.tween_callback((fig as PlayerRig).idle.bind(false))
 	await tween.finished

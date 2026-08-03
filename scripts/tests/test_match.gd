@@ -16,17 +16,6 @@ func _check(cond: bool, label: String) -> void:
 
 
 func _initialize() -> void:
-	# This suite encodes the SHIPPED rule — every scenario below sets a ball down
-	# next to a figure and expects possession. The underfoot experiment
-	# (MatchState.experiment_ball_underfoot) is a different game and would fail
-	# all of it, so it is pinned off here rather than papered over: this stays the
-	# regression net for the rule we can always fall back to.
-	#
-	# Which means the experiment itself has NO coverage here. What it has is
-	# scripts/tests/sim_move_range.gd, which measures behaviour over 40 matches
-	# rather than asserting rules — worth remembering before it ships.
-	MatchState.experiment_ball_underfoot = false
-	MatchState.experiment_no_self_collect = false
 	var ms := MatchState.new()
 	ms.setup(Formations.home(), Formations.away(), Vector2i(3, 8), "HomeTeam", 2)
 

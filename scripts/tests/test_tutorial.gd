@@ -23,7 +23,7 @@ func _check(cond: bool, label: String) -> void:
 func _initialize() -> void:
 	print("--- test_tutorial ---")
 	var ms := MatchState.new()
-	ms.setup(Tutorial.home_formation(), Tutorial.away_formation(), Tutorial.ball_start(), "HomeTeam", 2)
+	ms.setup(Tutorial.home_formation(), Tutorial.away_formation(), Tutorial.BALL, "HomeTeam", 2)
 	var t := Tutorial.new()
 
 	# The scenario has to open with the ball already ours, or step one is a lie.
@@ -58,7 +58,7 @@ func _initialize() -> void:
 	# while the game lit two.
 	_check(ms.combo_starters().size() == 1,
 		"exactly one player can start — the board answers the prompt once")
-	_check(t.allows(Tutorial.ball_start()), "tapping the ball is allowed, so the mistake can be answered")
+	_check(t.allows(Tutorial.BALL), "tapping the ball is allowed, so the mistake can be answered")
 	_check(not t.allows(Vector2i(0, 0)), "an unrelated square is ignored")
 	_check(t.nudge(Vector2i(0, 0)) != "", "a wrong tap is answered, not met with silence")
 	_check(ms.begin(Tutorial.FIRST), "begin the chain")

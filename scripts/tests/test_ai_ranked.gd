@@ -15,14 +15,6 @@ func _check(cond: bool, label: String) -> void:
 
 
 func _initialize() -> void:
-	# Shipped rule, like test_match and test_autogol. Two of these scenarios put
-	# the ball beside a figure and expect him to have it; the third asks whether
-	# Hard blocks a shooting lane, which is judgement written against the same
-	# rule. Under the underfoot experiment all three fail, and that failure says
-	# something true and worth stating plainly rather than muting: the AI has not
-	# been retuned for that rule and currently plays it badly.
-	MatchState.experiment_ball_underfoot = false
-	MatchState.experiment_no_self_collect = false
 	_test_rank_pick_determinism()
 	_test_rank_pick_statistics()
 	_test_ai_defends_open_lane()

@@ -254,49 +254,14 @@ func _cheby(a: Vector2i, b: Vector2i) -> int:
 ## contest right now. (An earlier version of this also required not being
 ## outnumbered there, but that blocked the exact reactive catch-up move it
 ## was meant to reward — reach the ball and you're entitled to act on it.)
-## EXPERIMENT (2026-08-03, off by default — measurement only). Two rules that
-## replace "you have the ball if you are standing NEXT to it":
-##
-##   1. The ball belongs to whoever is standing ON it.
-##   2. You may not collect a ball you have just kicked, on that same turn.
-##
-## Measured problem they answer: 59% of all kicks travel a single square and
-## keep possession 97.5% of the time — the final kick is being used as a third
-## pass, nudging the ball around inside your own cluster. Under (1) that nudge
-## buys nothing on its own, because the ball has to be walked onto; under (2)
-## the kicker cannot be the one to walk onto it, so the opponent always gets
-## first refusal, and after that both sides race for it with the SAME reactive
-## two-square move.
-##
-## The point of (2) is that it needs no minimum kick distance. Nothing dictates
-## where you may kick — only that you don't get to be first to your own ball.
-## It is also a real rule of football: at a free kick or throw-in the taker may
-## not play the ball again until someone else has touched it.
-##
-## Note what falls out for free: possession stops being decided by whose turn it
-## happens to be. Today both sides are often adjacent and the ball goes to
-## whoever is on the clock, which is the part that reads as arbitrary.
-## Split from each other so the measurement can say which one earns its keep.
-## Underfoot alone still lets you kick one square and step on: that now costs
-## your whole bonus move and leaves the ball exposed for a turn, which may
-## already be enough of a price without banning it outright.
-##
-## ON for playtesting (2026-08-03). Measured against the current rule over 40
-## matches: possession runs 27.1 -> 3.5, longest 134 -> 18, recovery 17.4% ->
-## 35.9%, match length 337 -> 67 turns, goals unchanged. The self-collect ban is
-## OFF because measuring it separately showed it made every one of those worse —
-## nudging the ball a square and stepping back onto it is still legal, it just
-## costs the whole bonus move and gains no ground, so it limits itself.
-##
-## Turn this off to get the shipped rule back. The instruction cards still
-## describe the old one, and the AI's scoring was written around it.
-static var experiment_ball_underfoot := true
-static var experiment_no_self_collect := false
-
-
+## Tried and rejected (2026-08-03): "the ball belongs to whoever is standing ON
+## it", to answer a player finding the defence could never reach it. It worked on
+## paper — possession runs 27.1 -> 3.5, recovery 17.4% -> 35.9%, matches a fifth
+## the length — and was rejected in the hand, because a ball at a figure's feet
+## simply isn't visible enough to play from. Measurements and the whole
+## implementation are in git around this date if it is ever worth revisiting; the
+## visibility is the thing that would have to be solved first, not the rule.
 func team_has_ball(team: String) -> bool:
-	if experiment_ball_underfoot:
-		return pieces.has(ball) and pieces[ball]["team"] == team
 	return _adjacent_count(team) >= 1
 
 
@@ -311,11 +276,6 @@ func _adjacent_count(team: String) -> int:
 
 func combo_starters() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
-	# Underfoot: exactly one figure can ever start a chain — the one it is under.
-	if experiment_ball_underfoot:
-		if pieces.has(ball) and pieces[ball]["team"] == current:
-			out.append(ball)
-		return out
 	for cell in pieces:
 		if pieces[cell]["team"] == current and _cheby(cell, ball) == 1:
 			out.append(cell)
@@ -406,21 +366,12 @@ func combo_pass_targets() -> Array[Vector2i]:
 ## execute_combo), so — matching the original 2006 game, which didn't even mark
 ## those cells as selectable — they're not offered as targets. Your OWN goal
 ## cells stay targetable from anywhere (a deliberate/accidental autogol).
-## EXPERIMENT (2026-08-03, off by default — measurement only, see
-## scripts/tests/sim_move_range.gd). The ball may not be parked where one of
-## your OWN figures is already standing next to it.
 ##
-## Measured cause of the complaint it answers: the side without the ball
-## strings together 27 possessions on average before winning it back, and
-## widening their move from 2 to 3 changed the recovery rate by 0.1 points.
-## Movement was never the bottleneck — passing has unlimited range while
-## chasing has two squares, so the attacker simply kicks to a square they
-## already cover and no amount of extra walking closes that. This puts the
-## attacker in the same race as the defender: kick into real space, then both
-## sides approach it.
-static var experiment_open_space := false
-
-
+## Also tried and rejected (2026-08-03): refusing squares one of your own figures
+## already stands next to, so the ball had to be kicked into real space. It cut
+## possession runs from 27 to 5.8 and nearly tripled the recovery rate, but the
+## rule read as arbitrary — you cannot see why a square is closed without
+## counting your own players around it.
 func combo_shoot_targets() -> Array[Vector2i]:
 	if chain.is_empty():
 		return [] as Array[Vector2i]
@@ -429,31 +380,13 @@ func combo_shoot_targets() -> Array[Vector2i]:
 	out.erase(ball)
 	if not in_opponent_half(shooter, current):
 		out = out.filter(func(c): return not is_opponent_goal(c, current))
-	if experiment_open_space:
-		var open := out.filter(func(c): return not _touches_own(c))
-		# Never leave a chain with nowhere to go — a rule that can strand the
-		# player mid-turn is worse than the problem it solves.
-		if not open.is_empty():
-			out = open
 	return out
-
-
-## True when `cell` sits next to any figure of the team to move.
-func _touches_own(cell: Vector2i) -> bool:
-	for c in pieces:
-		if pieces[c]["team"] == current and _cheby(cell, c) <= 1:
-			return true
-	return false
 
 
 # --- combo (pass chain -> shoot) --------------------------------------------
 ## Start (or restart) the chain on your figure next to the ball. True if valid.
 func begin(cell: Vector2i) -> bool:
-	if phase != Phase.COMBO or not is_own(cell):
-		return false
-	# Underfoot: the chain starts at the figure the ball is under, not beside.
-	var holds := cell == ball if experiment_ball_underfoot else _cheby(cell, ball) == 1
-	if holds:
+	if phase == Phase.COMBO and is_own(cell) and _cheby(cell, ball) == 1:
 		chain = [cell]
 		return true
 	return false
@@ -617,30 +550,15 @@ func move_targets(from: Vector2i) -> Array[Vector2i]:
 	var role: String = pieces[from]["role"]
 	var team: String = pieces[from]["team"]
 	var reach := current_move_range()
-	# Underfoot: the ball is what you are trying to reach, so it can no longer
-	# be a wall. It is still not something you pass THROUGH — stepping onto it
-	# is where that move ends.
-	var ball_blocks := not experiment_ball_underfoot
-	# ...and you may not collect the one you just kicked. The bonus move is the
-	# only move that happens in the same turn as a kick, which is exactly why
-	# this needs no rule about how far the kick must travel.
-	var ball_barred := experiment_no_self_collect and phase == Phase.MOVE and not _move_is_reactive
 	for dir in Board.DIRS:
 		var c: Vector2i = from + dir
 		var dist := 1
-		while Board.in_bounds(c) and not pieces.has(c) and dist <= reach:
-			var is_ball := c == ball
-			if is_ball and ball_blocks:
-				break
-			if is_ball and ball_barred:
-				break
+		while Board.in_bounds(c) and not pieces.has(c) and c != ball and dist <= reach:
 			if role == "gk":
 				if is_own_goal_cell(c, team):
 					out.append(c)
 			elif not is_goal_cell(c):
 				out.append(c)
-			if is_ball:
-				break # you stop on the ball, you don't run over it
 			c += dir
 			dist += 1
 	return out
