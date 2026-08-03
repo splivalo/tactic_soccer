@@ -21,9 +21,16 @@ func _initialize() -> void:
 	# edit between runs, but the open-space rule is a flag, so baseline and
 	# variant see identical seeds and identical AI without me editing anything
 	# in between and hoping I put it back.
-	for open_space in [false, true]:
-		MatchState.experiment_open_space = open_space
-		_run("open space required" if open_space else "baseline")
+	_run("baseline")
+	MatchState.experiment_open_space = true
+	_run("open space required")
+	MatchState.experiment_open_space = false
+	MatchState.experiment_ball_underfoot = true
+	_run("ball underfoot ALONE")
+	MatchState.experiment_no_self_collect = true
+	_run("ball underfoot + no self-collect")
+	MatchState.experiment_ball_underfoot = false
+	MatchState.experiment_no_self_collect = false
 	quit(0)
 
 
@@ -117,6 +124,10 @@ func _run(label: String) -> void:
 		% [label.to_upper(), MatchState.MAX_MOVE_RANGE, MatchState.BONUS_MOVE_RANGE,
 			MATCHES, DIFFICULTY])
 	print("  possession run     avg %.2f turns, longest %d" % [avg_streak, longest])
+	# What share of turns you actually get to play the ball. A rule that ends the
+	# 27-turn monopoly by leaving the ball loose most of the game has not fixed
+	# the game, it has replaced one problem with a duller one.
+	print("  turns WITH the ball %.1f%%" % (100.0 * (total_turns - chases) / maxi(total_turns, 1)))
 	print("  chasing turn won it %.1f%%  (%d of %d)" \
 		% [100.0 * recoveries / maxi(chases, 1), recoveries, chases])
 	print("  turns per match    %.0f" % (float(total_turns) / maxi(runs, 1)))

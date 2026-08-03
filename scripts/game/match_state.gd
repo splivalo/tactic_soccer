@@ -254,7 +254,39 @@ func _cheby(a: Vector2i, b: Vector2i) -> int:
 ## contest right now. (An earlier version of this also required not being
 ## outnumbered there, but that blocked the exact reactive catch-up move it
 ## was meant to reward — reach the ball and you're entitled to act on it.)
+## EXPERIMENT (2026-08-03, off by default — measurement only). Two rules that
+## replace "you have the ball if you are standing NEXT to it":
+##
+##   1. The ball belongs to whoever is standing ON it.
+##   2. You may not collect a ball you have just kicked, on that same turn.
+##
+## Measured problem they answer: 59% of all kicks travel a single square and
+## keep possession 97.5% of the time — the final kick is being used as a third
+## pass, nudging the ball around inside your own cluster. Under (1) that nudge
+## buys nothing on its own, because the ball has to be walked onto; under (2)
+## the kicker cannot be the one to walk onto it, so the opponent always gets
+## first refusal, and after that both sides race for it with the SAME reactive
+## two-square move.
+##
+## The point of (2) is that it needs no minimum kick distance. Nothing dictates
+## where you may kick — only that you don't get to be first to your own ball.
+## It is also a real rule of football: at a free kick or throw-in the taker may
+## not play the ball again until someone else has touched it.
+##
+## Note what falls out for free: possession stops being decided by whose turn it
+## happens to be. Today both sides are often adjacent and the ball goes to
+## whoever is on the clock, which is the part that reads as arbitrary.
+## Split from each other so the measurement can say which one earns its keep.
+## Underfoot alone still lets you kick one square and step on: that now costs
+## your whole bonus move and leaves the ball exposed for a turn, which may
+## already be enough of a price without banning it outright.
+static var experiment_ball_underfoot := false
+static var experiment_no_self_collect := false
+
+
 func team_has_ball(team: String) -> bool:
+	if experiment_ball_underfoot:
+		return pieces.has(ball) and pieces[ball]["team"] == team
 	return _adjacent_count(team) >= 1
 
 
@@ -269,6 +301,11 @@ func _adjacent_count(team: String) -> int:
 
 func combo_starters() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
+	# Underfoot: exactly one figure can ever start a chain — the one it is under.
+	if experiment_ball_underfoot:
+		if pieces.has(ball) and pieces[ball]["team"] == current:
+			out.append(ball)
+		return out
 	for cell in pieces:
 		if pieces[cell]["team"] == current and _cheby(cell, ball) == 1:
 			out.append(cell)
@@ -402,7 +439,11 @@ func _touches_own(cell: Vector2i) -> bool:
 # --- combo (pass chain -> shoot) --------------------------------------------
 ## Start (or restart) the chain on your figure next to the ball. True if valid.
 func begin(cell: Vector2i) -> bool:
-	if phase == Phase.COMBO and is_own(cell) and _cheby(cell, ball) == 1:
+	if phase != Phase.COMBO or not is_own(cell):
+		return false
+	# Underfoot: the chain starts at the figure the ball is under, not beside.
+	var holds := cell == ball if experiment_ball_underfoot else _cheby(cell, ball) == 1
+	if holds:
 		chain = [cell]
 		return true
 	return false
@@ -566,15 +607,30 @@ func move_targets(from: Vector2i) -> Array[Vector2i]:
 	var role: String = pieces[from]["role"]
 	var team: String = pieces[from]["team"]
 	var reach := current_move_range()
+	# Underfoot: the ball is what you are trying to reach, so it can no longer
+	# be a wall. It is still not something you pass THROUGH — stepping onto it
+	# is where that move ends.
+	var ball_blocks := not experiment_ball_underfoot
+	# ...and you may not collect the one you just kicked. The bonus move is the
+	# only move that happens in the same turn as a kick, which is exactly why
+	# this needs no rule about how far the kick must travel.
+	var ball_barred := experiment_no_self_collect and phase == Phase.MOVE and not _move_is_reactive
 	for dir in Board.DIRS:
 		var c: Vector2i = from + dir
 		var dist := 1
-		while Board.in_bounds(c) and not pieces.has(c) and c != ball and dist <= reach:
+		while Board.in_bounds(c) and not pieces.has(c) and dist <= reach:
+			var is_ball := c == ball
+			if is_ball and ball_blocks:
+				break
+			if is_ball and ball_barred:
+				break
 			if role == "gk":
 				if is_own_goal_cell(c, team):
 					out.append(c)
 			elif not is_goal_cell(c):
 				out.append(c)
+			if is_ball:
+				break # you stop on the ball, you don't run over it
 			c += dir
 			dist += 1
 	return out
