@@ -359,6 +359,21 @@ func combo_pass_targets() -> Array[Vector2i]:
 ## execute_combo), so — matching the original 2006 game, which didn't even mark
 ## those cells as selectable — they're not offered as targets. Your OWN goal
 ## cells stay targetable from anywhere (a deliberate/accidental autogol).
+## EXPERIMENT (2026-08-03, off by default — measurement only, see
+## scripts/tests/sim_move_range.gd). The ball may not be parked where one of
+## your OWN figures is already standing next to it.
+##
+## Measured cause of the complaint it answers: the side without the ball
+## strings together 27 possessions on average before winning it back, and
+## widening their move from 2 to 3 changed the recovery rate by 0.1 points.
+## Movement was never the bottleneck — passing has unlimited range while
+## chasing has two squares, so the attacker simply kicks to a square they
+## already cover and no amount of extra walking closes that. This puts the
+## attacker in the same race as the defender: kick into real space, then both
+## sides approach it.
+static var experiment_open_space := false
+
+
 func combo_shoot_targets() -> Array[Vector2i]:
 	if chain.is_empty():
 		return [] as Array[Vector2i]
@@ -367,7 +382,21 @@ func combo_shoot_targets() -> Array[Vector2i]:
 	out.erase(ball)
 	if not in_opponent_half(shooter, current):
 		out = out.filter(func(c): return not is_opponent_goal(c, current))
+	if experiment_open_space:
+		var open := out.filter(func(c): return not _touches_own(c))
+		# Never leave a chain with nowhere to go — a rule that can strand the
+		# player mid-turn is worse than the problem it solves.
+		if not open.is_empty():
+			out = open
 	return out
+
+
+## True when `cell` sits next to any figure of the team to move.
+func _touches_own(cell: Vector2i) -> bool:
+	for c in pieces:
+		if pieces[c]["team"] == current and _cheby(cell, c) <= 1:
+			return true
+	return false
 
 
 # --- combo (pass chain -> shoot) --------------------------------------------

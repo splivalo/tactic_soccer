@@ -17,6 +17,18 @@ const DIFFICULTY := "Medium"  # Hard is deterministic; Medium varies like a huma
 
 
 func _initialize() -> void:
+	# Both variants in one process: the move ranges are consts and need a source
+	# edit between runs, but the open-space rule is a flag, so baseline and
+	# variant see identical seeds and identical AI without me editing anything
+	# in between and hoping I put it back.
+	for open_space in [false, true]:
+		MatchState.experiment_open_space = open_space
+		_run("open space required" if open_space else "baseline")
+	quit(0)
+
+
+
+func _run(label: String) -> void:
 	var runs := 0
 	var total_turns := 0
 	var finished := 0
@@ -101,12 +113,13 @@ func _initialize() -> void:
 	if not streaks.is_empty():
 		avg_streak /= streaks.size()
 
-	print("MAX_MOVE_RANGE = %d   BONUS_MOVE_RANGE = %d   (%d matches, %s)" \
-		% [MatchState.MAX_MOVE_RANGE, MatchState.BONUS_MOVE_RANGE, MATCHES, DIFFICULTY])
+	print("\n%s   (move %d, bonus %d, %d matches, %s)" \
+		% [label.to_upper(), MatchState.MAX_MOVE_RANGE, MatchState.BONUS_MOVE_RANGE,
+			MATCHES, DIFFICULTY])
 	print("  possession run     avg %.2f turns, longest %d" % [avg_streak, longest])
 	print("  chasing turn won it %.1f%%  (%d of %d)" \
 		% [100.0 * recoveries / maxi(chases, 1), recoveries, chases])
 	print("  turns per match    %.0f" % (float(total_turns) / maxi(runs, 1)))
 	print("  matches finished   %d of %d" % [finished, runs])
 	print("  goals              %.2f per match" % (float(goals) / maxi(runs, 1)))
-	quit(0)
+
