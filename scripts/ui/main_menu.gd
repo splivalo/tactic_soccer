@@ -18,8 +18,31 @@ extends Control
 @onready var _settings_close_button: Button = %SettingsCloseButton
 
 
+## Until the tutorial has been opened once, the two play modes are shown but
+## closed. Not out of strictness — the whole reason the tutorial exists is a
+## first-time player who bounced off the game without it — but the lock has to
+## explain itself, so a tap on a closed mode says why in the button's own label
+## and then puts it back. A permanent line of instructions under the menu would
+## have cost a row on a screen that already carries six buttons and Legal.
+const LOCK_MESSAGE := "Play How to Play first"
+const LOCK_MESSAGE_SECONDS := 2.0
+const LOCK_DIM := 0.45
+const BREATH_LEG_TIME := 1.0 # matches hud.gd's breathing shield
+
+var _locked := false
+var _refusing: Button = null
+var _refusing_text := ""
+
+
 func _ready() -> void:
+	# Only for someone who has never opened it. Finishing isn't required: a lock
+	# that only lifts on completion traps anyone who backs out mid-tutorial in a
+	# menu where the only live button is the one they just left.
+	_locked = not Settings.tutorial_seen
+
 	_one_player_button.pressed.connect(func():
+		if _refuse(_one_player_button):
+			return
 		GameFlow.single_player = true
 		GameFlow.goto(GameFlow.Screen.DIFFICULTY_SELECT))
 	# Two modes only: AI and Online. The local hot-seat entry was dropped on
@@ -31,6 +54,8 @@ func _ready() -> void:
 	# a button on the online screen) keeps the two modes consistent and keeps
 	# the online screen from growing yet another button.
 	_online_button.pressed.connect(func():
+		if _refuse(_online_button):
+			return
 		GameFlow.single_player = false
 		GameFlow.reset_online()
 		GameFlow.online_mode = true
@@ -41,6 +66,11 @@ func _ready() -> void:
 	# same three things in words, and words are exactly what a first-time player
 	# doesn't read — the tutorial ends on the one card that survived, the general
 	# rules, which no single turn can teach.
+	#
+	# Renamed to match: "Instructions" is the least inviting word available for
+	# what is, on a first launch, the only button that does anything. Set here
+	# rather than in the scene so main_menu.tscn stays as authored.
+	_instructions_button.text = "How to Play"
 	_instructions_button.pressed.connect(func():
 		GameFlow.reset_online()
 		GameFlow.single_player = false
@@ -55,6 +85,49 @@ func _ready() -> void:
 	_sfx_slider.value_changed.connect(Settings.set_sfx_volume)
 	_vibration_check.toggled.connect(Settings.set_vibration_enabled)
 	_settings_close_button.pressed.connect(func(): _settings_modal.visible = false)
+
+	if _locked:
+		_apply_lock()
+
+
+## Dims the two closed modes and gives the open one a slow breath, so the eye
+## lands on it without a word being written. The closed buttons stay ENABLED —
+## a disabled Button emits nothing when pressed, and a lock that can't be tapped
+## can't explain itself.
+func _apply_lock() -> void:
+	for b in [_one_player_button, _online_button]:
+		b.modulate.a = LOCK_DIM
+	var faded := Color(1.0, 1.0, 1.0, 0.55)
+	var breath := create_tween().set_loops()
+	breath.tween_property(_instructions_button, "modulate", faded, BREATH_LEG_TIME) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	breath.tween_property(_instructions_button, "modulate", Color.WHITE, BREATH_LEG_TIME) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
+## True when the press was a locked one and has been answered — the caller must
+## then do nothing else. The message goes IN the button that was pressed: it
+## needs no space of its own, nothing on the screen moves, and there is no
+## question about which button it refers to.
+## Deliberately NOT a coroutine — the caller branches on what it returns, and a
+## function that awaits hands back a suspended call rather than a bool.
+func _refuse(button: Button) -> bool:
+	if not _locked:
+		return false
+	_restore_refusal() # one at a time, or two buttons read the same line at once
+	_refusing = button
+	_refusing_text = button.text
+	button.text = LOCK_MESSAGE
+	get_tree().create_timer(LOCK_MESSAGE_SECONDS).timeout.connect(func():
+		if _refusing == button:
+			_restore_refusal())
+	return true
+
+
+func _restore_refusal() -> void:
+	if _refusing != null:
+		_refusing.text = _refusing_text
+		_refusing = null
 
 
 ## The main menu is the one screen where back SHOULD leave the game — it is the

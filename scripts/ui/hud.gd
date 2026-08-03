@@ -289,11 +289,12 @@ func _fit_footer() -> void:
 	var font := _footer_label.get_theme_font("font")
 	if font == null:
 		return
-	var size := FOOTER_FONT_MAX
-	while size > FOOTER_FONT_MIN \
-			and font.get_string_size(_footer_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > available:
-		size -= 2
-	_footer_label.add_theme_font_size_override("font_size", size)
+	# Not `size`: this script extends Control, which already has one.
+	var font_size := FOOTER_FONT_MAX
+	while font_size > FOOTER_FONT_MIN \
+			and font.get_string_size(_footer_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > available:
+		font_size -= 2
+	_footer_label.add_theme_font_size_override("font_size", font_size)
 
 
 ## side = "HomeTeam"/"AwayTeam", phase = MatchState.Phase — bottom hint bar

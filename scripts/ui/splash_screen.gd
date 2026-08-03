@@ -25,13 +25,10 @@ func _input(event: InputEvent) -> void:
 	if is_continue:
 		_going = true
 		get_viewport().set_input_as_handled()
-		# First launch goes straight into the tutorial. The player who most needs
-		# it is exactly the one who would never go looking for it — the whole
-		# reason the written instructions failed was that nobody opens them.
-		if not Settings.tutorial_seen:
-			GameFlow.tutorial_mode = true
-			GameFlow.player_formation = []
-			GameFlow.player_side = "HomeTeam"
-			GameFlow.goto(GameFlow.Screen.MATCH)
-			return
+		# Always the menu, even on a first launch. Dropping straight into the
+		# tutorial put a board with figures on it in front of someone who had
+		# started nothing and seen nothing of the app — it read as a match they
+		# hadn't asked for. The menu names the game, shows what it offers, and
+		# leaves only How to Play open (see main_menu.gd), so the player still
+		# ends up in the tutorial — but by tapping it.
 		GameFlow.goto(GameFlow.Screen.MAIN_MENU)

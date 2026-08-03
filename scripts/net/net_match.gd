@@ -271,12 +271,13 @@ static func normalize_log(data) -> Dictionary:
 ## rather than "react to whatever arrived": a poll can return several new turns
 ## at once (a slow network, a backgrounded app), and they must be applied in
 ## order, exactly once each.
-func _drain(log: Dictionary) -> void:
+## `turn_log`, not `log` — that one is a built-in function.
+func _drain(turn_log: Dictionary) -> void:
 	while _live:
 		var key := str(applied)
-		if not log.has(key):
+		if not turn_log.has(key):
 			return
-		var entry = log[key]
+		var entry = turn_log[key]
 		applied += 1
 		if not (entry is Dictionary):
 			continue

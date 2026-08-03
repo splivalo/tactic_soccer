@@ -1028,6 +1028,11 @@ var _tutorial_lesson: Label = null
 
 
 func _start_tutorial() -> void:
+	# Marked on OPENING, not on finishing. The main menu keeps the two play modes
+	# closed until this has happened (see main_menu.gd), and a lock that only
+	# lifts on completion would strand anyone who backs out halfway in a menu
+	# whose one live button is the thing they just walked away from.
+	Settings.mark_tutorial_seen()
 	_tutorial = Tutorial.new()
 	ball_start_cell = Tutorial.BALL
 	if _hud != null:
@@ -1171,7 +1176,6 @@ func _finish_tutorial() -> void:
 		_tutorial_title = null
 		_tutorial_lesson = null
 	GameFlow.tutorial_mode = false
-	Settings.mark_tutorial_seen()
 	# Ends on the rules card — scoring, offside, the keeper, cards. None of that
 	# fits in one turn, and it is the only instruction page the tutorial didn't
 	# make redundant. Closing mode drops the arrows and the other three cards
