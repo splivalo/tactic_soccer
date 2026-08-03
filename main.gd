@@ -1348,7 +1348,14 @@ func _start_net_match(room: String) -> void:
 	# Resigning arrives as an action; somebody who just closes the app doesn't
 	# send anything at all, and only presence catches that.
 	_net_match.opponent_lost.connect(_net_opponent_left)
-	_net_match.deadline_changed.connect(func(ms: float): _remote_deadline_ms = ms)
+	# Was connected to nothing. A poll that keeps failing looks exactly like a
+	# frozen game — the board simply stops changing — and the player had no way
+	# to tell that apart from a bug, nor did the log.
+	_net_match.sync_failed.connect(_on_sync_failed)
+	_net_match.sync_recovered.connect(_on_sync_recovered)
+	_net_match.deadline_changed.connect(func(ms: float):
+		_remote_deadline_ms = ms
+		_remote_stall_said = false)
 	_net_match.start(room, null, GameFlow.online_opponent_uid)
 	# Measured once, before any deadline is read: the shared deadline is stored
 	# in SERVER time, and a device whose clock is a minute out would otherwise
@@ -1377,6 +1384,35 @@ func _net_send(action: Dictionary) -> void:
 		_net_desync("could not send our own turn: %s" % res["error"])
 
 
+## How many polls in a row may fail before the player is told. Below this it is
+## a blip on a phone network and saying anything would be noise; above it, their
+## opponent's turns have genuinely stopped arriving.
+const SYNC_COMPLAIN_AFTER := 3
+
+## How far past the opponent's own published deadline we wait before admitting
+## nothing is coming. Generous: it covers their animation, their upload, and our
+## next poll on top.
+const REMOTE_STALL_GRACE := 15.0
+
+var _sync_troubled := false
+var _remote_stall_said := false
+
+
+func _on_sync_failed(reason: String, streak: int) -> void:
+	if streak < SYNC_COMPLAIN_AFTER or _sync_troubled:
+		return
+	_sync_troubled = true
+	if _hud != null:
+		_hud.set_footer_text("Connection trouble — reconnecting", Color.WHITE)
+
+
+func _on_sync_recovered() -> void:
+	if not _sync_troubled:
+		return
+	_sync_troubled = false
+	_refresh_turn_view()
+
+
 ## Replays the opponent's action through the SAME functions a tap would call, so
 ## it animates identically. Every step is checked against our own MatchState
 ## first: this is the only real defence against a tampered client, since
@@ -1393,6 +1429,11 @@ func _on_remote_action(action: Dictionary) -> void:
 	# board still mid-change. That is the intermittent "he moved and I never saw
 	# it, then nothing worked" — it only showed up when the poll happened to
 	# catch two entries together.
+	# Printed alongside the TURN/MOVE lines the match already logs, so a report of
+	# "it froze" can be read afterwards: whether the opponent's action arrived at
+	# all, and whether we were still chewing on the last one when it did.
+	print("NET RECV %s (queued=%d busy=%s remote_busy=%s)" \
+		% [String(action.get("t", "?")), _remote_queue.size(), _busy, _remote_busy])
 	_remote_queue.append(action)
 	if _remote_busy:
 		return
@@ -1439,7 +1480,11 @@ func _play_remote_action(action: Dictionary) -> bool:
 			var to := NetAction.cell_from_json(action.get("to", null))
 			if not (to in _state.move_targets(from)):
 				return false
-			_apply_move(from, to, String(action["t"]) == "hold")
+			# Awaited. _apply_move is a coroutine that holds _busy for the whole
+			# slide; returning before it finished told the drain loop this action
+			# was done while the board was still mid-change, which is the same
+			# class of overlap the queue exists to prevent.
+			await _apply_move(from, to, String(action["t"]) == "hold")
 			return true
 		"remove":
 			var cell := NetAction.cell_from_json(action.get("cell", null))
@@ -2786,10 +2831,19 @@ func _show_remote_countdown() -> void:
 			_hud.update_timer(-1)
 		return
 	_timer_dash_shown = false
-	var left := maxi(ceili((_remote_deadline_ms - Net.server_now_ms()) / 1000.0), 0)
+	var raw := (_remote_deadline_ms - Net.server_now_ms()) / 1000.0
+	var left := maxi(ceili(raw), 0)
 	if left != _shown_time_left:
 		_shown_time_left = left
 		_hud.update_timer(left)
+	# Their clock ran out and their forfeit never reached us. Whatever the cause,
+	# the board will not change again on its own, and the player deserves to be
+	# told that rather than left tapping at a game that has quietly stopped.
+	if raw < -REMOTE_STALL_GRACE and not _remote_stall_said:
+		_remote_stall_said = true
+		push_warning("REMOTE STALL: %.0fs past their deadline, nothing received (applied=%s)" \
+			% [-raw, _net_match.applied if _net_match != null else -1])
+		_hud.set_footer_text("Still waiting for your opponent...", Color.WHITE)
 
 
 func _carded_label() -> String:

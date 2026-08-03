@@ -30,7 +30,13 @@ signal action_received(action: Dictionary)
 ## Our own append was refused because that sequence number already existed —
 ## the two clients disagree about how far the game has got.
 signal desync(reason: String)
-signal sync_failed(reason: String)
+## A poll didn't come back. `streak` is how many in a row have now failed — the
+## consumer decides at what point that stops being a blip and starts being worth
+## telling the player about.
+signal sync_failed(reason: String, streak: int)
+
+## First successful poll after a run of failures.
+signal sync_recovered
 ## The opponent stopped showing up. Not the same as resigning: this is the
 ## player who closes the app, loses signal, or walks into a lift.
 signal opponent_lost(reason: String)
@@ -76,6 +82,8 @@ var _poll: Timer = null
 var _presence_timer: Timer = null
 var _busy := false
 var _presence_busy := false
+## Consecutive failed polls. Reset by the first one that comes back.
+var _fail_streak := 0
 var _live := false
 
 ## The last presence stamp we saw from the opponent, and how long WE have been
@@ -195,8 +203,19 @@ func _tick() -> void:
 	_busy = false
 
 	if not res["ok"]:
-		sync_failed.emit(res["error"])
+		# Counted, not just announced. One failed poll is a blip and must not end
+		# a match; a run of them means the opponent's turns have stopped arriving
+		# and the player is staring at a board that will never change. Nobody was
+		# listening to this signal at all, so that state was invisible — to them
+		# and to anyone reading the log afterwards.
+		_fail_streak += 1
+		push_warning("SYNC FAILED (%d in a row): %s" % [_fail_streak, res["error"]])
+		sync_failed.emit(res["error"], _fail_streak)
 		return
+	if _fail_streak > 0:
+		print("SYNC RECOVERED after %d failed polls" % _fail_streak)
+		_fail_streak = 0
+		sync_recovered.emit()
 	_drain(normalize_log(res["data"]))
 	await _read_deadline()
 	_pace_poll()
