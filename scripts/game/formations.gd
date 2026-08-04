@@ -7,8 +7,15 @@ extends RefCounted
 ## Rule: a team may only stand on its OWN half at kick-off.
 ##   HOME = near-camera half, rows 5-9 (defends the +Z goal), attacks toward -Z.
 ##   AWAY = far half,        rows 0-4 (defends the -Z goal), attacks toward +Z.
-## Numbers 1-6 (single digits — that's all the number textures we have for now):
-## GK wears 1, outfield players 2-6.
+## Numbers 1-7 (single digits — that's every number texture we have):
+## GK wears 1, outfield players 2-7.
+##
+## Six outfield rather than five since 2026-08-04. Measured: 40 matches at one
+## action per turn went from 586 turns to 413, and the turns a player spends
+## WITHOUT the ball — the thing that actually reads as the game dragging — from
+## 312 per match to 216. Seven outfield is better again (309 / 160) and is what
+## to try next; it needs one more shirt-number texture, which is the only reason
+## it isn't this.
 
 ## Near-camera team (rows 5-9).
 static func home() -> Array[Dictionary]:
@@ -19,6 +26,7 @@ static func home() -> Array[Dictionary]:
 		{"cell": Vector2i(3, 7), "number": 4, "role": "field"},
 		{"cell": Vector2i(4, 6), "number": 5, "role": "field"},
 		{"cell": Vector2i(2, 6), "number": 6, "role": "field"},
+		{"cell": Vector2i(6, 7), "number": 7, "role": "field"},
 	]
 
 
@@ -31,4 +39,5 @@ static func away() -> Array[Dictionary]:
 		{"cell": Vector2i(3, 2), "number": 4, "role": "field"},
 		{"cell": Vector2i(2, 3), "number": 5, "role": "field"},
 		{"cell": Vector2i(4, 3), "number": 6, "role": "field"},
+		{"cell": Vector2i(0, 2), "number": 7, "role": "field"},
 	]

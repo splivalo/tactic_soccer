@@ -299,7 +299,8 @@ var _busy := false # true while the ball animates (ignore input)
 var _fx: BoardFx = null
 
 # --- Pre-match placement (formation setup, see _start_placement) -------------
-const PLACEMENT_ROLE_ORDER: Array[String] = ["gk", "field", "field", "field", "field", "field"]
+const PLACEMENT_ROLE_ORDER: Array[String] = \
+	["gk", "field", "field", "field", "field", "field", "field"]
 var _placement_active := false
 var _placement_root: Node3D = null # holds figures placed so far, freed once _build_match spawns the real teams
 var _placement_index := 0 # which slot in PLACEMENT_ROLE_ORDER is being placed next
