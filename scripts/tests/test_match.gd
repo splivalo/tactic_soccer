@@ -16,11 +16,6 @@ func _check(cond: bool, label: String) -> void:
 
 
 func _initialize() -> void:
-	# This suite is the net for the SHIPPED two-part turn — kick, then a bonus
-	# move — so it pins the single-action experiment off rather than being
-	# rewritten around it. If that experiment is ever adopted, the assertions
-	# about the bonus move are what needs revisiting here.
-	MatchState.experiment_single_action = false
 	var ms := MatchState.new()
 	ms.setup(Formations.home(), Formations.away(), Vector2i(3, 8), "HomeTeam", 2)
 

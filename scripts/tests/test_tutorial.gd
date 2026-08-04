@@ -131,25 +131,18 @@ func _initialize() -> void:
 	_check(res["ok"], "the shot resolves")
 	_check(t.on_action("shoot", Tutorial.SAFE_SHOT), "lesson advances to the move")
 
-	# Step 5 — or the lack of one. Under one action per turn the kick IS the
-	# turn, and the tutorial has to end there: the scenario's opponent is a lone
-	# keeper with nobody to play him, so waiting for a move that follows the shot
-	# would hang on a turn that never resolves.
-	if MatchState.experiment_single_action:
-		_check(ms.current == "AwayTeam", "the kick ended the turn")
-		_check(t.finished(), "the lesson ends with the kick, not after it")
-	else:
-		_check(ms.phase == MatchState.Phase.MOVE, "a move is owed after the shot")
-		var movers := ms.move_from_cells()
-		_check(not movers.is_empty(), "someone can move")
-		if not movers.is_empty():
-			var from: Vector2i = movers[0]
-			var targets := ms.move_targets(from)
-			_check(not targets.is_empty(), "that someone has somewhere to go")
-			if not targets.is_empty():
-				_check(ms.do_move(from, targets[0]), "the move goes through")
-				_check(t.on_action("move", targets[0]), "lesson finishes")
-		_check(t.finished(), "tutorial reports itself done")
+	# Step 5 — the second action of the turn.
+	_check(ms.phase == MatchState.Phase.MOVE, "a move is owed after the shot")
+	var movers := ms.move_from_cells()
+	_check(not movers.is_empty(), "someone can move")
+	if not movers.is_empty():
+		var from: Vector2i = movers[0]
+		var targets := ms.move_targets(from)
+		_check(not targets.is_empty(), "that someone has somewhere to go")
+		if not targets.is_empty():
+			_check(ms.do_move(from, targets[0]), "the move goes through")
+			_check(t.on_action("move", targets[0]), "lesson finishes")
+	_check(t.finished(), "tutorial reports itself done")
 
 	if _fail == 0:
 		print("--- test_tutorial: ALL PASSED ---")

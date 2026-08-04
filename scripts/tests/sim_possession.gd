@@ -30,9 +30,7 @@ const SPARE_AWAY := [
 
 
 func _initialize() -> void:
-	# The rules as they actually stand: one action per turn, two-square move,
-	# 7x10 board, two goals to win. Only the squad size varies.
-	MatchState.experiment_single_action = true
+	# The rules as they actually stand. Only the squad size varies.
 	for extra in [0, 1, 2]:
 		_run("%d outfield + GK" % (5 + extra), extra)
 	quit(0)

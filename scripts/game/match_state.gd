@@ -261,25 +261,21 @@ func _cheby(a: Vector2i, b: Vector2i) -> int:
 ## simply isn't visible enough to play from. Measurements and the whole
 ## implementation are in git around this date if it is ever worth revisiting; the
 ## visibility is the thing that would have to be solved first, not the rule.
-## ON for playtesting (2026-08-03). A turn is ONE action: play the ball, or move
-## a player two squares. Nothing follows a kick.
+## Also tried and rejected (2026-08-04): one action per turn, with nothing
+## following a kick. It did what it was built for — possession runs 27 down to 6
+## — and broke something more important, which took a human two matches to name
+## and is obvious once said: the post-kick move is how an attack ADVANCES.
 ##
-## What it answers, from a human-vs-human log rather than a simulation. The
-## defender reached the ball on all six of his turns — perfect approach, never
-## late, never in the wrong place — and it never once mattered, because the
-## attacker was adjacent too and moved first. The attacker's post-kick move
-## landed him next to the new ball position 7 times out of 7: kick far, then
-## close the last square. That move is the whole reason he is always first.
+## Without it a turn is either a kick, which keeps the ball but moves no player
+## up the pitch, or a move, which advances a man but leaves the ball sitting
+## where the defender can reach it. So possession bought nothing: seven turns of
+## kicking with the ball never leaving rows 5-6, and the single attempt to go
+## forward lost it immediately. The team with the ball could not progress and the
+## team without it could not be hurt.
 ##
-## So this removes it rather than adding anything to counter it — the rules get
-## SHORTER, and the defender gets the one thing he never had, which is the tempo
-## to arrive before the ball is played again. It is also close to what the game
-## did originally, before the post-shot move was introduced.
-##
-## Set false to get the shipped two-part turn back.
-static var experiment_single_action := true
-
-
+## Second time this conclusion has been reached from the other direction, which
+## is the note worth leaving: the two-part turn is not clutter, it is the only
+## thing that lets you keep the ball AND get somewhere with it.
 func team_has_ball(team: String) -> bool:
 	return _adjacent_count(team) >= 1
 
@@ -510,10 +506,6 @@ func execute_combo(shoot_cell: Vector2i) -> Dictionary:
 		res["scorer"] = scorer
 		res["win"] = score[scorer] >= goals_to_win
 		res["kickoff"] = opponent(scorer)  # the team scored against restarts
-	elif experiment_single_action:
-		# One action per turn, no exception: you played the ball, so your turn is
-		# over. See the flag's own note for why this is the shape being tried.
-		next_turn()
 	else:
 		# Didn't score (including offside) — the shooting team stays
 		# `current` and gets ONE bonus move (do_move, same MAX_MOVE_RANGE)
