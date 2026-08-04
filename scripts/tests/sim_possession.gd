@@ -30,9 +30,15 @@ const SPARE_AWAY := [
 
 
 func _initialize() -> void:
-	# The rules as they actually stand. Only the squad size varies.
-	for extra in [0, 1, 2]:
-		_run("%d outfield + GK" % (5 + extra), extra)
+	# The rules as they actually stand — two-part turn, six outfield a side.
+	# Only the defender's action count varies.
+	_run("defender: one move of two (shipped)", 1)
+	MatchState.experiment_defender_two_moves = true
+	_run("defender: two moves of two", 1)
+	MatchState.experiment_defender_two_moves = false
+	MatchState.experiment_defender_split_move = true
+	_run("defender: two moves of one", 1)
+	MatchState.experiment_defender_split_move = false
 	quit(0)
 
 

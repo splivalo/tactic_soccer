@@ -27,6 +27,17 @@ var _next_id: int = 0
 # always 1 (both the post-shot bonus move and the reactive move are single
 # moves; see _move_is_reactive for which one is which).
 var moves_left: int = 1
+
+## See start_turn. Off by default; measurement only.
+static var experiment_defender_two_moves := false
+
+## The milder dose of the same idea: two moves of ONE square instead of one move
+## of two. Total ground covered is unchanged — what the defender gains is the
+## thing the attacker already has and he doesn't, which is being able to touch
+## two different players in a turn. Full two-square doses overshot badly
+## (possession runs 27.6 -> 1.58, recovery 17% -> 72%), so this separates
+## flexibility from speed to see which of the two was doing the work.
+static var experiment_defender_split_move := false
 # 2026-07-23: re-introduced (was tried, then removed during the "1 action
 # per turn" redesign, now being tested again with the rest of that redesign
 # in place — see the "cards / stalling" doc comment for what else changed
@@ -152,7 +163,14 @@ func start_turn() -> void:
 		phase = Phase.COMBO
 	else:
 		phase = Phase.MOVE
-		moves_left = 1
+		# EXPERIMENT (2026-08-04, measurement only). The side WITH the ball takes
+		# two actions a turn — the chain-and-kick, then a move — while the side
+		# without it takes one. That asymmetry has never been stated out loud and
+		# is the plainest reason the attacker is permanently a step ahead: he
+		# plays at double the tempo. This gives the defender the same two, which
+		# makes the rule SHORTER to state (every turn is two actions, no
+		# exception) rather than adding anything.
+		moves_left = 2 if (experiment_defender_two_moves or experiment_defender_split_move) else 1
 		_move_is_reactive = true
 
 
@@ -564,6 +582,8 @@ const BONUS_MOVE_RANGE := 1
 ## planning, which is the exact failure the one-action turn exists to prevent.
 ## Possession runs stayed at nine either way, so it never bought what it was for.
 func current_move_range() -> int:
+	if experiment_defender_split_move and phase == Phase.MOVE and _move_is_reactive:
+		return 1 # two of these instead of one full-length move
 	if phase == Phase.MOVE and not _move_is_reactive:
 		return BONUS_MOVE_RANGE
 	return MAX_MOVE_RANGE
@@ -626,6 +646,12 @@ func do_move(from: Vector2i, to: Vector2i) -> bool:
 	var info: Dictionary = pieces[from]
 	pieces.erase(from)
 	pieces[to] = info
+	# moves_left was dead weight until now — every MOVE phase was a single move
+	# and this called next_turn() unconditionally. It is what the defender's
+	# second move rides on, so it is actually counted.
+	moves_left -= 1
+	if _move_is_reactive and moves_left > 0:
+		return true # same team, another move still owed
 	next_turn()
 	return true
 
