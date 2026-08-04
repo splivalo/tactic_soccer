@@ -320,7 +320,10 @@ var _pressed := false
 var _press_screen_pos := Vector2.ZERO
 var _dragging := false
 var _drag_candidate := NO_CELL
-const DRAG_TAP_THRESHOLD_PX := 20.0 # finger movement below this = a tap, not a drag
+## Finger movement below this is a tap, not a drag. 20 was a mouse number: on a
+## 1080-wide phone it is about two millimetres, which is less than a thumb rolls
+## on an ordinary tap, so taps were routinely arriving as drags.
+const DRAG_TAP_THRESHOLD_PX := 36.0
 const DRAG_SNAP_RADIUS := 0.9 # world units — how close for the live preview highlight
 const DRAG_COMMIT_RADIUS := 0.38 # tighter — "arrived": auto-connect without releasing
 const TAP_HIT_RADIUS := 0.55 # world units — forgiveness for a plain tap
@@ -1679,7 +1682,17 @@ func _on_motion(screen_pos: Vector2) -> void:
 	if _state.phase == MatchState.Phase.MOVE or _holding:
 		if _move_from == NO_CELL:
 			return # nothing picked up/selected — nothing to drag toward
-		_drag_candidate = _resolve_target(screen_pos, _state.move_targets(_move_from), DRAG_SNAP_RADIUS)
+		# The figure's OWN cell competes for the snap, and winning it means "no
+		# target yet". Without this, the snap radius is nearly a whole tile, so a
+		# finger still sitting on the figure was already latched onto a
+		# neighbouring square — and a tap with a few pixels of wobble in it (any
+		# tap on a phone) counted as a drag, latched, and walked the man one
+		# square the instant it was released. Reported as "I tapped him to select
+		# him and he went off on his own".
+		var snap: Array[Vector2i] = [_move_from]
+		snap.append_array(_state.move_targets(_move_from))
+		var aimed := _resolve_target(screen_pos, snap, DRAG_SNAP_RADIUS)
+		_drag_candidate = NO_CELL if aimed == _move_from else aimed
 		_draw_move(_move_from, _drag_candidate)
 		return
 
