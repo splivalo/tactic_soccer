@@ -588,7 +588,7 @@ theme_override_fonts/normal_font = SubResource("SystemFont_0bf4q")
 theme_override_font_sizes/normal_font_size = 27
 bbcode_enabled = true
 text = "[color=#f7c226]TIME-WASTING → YELLOW CARD[/color]
-Letting the clock run out on your move."
+Letting the clock run out on your turn."
 fit_content = true
 
 [node name="Rule5" type="PanelContainer" parent="SafeArea/VBox/CardPanel/PageStage/Page4/RulesList" unique_id=2067834490]
