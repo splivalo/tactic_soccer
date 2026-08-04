@@ -288,8 +288,8 @@ var _ball_last_pos := Vector3.ZERO  # for rolling-spin (see _spin_ball)
 var _move_from := Vector2i(-1, -1) # figure selected to move (view only)
 # True once the human has tapped a NON-ball-adjacent figure with an empty
 # chain (see _combo_tap) — declining the ball this turn in favour of just
-# moving that figure. From there, input handling (_on_motion/_on_release/
-# _move_click) treats it exactly like Phase.MOVE's tap/drag flow even though
+# moving that figure. From there, input handling (_on_release/
+# _move_click) treats it exactly like Phase.MOVE's tap flow even though
 # _state.phase is still COMBO, and _apply_move's `as_hold` gets this value so
 # the move actually goes through MatchState.hold_and_move instead of
 # do_move. Reset once the hold-move completes, or the player deselects by
@@ -313,20 +313,17 @@ var _fx_effects: BoardFx = null
 const BALL_RADIUS := 0.15 # ball.glb is 0.3 units across
 const NO_CELL := Vector2i(-1, -1)
 
-# --- Input: tap vs drag --------------------------------------------------------
-# TAP always (re)starts the COMBO chain or rewinds it; DRAG is the only way to
-# connect two figures (a real pass) or aim a shot — see _on_press/_motion/_release.
+# --- Input: taps, and only taps ------------------------------------------------
+# Dragging is gone (2026-08-04). It was never needed — a tap already begins a
+# chain, passes, shoots, picks a figure up, moves it and removes it — and it
+# cost more than it gave: on a phone the tap/drag threshold was smaller than the
+# roll of a thumb, so ordinary taps arrived as drags, and the snap radius was
+# nearly a whole tile, so a finger still resting on a figure had already latched
+# onto the square beside it. Tapping a man to select him walked him off on his
+# own. One input path cannot disagree with itself.
 var _pressed := false
 var _press_screen_pos := Vector2.ZERO
-var _dragging := false
-var _drag_candidate := NO_CELL
-## Finger movement below this is a tap, not a drag. 20 was a mouse number: on a
-## 1080-wide phone it is about two millimetres, which is less than a thumb rolls
-## on an ordinary tap, so taps were routinely arriving as drags.
-const DRAG_TAP_THRESHOLD_PX := 36.0
-const DRAG_SNAP_RADIUS := 0.9 # world units — how close for the live preview highlight
-const DRAG_COMMIT_RADIUS := 0.38 # tighter — "arrived": auto-connect without releasing
-const TAP_HIT_RADIUS := 0.55 # world units — forgiveness for a plain tap
+const TAP_HIT_RADIUS := 0.55 # world units — forgiveness for a tap
 const FIGURE_HEIGHT := 1.6 # a bit over the model's real height (~1.45 @ scale 1)
 
 # --- Board FX (tunable in the Inspector on this node) -------------------------
@@ -1646,82 +1643,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			_on_press(st.position)
 		else:
 			_on_release(st.position)
-	elif event is InputEventMouseMotion and _pressed:
-		_on_motion((event as InputEventMouseMotion).position)
-	elif event is InputEventScreenDrag:
-		_on_motion((event as InputEventScreenDrag).position)
 
 
 func _on_press(screen_pos: Vector2) -> void:
 	_pressed = true
 	_press_screen_pos = screen_pos
-	_dragging = false
-	_drag_candidate = NO_CELL
 
-
-func _on_motion(screen_pos: Vector2) -> void:
-	if not _pressed or _placement_active: # placement is tap-only, no drag
-		return
-	if not _dragging and screen_pos.distance_to(_press_screen_pos) > DRAG_TAP_THRESHOLD_PX:
-		_dragging = true
-		# Starting a drag right on one of your own figures "picks it up" —
-		# same effect as tapping it first, so a single press-drag-release can
-		# select AND move it, instead of needing two separate taps. `_holding`
-		# (the human tapped a non-ball-adjacent figure instead of shooting,
-		# see _combo_tap) gets the exact same tap/drag treatment as a real
-		# Phase.MOVE, just still technically mid-Phase.COMBO.
-		if _state.phase == MatchState.Phase.MOVE or _holding:
-			var pickable := _state.own_cells() if _holding else _state.move_from_cells()
-			var picked := _resolve_target(_press_screen_pos, pickable, TAP_HIT_RADIUS)
-			if picked != NO_CELL and not _tutorial_blocks(picked):
-				_move_from = picked
-				_draw_move(_move_from)
-	if not _dragging:
-		return
-
-	if _state.phase == MatchState.Phase.MOVE or _holding:
-		if _move_from == NO_CELL:
-			return # nothing picked up/selected — nothing to drag toward
-		# The figure's OWN cell competes for the snap, and winning it means "no
-		# target yet". Without this, the snap radius is nearly a whole tile, so a
-		# finger still sitting on the figure was already latched onto a
-		# neighbouring square — and a tap with a few pixels of wobble in it (any
-		# tap on a phone) counted as a drag, latched, and walked the man one
-		# square the instant it was released. Reported as "I tapped him to select
-		# him and he went off on his own".
-		var snap: Array[Vector2i] = [_move_from]
-		snap.append_array(_state.move_targets(_move_from))
-		var aimed := _resolve_target(screen_pos, snap, DRAG_SNAP_RADIUS)
-		_drag_candidate = NO_CELL if aimed == _move_from else aimed
-		_draw_move(_move_from, _drag_candidate)
-		return
-
-	if _state.phase != MatchState.Phase.COMBO or _state.chain.is_empty():
-		return # only mid-combo dragging has anything to snap to
-
-	# Auto-connect: once the finger actually ARRIVES at a pass target (or an
-	# earlier chain figure, for rewind), commit it right away — without
-	# waiting for a release. Lets one continuous drag chain through several
-	# figures (1->2->3->...) instead of needing a separate drag per hop.
-	# Shooting still always needs an explicit release (see _on_release).
-	var connectable: Array[Vector2i] = []
-	connectable.append_array(_state.chain)
-	connectable.append_array(_state.combo_pass_targets())
-	var arrived := _resolve_target(screen_pos, connectable, DRAG_COMMIT_RADIUS)
-	if arrived != NO_CELL and arrived != _state.chain[-1]:
-		if arrived in _state.chain:
-			_state.rewind(arrived) # stepping back is never wrong, tutorial or not
-		elif _tutorial_blocks(arrived):
-			return
-		else:
-			_state.extend(arrived)
-			_tutorial_did("extend", arrived)
-		_drag_candidate = NO_CELL
-		_draw_combo()
-		return # re-evaluate fresh candidates on the next motion event
-
-	_drag_candidate = _resolve_target(screen_pos, _drag_candidates(), DRAG_SNAP_RADIUS)
-	_draw_combo(_drag_candidate)
 
 
 func _on_release(screen_pos: Vector2) -> void:
@@ -1731,24 +1658,7 @@ func _on_release(screen_pos: Vector2) -> void:
 	if _placement_active:
 		_placement_tap(screen_pos)
 		return
-	if _dragging:
-		_dragging = false
-		var candidate := _drag_candidate
-		_drag_candidate = NO_CELL
-		if _state.phase == MatchState.Phase.MOVE or _holding:
-			if candidate != NO_CELL and _move_from != NO_CELL:
-				var was_holding := _holding
-				_holding = false
-				_apply_move(_move_from, candidate, was_holding)
-			elif _move_from != NO_CELL:
-				_draw_move(_move_from) # dragged into a dead zone — stay selected
-			return
-		if candidate != NO_CELL:
-			_commit_combo_target(candidate)
-		else:
-			_draw_combo() # dragged into a dead zone — cancel, nothing changes
-		return
-	# A plain tap — resolved against phase-specific candidate sets (see below),
+	# A tap — resolved against phase-specific candidate sets (see below),
 	# not a single raw raycast cell, so tapping a tall figure's body works too.
 	if _holding:
 		_move_click(screen_pos)
@@ -1816,32 +1726,6 @@ func _resolve_target(screen_pos: Vector2, candidates: Array[Vector2i], radius: f
 	return best
 
 
-# Every cell a drag could usefully snap to right now: chain members (rewind),
-# pass targets (extend) and shoot targets (execute).
-func _drag_candidates() -> Array[Vector2i]:
-	var out: Array[Vector2i] = []
-	out.append_array(_state.chain)
-	out.append_array(_state.combo_pass_targets())
-	out.append_array(_state.combo_shoot_targets())
-	return out
-
-
-func _commit_combo_target(cell: Vector2i) -> void:
-	if cell in _state.chain:
-		_state.rewind(cell)
-		_draw_combo()
-	elif cell in _state.combo_pass_targets():
-		if _tutorial_blocks(cell):
-			return
-		_state.extend(cell)
-		_draw_combo()
-		_tutorial_did("extend", cell)
-	elif cell in _state.combo_shoot_targets():
-		if _tutorial_blocks(cell):
-			return
-		_tutorial_did("shoot", cell)
-		_do_combo(cell)
-
 
 # --- COMBO: a plain tap (re)starts the chain, rewinds it, extends it with a
 # pass, or shoots --------------------------------------------------------------
@@ -1906,7 +1790,7 @@ func _combo_tap(screen_pos: Vector2) -> void:
 	# here (see _draw_combo), not just the ball-adjacent ones, so this is a
 	# real, always-visible choice, not a hidden fallback. From here on,
 	# taps/drags route through the exact same flow a real Phase.MOVE uses
-	# (see _on_motion/_on_release/_move_click) — `_holding` just means
+	# (see _on_release/_move_click) — `_holding` just means
 	# "resolve the eventual move via hold_and_move, not do_move".
 	var starter := _resolve_target(screen_pos, _state.combo_starters(), TAP_HIT_RADIUS)
 	if starter != NO_CELL:
@@ -2982,7 +2866,7 @@ func _refresh_turn_view() -> void:
 		_turn_timer.stop()
 		if _hud != null:
 			_hud.update_timer(-1)  # also clears the big centre-pitch countdown
-	elif _state.phase == MatchState.Phase.REMOVE:
+	elif _state.phase == MatchState.Phase.REMOVE and not (GameFlow.online_mode and _is_remote_turn()):
 		# REMOVE used to have no clock at all, because timing it out would have
 		# run forfeit() — which cancels pending_removal, so waiting would have
 		# DELETED the punishment. That reasoning was sound and the conclusion
@@ -2992,6 +2876,12 @@ func _refresh_turn_view() -> void:
 		# It has a clock now, and running it out doesn't cancel anything — it
 		# picks for you (see _on_turn_timeout). Waiting is still no escape hatch;
 		# it just isn't a hostage situation either.
+		#
+		# ONLY on the device being punished. This branch used to come before the
+		# remote check, so the player merely WAITING for the removal also started
+		# a clock and published a deadline over the top of the carded player's —
+		# and, because their own timer was then running, the stalled-opponent
+		# warning never fired, which is exactly the case it exists for.
 		_pool_team = _state.current
 		_turn_timer.start(remove_time_limit)
 		_publish_turn_deadline(remove_time_limit)
