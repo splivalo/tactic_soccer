@@ -391,21 +391,11 @@ func combo_pass_targets() -> Array[Vector2i]:
 ## possession runs from 27 to 5.8 and nearly tripled the recovery rate, but the
 ## rule read as arbitrary — you cannot see why a square is closed without
 ## counting your own players around it.
-## ON for playtesting (2026-08-04). A kick has to travel at least as far as a
-## player can run — the same MAX_MOVE_RANGE, not a second number to remember.
-##
-## Measured target: 58.7% of every kick in the game travels exactly ONE square,
-## and those keep possession 97.5% of the time. Two squares keeps it 35.7%. That
-## one-square nudge is the attacker moving the ball to the next man in his own
-## cluster, which no defender can contest because it never leaves the cluster.
-##
-## Note this is a MINIMUM and an earlier version of the idea was rejected for
-## feeling forced — at three squares it was. At two it stops being a constraint
-## and starts being physics: it is absurd that the ball can move less far than
-## the man kicking it, which makes it slower than the players.
-static var experiment_min_kick := true
-
-
+## Also tried and rejected (2026-08-04): a kick had to travel at least as far as
+## a player can run, aimed at the 58.7% of kicks that go exactly ONE square and
+## keep possession 97.5% of the time. Rejected on feel, not effect — the run it
+## was played against was the shortest yet — because a square you are standing
+## next to being unavailable reads as arbitrary no matter how it is justified.
 func combo_shoot_targets() -> Array[Vector2i]:
 	if chain.is_empty():
 		return [] as Array[Vector2i]
@@ -414,14 +404,6 @@ func combo_shoot_targets() -> Array[Vector2i]:
 	out.erase(ball)
 	if not in_opponent_half(shooter, current):
 		out = out.filter(func(c): return not is_opponent_goal(c, current))
-	if experiment_min_kick:
-		var far := out.filter(func(c): return _cheby(c, shooter) >= MAX_MOVE_RANGE)
-		# Safety valve, not part of the rule: boxed in tightly enough that every
-		# ray dies at one square, the player would be left with a chain and no
-		# legal kick. Stepping back out and moving instead is always available,
-		# but "nothing is lit and I don't know why" is how a game reads as broken.
-		if not far.is_empty():
-			out = far
 	return out
 
 
@@ -583,35 +565,13 @@ const BONUS_MOVE_RANGE := 1
 ## How far the figure moving right now may travel: the reduced
 ## BONUS_MOVE_RANGE during a post-shot bonus move, otherwise the normal
 ## MAX_MOVE_RANGE (reactive moves and hold_and_move both keep full range).
-## ON for playtesting (2026-08-04). A figure may run as far as the ray takes it.
-##
-## Asked for after a human match where the attacker kicked SHORT — to a square
-## his own next man already covered — and simply relocated the ball again before
-## the defender could walk the two squares to it. The defender is permanently one
-## turn behind, not because the ball travels far but because it moves every turn
-## and he doesn't.
-##
-## Worth knowing what was measured before, under the old two-part turn: unlimited
-## movement gave 1284 turns per match and 5 matches in 15 never finished — it is
-## the reason MAX_MOVE_RANGE exists at all. This is being tried again because the
-## turn structure has changed since, and because that measurement was AI against
-## AI, which has already misled us once in this game's tuning.
-##
-## Tried and turned off again (2026-08-04). Matches got dramatically SHORTER,
-## not longer — 28 turns for two goals against 40-plus for one — so the 1284
-## figure did not survive the change of turn structure. What killed it was the
-## other thing: with everyone able to cross the pitch every turn, the game
-## rewarded improvisation over planning, which is the exact failure the "1 action
-## per turn" redesign was made to fix in the first place. Possession runs also
-## stayed at nine, as predicted, so it never bought what it was asked for.
-static var experiment_unlimited_move := false
-
-
+## Also tried and rejected (2026-08-04): unlimited movement, on the theory that
+## the defender is permanently a turn behind a ball that relocates every turn.
+## It did the opposite of the old warning — matches got much SHORTER, 28 turns
+## for two goals against 40-plus for one — but it rewarded improvisation over
+## planning, which is the exact failure the one-action turn exists to prevent.
+## Possession runs stayed at nine either way, so it never bought what it was for.
 func current_move_range() -> int:
-	if experiment_unlimited_move:
-		# The ray already stops at the first figure, the ball, or the edge, so
-		# the board's own size is as unlimited as unlimited gets.
-		return maxi(Board.COLS, Board.ROWS)
 	if phase == Phase.MOVE and not _move_is_reactive:
 		return BONUS_MOVE_RANGE
 	return MAX_MOVE_RANGE

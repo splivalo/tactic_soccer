@@ -1410,7 +1410,7 @@ var _sync_troubled := false
 var _remote_stall_said := false
 
 
-func _on_sync_failed(reason: String, streak: int) -> void:
+func _on_sync_failed(_reason: String, streak: int) -> void:
 	if streak < SYNC_COMPLAIN_AFTER or _sync_troubled:
 		return
 	_sync_troubled = true
@@ -1422,7 +1422,13 @@ func _on_sync_recovered() -> void:
 	if not _sync_troubled:
 		return
 	_sync_troubled = false
-	_refresh_turn_view()
+	# Only the footer. A full _refresh_turn_view() here re-enters the timer
+	# branches with the same team still on the clock, takes the "same team
+	# continuing" path, and restarts their turn on whatever fraction of a second
+	# was last snapshotted — so recovering from a network blip could hand the
+	# player 0.05 seconds and forfeit their turn for them.
+	if _hud != null and _state != null:
+		_hud.update_turn_hint(_state.current, _state.phase, "", _state.moves_left)
 
 
 ## Replays the opponent's action through the SAME functions a tap would call, so

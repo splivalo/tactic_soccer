@@ -15,13 +15,6 @@ func _check(cond: bool, label: String) -> void:
 
 
 func _initialize() -> void:
-	# _test_shot_must_stay_recoverable builds a cramped position where the only
-	# shots keeping a man beside the ball are ONE square away, so a minimum kick
-	# distance leaves the AI no choice that satisfies it. The scenario encodes the
-	# shipped rule; pinned off here rather than rebuilt, since the judgement it
-	# guards — never fire the ball where nobody can collect it — is worth keeping
-	# testable against the rule we can fall back to.
-	MatchState.experiment_min_kick = false
 	_test_rank_pick_determinism()
 	_test_rank_pick_statistics()
 	_test_ai_defends_open_lane()
