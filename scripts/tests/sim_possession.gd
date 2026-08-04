@@ -1,6 +1,6 @@
 extends SceneTree
 
-## Does one more player per side help the DEFENCE?
+## Possession metrics for whatever rule variant is compiled in.
 ##
 ##   godot --headless -s res://scripts/tests/sim_squad_size.gd
 ##
@@ -24,8 +24,10 @@ const EXTRA_AWAY := {"cell": Vector2i(0, 2), "number": 7, "role": "field"}
 
 
 func _initialize() -> void:
-	_run("5 outfield + GK (current)", false)
-	_run("6 outfield + GK", true)
+	MatchState.experiment_single_action = false
+	_run("two-part turn (shipped)", false)
+	MatchState.experiment_single_action = true
+	_run("one action per turn", false)
 	quit(0)
 
 
