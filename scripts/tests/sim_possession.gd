@@ -2,7 +2,7 @@ extends SceneTree
 
 ## Possession metrics for whatever rule variant is compiled in.
 ##
-##   godot --headless -s res://scripts/tests/sim_squad_size.gd
+##   godot --headless -s res://scripts/tests/sim_possession.gd
 ##
 ## The appeal is that it isn't a rules change at all: more bodies means fewer
 ## clear rays, so the blocking that already exists starts to bite. The worry is
@@ -17,30 +17,37 @@ const MATCHES := 40
 const MAX_TURNS := 1200
 const DIFFICULTY := "Medium"
 
-## Kept off the existing men's lines so it adds a body without simply walling
-## one lane: home defends rows 5-9, away rows 0-4.
-const EXTRA_HOME := {"cell": Vector2i(6, 7), "number": 7, "role": "field"}
-const EXTRA_AWAY := {"cell": Vector2i(0, 2), "number": 7, "role": "field"}
+## Spare bodies, kept off the existing men's lines so each adds a figure rather
+## than simply walling one lane. Home defends rows 5-9, away rows 0-4.
+const SPARE_HOME := [
+	{"cell": Vector2i(6, 7), "number": 7, "role": "field"},
+	{"cell": Vector2i(0, 7), "number": 8, "role": "field"},
+]
+const SPARE_AWAY := [
+	{"cell": Vector2i(0, 2), "number": 7, "role": "field"},
+	{"cell": Vector2i(6, 2), "number": 8, "role": "field"},
+]
 
 
 func _initialize() -> void:
-	MatchState.experiment_single_action = false
-	_run("two-part turn (shipped)", false)
+	# The rules as they actually stand: one action per turn, two-square move,
+	# 7x10 board, two goals to win. Only the squad size varies.
 	MatchState.experiment_single_action = true
-	_run("one action per turn", false)
+	for extra in [0, 1, 2]:
+		_run("%d outfield + GK" % (5 + extra), extra)
 	quit(0)
 
 
-func _squad(base: Array[Dictionary], extra: Dictionary, add: bool) -> Array[Dictionary]:
+func _squad(base: Array[Dictionary], spare: Array, extra: int) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for p in base:
 		out.append(p.duplicate())
-	if add:
-		out.append(extra.duplicate())
+	for i in extra:
+		out.append((spare[i] as Dictionary).duplicate())
 	return out
 
 
-func _run(label: String, add: bool) -> void:
+func _run(label: String, extra: int) -> void:
 	var total_turns := 0
 	var finished := 0
 	var goals := 0
@@ -53,8 +60,8 @@ func _run(label: String, add: bool) -> void:
 
 	for m in MATCHES:
 		seed(m * 7919)
-		var home := _squad(Formations.home(), EXTRA_HOME, add)
-		var away := _squad(Formations.away(), EXTRA_AWAY, add)
+		var home := _squad(Formations.home(), SPARE_HOME, extra)
+		var away := _squad(Formations.away(), SPARE_AWAY, extra)
 		var ms := MatchState.new()
 		ms.setup(home, away, Vector2i(3, 8), "HomeTeam", 2)
 		var turns := 0

@@ -139,14 +139,16 @@ func _test_shot_must_stay_recoverable() -> void:
 
 # --- Smoke test: a full AI-vs-AI match plays out without errors/infinite loops
 func _test_full_ai_vs_ai_match() -> void:
-	# win=2 (not the real default of 3) purely so this stays a fast smoke test:
-	# Hard now plays real defense (see AIPlayer._post_shot_threat_penalty /
+	# win=2, which IS the shipped value — see main.gd's goals_to_win export. An
+	# older version of this comment claimed the real default was 3, which was
+	# wrong and got repeated downstream, so: 2.
+	#
+	# Hard plays real defense (see AIPlayer._post_shot_threat_penalty /
 	# _search_best_combo), so a Hard-vs-Hard match between two equally-matched,
 	# fully deterministic Hard AIs is a genuine defensive grind — it can easily
-	# need well over 400 individual actions to reach a 3rd goal even though
-	# it's making steady progress (2 goals inside 400 already). This test only
-	# needs to prove the loop terminates cleanly across every phase, not that a
-	# full 3-goal match is fast.
+	# need well over 400 individual actions even though it's making steady
+	# progress. This test only needs to prove the loop terminates cleanly across
+	# every phase, not that a match is fast.
 	for difficulty in ["Easy", "Medium", "Hard"]:
 		var ms := MatchState.new()
 		ms.setup(Formations.home(), Formations.away(), Vector2i(3, 8), "HomeTeam", 2)
