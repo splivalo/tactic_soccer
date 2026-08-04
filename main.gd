@@ -3106,8 +3106,11 @@ func _on_turn_timeout() -> void:
 		var cell := AIPlayer.decide_removal(_state, "Hard")
 		if cell != NO_CELL:
 			print("TIME UP: %s did not choose — removing %s" % [_state.current, cell])
+			# _remove_at refreshes the turn view itself. Calling it again here
+			# would re-enter the timer branches with the NEW team already set as
+			# _pool_team, take the "same team continuing" path, and start their
+			# turn on the fraction of a second left over from the last snapshot.
 			_remove_at(cell)
-			_refresh_turn_view()
 			return
 	print("TIME UP: %s forfeits (phase=%s)" % [_state.current, MatchState.Phase.keys()[_state.phase]])
 	_state.forfeit(true)

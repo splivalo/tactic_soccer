@@ -178,20 +178,44 @@ func _presence_tick() -> void:
 ## is a desync, and it is reported rather than retried at the next index:
 ## appending anyway would leave the two clients playing different games while
 ## both think everything is fine.
+## How many times to try before giving the match up. A phone changing cell or
+## dropping to a weak bar loses a request routinely; that must not cost a match.
+const SEND_ATTEMPTS := 3
+const SEND_RETRY_SECONDS := 0.4
+
+
 func send_action(action: Dictionary) -> Dictionary:
 	if room == "":
 		return {"ok": false, "error": "no room"}
 
-	var res: Dictionary = await net.db_put("rooms/%s/turns/%d" % [room, applied], {
-		"by": net.uid,
-		"action": action,
-		"at": net.server_timestamp(),
-	})
-	if not res["ok"]:
-		desync.emit("could not append turn %d: %s" % [applied, res["error"]])
-		return res
+	var path := "rooms/%s/turns/%d" % [room, applied]
+	var payload := {"by": net.uid, "action": action, "at": net.server_timestamp()}
+	var res: Dictionary = {"ok": false, "error": "not attempted"}
+	for attempt in SEND_ATTEMPTS:
+		if attempt > 0:
+			await get_tree().create_timer(SEND_RETRY_SECONDS).timeout
+		res = await net.db_put(path, payload)
+		if res["ok"]:
+			applied += 1
+			return res
 
-	applied += 1
+		# Read the slot back before believing the failure. A response lost on the
+		# way home looks identical to a write that never happened, and the rules
+		# refuse a second write to an index that already exists — so a blind
+		# retry would report a desync for a turn that actually went through, and
+		# abandon a perfectly healthy match.
+		var check: Dictionary = await net.db_get(path)
+		if check["ok"] and check["data"] is Dictionary:
+			if String(check["data"].get("by", "")) == net.uid:
+				push_warning("turn %d was already ours — the reply was lost, not the write" % applied)
+				applied += 1
+				return {"ok": true, "code": 200, "data": check["data"], "error": ""}
+			# Somebody else's turn is sitting in our slot. That is a real
+			# disagreement about whose move it is, and retrying cannot fix it.
+			break
+
+	desync.emit("could not append turn %d after %d tries: %s" \
+		% [applied, SEND_ATTEMPTS, res["error"]])
 	return res
 
 
