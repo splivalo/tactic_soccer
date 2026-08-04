@@ -84,6 +84,12 @@ extends Node3D
 ## offence (see MatchState.forfeit), so there has to be room to think about
 ## the attack without the clock turning that into a card.
 @export var turn_time_limit := 40.0
+
+## Shorter than a normal turn on purpose: picking which of your own to lose is
+## one tap on a board where every choice is already lit, not a decision to plan.
+## The full 40 here would leave the other player waiting through a punishment
+## that isn't theirs.
+@export var remove_time_limit := 15.0
 ## Loudness of the countdown tick (assets/audio/sfx/timer.mp3) — one play per
 ## whole-second tick while the HUD's big center-pitch countdown is showing
 ## (see hud.gd's TIMER_URGENT_AT / _update_turn_timer_display below). Same
@@ -2957,12 +2963,18 @@ func _refresh_turn_view() -> void:
 		if _hud != null:
 			_hud.update_timer(-1)  # also clears the big centre-pitch countdown
 	elif _state.phase == MatchState.Phase.REMOVE:
-		# No timer here, on purpose: REMOVE is the actual PENALTY for a 3rd
-		# stalling violation, not a normal decision — if it timed out like
-		# every other phase, forfeit() would just cancel pending_removal and
-		# the penalty would vanish. Waiting it out must not be an escape
-		# hatch, so there's simply nothing to wait out.
-		_turn_timer.stop()
+		# REMOVE used to have no clock at all, because timing it out would have
+		# run forfeit() — which cancels pending_removal, so waiting would have
+		# DELETED the punishment. That reasoning was sound and the conclusion
+		# wasn't: online it left the other player staring at a board that would
+		# never change, for as long as the carded one felt like it.
+		#
+		# It has a clock now, and running it out doesn't cancel anything — it
+		# picks for you (see _on_turn_timeout). Waiting is still no escape hatch;
+		# it just isn't a hostage situation either.
+		_pool_team = _state.current
+		_turn_timer.start(remove_time_limit)
+		_publish_turn_deadline(remove_time_limit)
 	elif GameFlow.online_mode and _is_remote_turn():
 		# No LOCAL timer while the opponent is on the clock — running our own
 		# stopwatch from whenever we happened to learn their turn began is what
@@ -3079,6 +3091,18 @@ func _on_turn_timeout() -> void:
 	# caught by presence — see NetMatch.)
 	if GameFlow.online_mode and _is_remote_turn():
 		return
+	# A red card's removal is not forfeitable — forfeit() cancels the pending
+	# removal, so timing out would erase the punishment. Choose for them instead,
+	# by the same rule the AI uses: the outfield figure standing furthest from
+	# the ball, never the keeper. It is the least damaging piece to lose, so
+	# letting the clock run costs you nothing extra beyond the choice itself.
+	if _state.phase == MatchState.Phase.REMOVE:
+		var cell := AIPlayer.decide_removal(_state, "Hard")
+		if cell != NO_CELL:
+			print("TIME UP: %s did not choose — removing %s" % [_state.current, cell])
+			_remove_at(cell)
+			_refresh_turn_view()
+			return
 	print("TIME UP: %s forfeits (phase=%s)" % [_state.current, MatchState.Phase.keys()[_state.phase]])
 	_state.forfeit(true)
 	_net_send(NetAction.forfeit())
