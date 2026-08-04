@@ -61,8 +61,12 @@ const THEIRS := [
 const FIRST := Vector2i(3, 6)   # A
 const SECOND := Vector2i(5, 6)  # B
 const THIRD := Vector2i(5, 3)   # C
+## Both on the SAME ray north out of C, one square apart: the contrast the step
+## teaches is then purely about the keeper standing there, not about direction.
+## (5,1) rather than the nearer (4,3) so the pair survives a minimum kick
+## distance — see MatchState.experiment_min_kick.
 const SAFE_SHOT := Vector2i(5, 0)
-const RISKY_SHOT := Vector2i(4, 3)  # right below the opponent on (4,2)
+const RISKY_SHOT := Vector2i(5, 1)  # diagonally off the opponent on (4,2)
 
 enum Step { PICK, CONNECT, CHAIN, SHOOT, MOVE, DONE }
 

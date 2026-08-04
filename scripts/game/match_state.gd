@@ -391,6 +391,21 @@ func combo_pass_targets() -> Array[Vector2i]:
 ## possession runs from 27 to 5.8 and nearly tripled the recovery rate, but the
 ## rule read as arbitrary — you cannot see why a square is closed without
 ## counting your own players around it.
+## ON for playtesting (2026-08-04). A kick has to travel at least as far as a
+## player can run — the same MAX_MOVE_RANGE, not a second number to remember.
+##
+## Measured target: 58.7% of every kick in the game travels exactly ONE square,
+## and those keep possession 97.5% of the time. Two squares keeps it 35.7%. That
+## one-square nudge is the attacker moving the ball to the next man in his own
+## cluster, which no defender can contest because it never leaves the cluster.
+##
+## Note this is a MINIMUM and an earlier version of the idea was rejected for
+## feeling forced — at three squares it was. At two it stops being a constraint
+## and starts being physics: it is absurd that the ball can move less far than
+## the man kicking it, which makes it slower than the players.
+static var experiment_min_kick := true
+
+
 func combo_shoot_targets() -> Array[Vector2i]:
 	if chain.is_empty():
 		return [] as Array[Vector2i]
@@ -399,6 +414,14 @@ func combo_shoot_targets() -> Array[Vector2i]:
 	out.erase(ball)
 	if not in_opponent_half(shooter, current):
 		out = out.filter(func(c): return not is_opponent_goal(c, current))
+	if experiment_min_kick:
+		var far := out.filter(func(c): return _cheby(c, shooter) >= MAX_MOVE_RANGE)
+		# Safety valve, not part of the rule: boxed in tightly enough that every
+		# ray dies at one square, the player would be left with a chain and no
+		# legal kick. Stepping back out and moving instead is always available,
+		# but "nothing is lit and I don't know why" is how a game reads as broken.
+		if not far.is_empty():
+			out = far
 	return out
 
 
@@ -574,8 +597,14 @@ const BONUS_MOVE_RANGE := 1
 ## turn structure has changed since, and because that measurement was AI against
 ## AI, which has already misled us once in this game's tuning.
 ##
-## Set false for the shipped two-square move.
-static var experiment_unlimited_move := true
+## Tried and turned off again (2026-08-04). Matches got dramatically SHORTER,
+## not longer — 28 turns for two goals against 40-plus for one — so the 1284
+## figure did not survive the change of turn structure. What killed it was the
+## other thing: with everyone able to cross the pitch every turn, the game
+## rewarded improvisation over planning, which is the exact failure the "1 action
+## per turn" redesign was made to fix in the first place. Possession runs also
+## stayed at nine, as predicted, so it never bought what it was asked for.
+static var experiment_unlimited_move := false
 
 
 func current_move_range() -> int:

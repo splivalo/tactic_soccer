@@ -22,6 +22,7 @@ func _initialize() -> void:
 	# about the bonus move are what needs revisiting here.
 	MatchState.experiment_single_action = false
 	MatchState.experiment_unlimited_move = false
+	MatchState.experiment_min_kick = false
 	var ms := MatchState.new()
 	ms.setup(Formations.home(), Formations.away(), Vector2i(3, 8), "HomeTeam", 2)
 
