@@ -560,7 +560,29 @@ const BONUS_MOVE_RANGE := 1
 ## How far the figure moving right now may travel: the reduced
 ## BONUS_MOVE_RANGE during a post-shot bonus move, otherwise the normal
 ## MAX_MOVE_RANGE (reactive moves and hold_and_move both keep full range).
+## ON for playtesting (2026-08-04). A figure may run as far as the ray takes it.
+##
+## Asked for after a human match where the attacker kicked SHORT — to a square
+## his own next man already covered — and simply relocated the ball again before
+## the defender could walk the two squares to it. The defender is permanently one
+## turn behind, not because the ball travels far but because it moves every turn
+## and he doesn't.
+##
+## Worth knowing what was measured before, under the old two-part turn: unlimited
+## movement gave 1284 turns per match and 5 matches in 15 never finished — it is
+## the reason MAX_MOVE_RANGE exists at all. This is being tried again because the
+## turn structure has changed since, and because that measurement was AI against
+## AI, which has already misled us once in this game's tuning.
+##
+## Set false for the shipped two-square move.
+static var experiment_unlimited_move := true
+
+
 func current_move_range() -> int:
+	if experiment_unlimited_move:
+		# The ray already stops at the first figure, the ball, or the edge, so
+		# the board's own size is as unlimited as unlimited gets.
+		return maxi(Board.COLS, Board.ROWS)
 	if phase == Phase.MOVE and not _move_is_reactive:
 		return BONUS_MOVE_RANGE
 	return MAX_MOVE_RANGE
