@@ -13,45 +13,70 @@ extends SceneTree
 ## Formations are built here rather than changed in Formations, so the game is
 ## untouched by running this.
 
-const MATCHES := 40
+const MATCHES := 25 # bigger squads are slower to simulate
 const MAX_TURNS := 1200
 const DIFFICULTY := "Medium"
 
-## Spare bodies, kept off the existing men's lines so each adds a figure rather
-## than simply walling one lane. Home defends rows 5-9, away rows 0-4.
-const SPARE_HOME := [
-	{"cell": Vector2i(6, 7), "number": 7, "role": "field"},
-	{"cell": Vector2i(0, 7), "number": 8, "role": "field"},
+## Home outfield men in the order they get added, so taking the first N gives a
+## squad of N that still looks like a formation rather than a corner of one.
+## Four is five-a-side, which is a real format, not an invention. Away is the
+## mirror the rest of Formations already uses (x -> 6-x, y -> 9-y).
+const HOME_OUTFIELD := [
+	Vector2i(1, 8), Vector2i(5, 8),   # 2 — a wide pair at the back
+	Vector2i(3, 7),                   # 3 — the man beside the kickoff ball
+	Vector2i(3, 5),                   # 4 — one ahead: the 2-1-1 that ships
+	Vector2i(2, 6), Vector2i(4, 6),   # 5, 6 — the shape it replaced
 ]
-const SPARE_AWAY := [
-	{"cell": Vector2i(0, 2), "number": 7, "role": "field"},
-	{"cell": Vector2i(6, 2), "number": 8, "role": "field"},
-]
+const HOME_GK := Vector2i(3, 9)
+
+
+## How many immediate choices the side to move is looking at. The number that
+## answers "does this become chaos" — a human reported the old fast version was
+## unplayable not because it was unfair but because "it was hard to keep track of
+## every possible move". Chess sits around 35 and is about the ceiling a person
+## can plan against.
+##
+## Counted shallow, at the top of the turn: ways to start a chain, plus every
+## square every movable figure could go to. Chain continuations are deeper and
+## deliberately not counted — this is "how much is in front of me right now".
+func _branching(ms: MatchState) -> int:
+	var n := 0
+	if ms.phase == MatchState.Phase.COMBO:
+		n += ms.combo_starters().size()
+		for c in ms.own_cells():
+			n += ms.move_targets(c).size()
+	else:
+		for c in ms.move_from_cells():
+			n += ms.move_targets(c).size()
+	return n
 
 
 func _initialize() -> void:
-	# The rules as they actually stand — two-part turn, six outfield a side.
-	# Only the defender's action count varies.
-	_run("defender: one move of two (shipped)", 1)
-	MatchState.experiment_defender_two_moves = true
-	_run("defender: two moves of two", 1)
-	MatchState.experiment_defender_two_moves = false
-	MatchState.experiment_defender_split_move = true
-	_run("defender: two moves of one", 1)
-	MatchState.experiment_defender_split_move = false
+	# Rules untouched — only how many men are on the pitch. Downwards this time:
+	# every previous run added players and none of it moved possession, so the
+	# question is whether taking them away does.
+	for outfield in [4]:
+		_run("%d outfield + GK  (%d a side)" % [outfield, outfield + 1], outfield)
 	quit(0)
 
 
-func _squad(base: Array[Dictionary], spare: Array, extra: int) -> Array[Dictionary]:
+func _squad(outfield: int, home: bool) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	for p in base:
-		out.append(p.duplicate())
-	for i in extra:
-		out.append((spare[i] as Dictionary).duplicate())
+	out.append({"cell": _side(HOME_GK, home), "number": 1, "role": "gk"})
+	for i in outfield:
+		out.append({
+			"cell": _side(HOME_OUTFIELD[i], home),
+			"number": i + 2,
+			"role": "field",
+		})
 	return out
 
 
-func _run(label: String, extra: int) -> void:
+func _side(cell: Vector2i, home: bool) -> Vector2i:
+	return cell if home else Vector2i(6 - cell.x, 9 - cell.y)
+
+
+func _run(label: String, outfield: int) -> void:
 	var total_turns := 0
 	var finished := 0
 	var goals := 0
@@ -61,11 +86,13 @@ func _run(label: String, extra: int) -> void:
 	var was_chasing := {"HomeTeam": false, "AwayTeam": false}
 	var blocked_rays := 0.0
 	var ray_samples := 0
+	var branch_total := 0.0
+	var branch_worst := 0
 
 	for m in MATCHES:
 		seed(m * 7919)
-		var home := _squad(Formations.home(), SPARE_HOME, extra)
-		var away := _squad(Formations.away(), SPARE_AWAY, extra)
+		var home := _squad(outfield, true)
+		var away := _squad(outfield, false)
 		var ms := MatchState.new()
 		ms.setup(home, away, Vector2i(3, 8), "HomeTeam", 2)
 		var turns := 0
@@ -87,6 +114,9 @@ func _run(label: String, extra: int) -> void:
 				if has_ball:
 					recoveries += 1
 			was_chasing[on_move] = not has_ball
+			var b := _branching(ms)
+			branch_total += b
+			branch_worst = maxi(branch_worst, b)
 
 			turns += 1
 			match ms.phase:
@@ -142,6 +172,8 @@ func _run(label: String, extra: int) -> void:
 	print("  chasing turn won it %.1f%%  (%d of %d)" \
 		% [100.0 * recoveries / maxi(chases, 1), recoveries, chases])
 	print("  squares a chain can reach  %.1f" % (blocked_rays / maxf(ray_samples, 1.0)))
+	print("  choices per turn    %.0f  (worst %d)   [chess is about 35]" \
+		% [branch_total / maxf(total_turns, 1.0), branch_worst])
 	print("  turns per match     %.0f" % (float(total_turns) / MATCHES))
 	print("  matches finished    %d of %d" % [finished, MATCHES])
 	print("  goals               %.2f per match" % (float(goals) / MATCHES))
