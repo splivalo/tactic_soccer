@@ -333,6 +333,19 @@ const FIGURE_HEIGHT := 1.6 # a bit over the model's real height (~1.45 @ scale 1
 @export var color_move := Color(0.28, 1.0, 0.45, 0.9) # move target cell
 @export var color_shoot := Color(0.30, 1.0, 0.5, 0.9) # shoot target cell
 @export var color_tap := Color(0.30, 0.65, 1.0, 0.95) # blue: a man you can WALK — never one the ball can go through
+
+## The "these are yours" pool under each figure of the team on the move.
+##
+## Was a very dark green (0.09, 0.20, 0.08) on green grass, which is close to no
+## contrast at all — it read as the figure's shadow rather than as a marker, and
+## with a chain running it was the only thing left saying which men were yours.
+## Pale rather than dark for that reason: white is the one hue no action colour
+## uses, so it separates from the pitch without competing with orange or blue.
+## Alpha stays low so an FX tile landing on the same cell still overpowers it.
+##
+## Set from code (see _set_own_marker_visible) rather than in player_rigged.tscn,
+## so it stays tunable here alongside the colours it has to sit beside.
+@export var own_marker_color := Color(1.0, 1.0, 1.0, 0.34)
 ## The ONE figure currently selected/held (see _draw_move) — the original
 ## cyan-blue "selected mover" colour from before color_tap_selected existed
 ## as a separate variable, so it stands out from the plain-blue tappable
@@ -679,6 +692,8 @@ func _set_own_marker_visible(fig: Node3D, is_own: bool) -> void:
 	var mat := glow.material_override as StandardMaterial3D
 	if mat != null and mat.albedo_texture == null: # shared resource — generate once
 		mat.albedo_texture = BoardFx.make_tile_texture() # SAME shape as the FX tiles
+	if mat != null:
+		mat.albedo_color = own_marker_color
 
 
 ## _set_own_marker_visible's is_own only decides "is this the local player's
@@ -2684,7 +2699,15 @@ func _move_click(screen_pos: Vector2) -> void:
 			_holding = false
 			_move_from = NO_CELL
 			_draw_combo()
-		return # tapping the already-selected figure again during a real reactive MOVE is a harmless no-op
+		else:
+			# Same gesture during a real MOVE. It used to be a deliberate no-op,
+			# on the grounds that you have to move SOMEBODY so letting go leads
+			# nowhere — but one gesture that sometimes releases and sometimes
+			# doesn't is worse than one that always does, and tapping a different
+			# figure already changed the selection anyway.
+			_move_from = NO_CELL
+			_draw_movable()
+		return
 	var dest := _resolve_target(screen_pos, _state.move_targets(_move_from), TAP_HIT_RADIUS)
 	if dest != NO_CELL:
 		_play_sfx(FIELD_TAP_SOUND, field_tap_volume_db)
@@ -2851,11 +2874,7 @@ func _refresh_turn_view() -> void:
 		# another MOVE step (moves_left still > 0 but nothing drawn), and the
 		# player can time out never realizing a figure — or a second reactive
 		# move — was still theirs to take.
-		_fx.clear()
-		var own := _state.move_from_cells()
-		for c in own:
-			_fx.add_tile(_cell_world(c.x, c.y), color_tap)
-		_update_own_team_markers(own)
+		_draw_movable()
 	print("TURN: %s  phase=%s" % [_state.current, MatchState.Phase.keys()[_state.phase]])
 	_shown_time_left = -1
 	if _tutorial != null:
@@ -3023,6 +3042,22 @@ func _on_turn_timeout() -> void:
 	_refresh_turn_view()
 
 
+
+
+## Phase.MOVE with nothing picked up yet: whichever figures are actually
+## tappable (MatchState.move_from_cells — every own figure for a REACTIVE move,
+## only the shooter for a BONUS move). Without this the pitch reads as frozen
+## whenever a MOVE follows another MOVE and nothing is drawn, and the player can
+## time out never realising a figure was still theirs to take.
+##
+## Its own function because deselecting has to get back to exactly this view,
+## and a second copy of it would be a second thing to keep in step.
+func _draw_movable() -> void:
+	_fx.clear()
+	var own := _state.move_from_cells()
+	for c in own:
+		_fx.add_tile(_cell_world(c.x, c.y), color_tap)
+	_update_own_team_markers(own)
 
 
 # Highlights every one of the carded team's figures as a removable target.
