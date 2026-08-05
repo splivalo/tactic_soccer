@@ -1836,42 +1836,55 @@ func _combo_tap(screen_pos: Vector2) -> void:
 ##
 ## Watching a first-time player, the very first thing they did was tap the ball —
 ## and the game replied with silence, which reads as broken rather than as
-## wrong. It now blinks the same orange used for a chosen chain figure under
-## every player who can actually play it: same colour because it means the same
-## thing ("the ball goes through this one"), blinking because nothing has been
-## chosen yet.
-##
-## In COMBO that's whoever may start the chain. In MOVE it's every own figure
-## that could still reach a square beside the ball this turn — which is the real
-## answer to the question being asked.
+## wrong. The answer it gives depends on whether anyone can play the ball at
+## all, and so does the colour it gives it in — see the two halves below.
 func _hint_ball_carriers(screen_pos: Vector2) -> void:
 	if _state == null:
 		return
 	if _resolve_target(screen_pos, [_state.ball], TAP_HIT_RADIUS) == NO_CELL:
 		return
 
-	var hint: Array[Vector2i] = []
+	# COMBO: whoever may start the chain. Orange is the truth there — the ball
+	# really can go through them, this turn.
 	if _state.phase == MatchState.Phase.COMBO:
-		hint = _state.combo_starters()
-	else:
-		for cell in _state.own_cells():
-			for target in _state.move_targets(cell):
-				# Adjacent in any of the 8 directions == possession.
-				if maxi(absi(target.x - _state.ball.x), absi(target.y - _state.ball.y)) <= 1:
-					hint.append(cell)
-					break
+		var carriers := _state.combo_starters()
+		if carriers.is_empty():
+			return
+		_fx.clear()
+		for cell in carriers:
+			_fx.add_tile(_cell_world(cell.x, cell.y), color_chain, -1.0, true)
+		_update_own_team_markers(carriers)
+		_play_sfx(SELECT_SOUND, select_sfx_volume_db)
+		return
 
-	if hint.is_empty():
+	# MOVE: nobody can play the ball at all, so orange here was a lie — and a
+	# loud one, since a two-square move reaches the ball from most of the pitch
+	# and lit nearly the whole team as if they were all on it. Reported as
+	# "I tapped the ball with nobody near it and everyone went orange".
+	#
+	# The honest answer to "how do I get it?" here is a WALK, so it is blue, and
+	# the men who cannot get there this turn stay blue but go steady — the same
+	# way the board already separates "you can act on this" from "still yours".
+	var movers := _state.move_from_cells()
+	var can_reach: Array[Vector2i] = []
+	for cell in movers:
+		for target in _state.move_targets(cell):
+			# Landing beside the ball is what possession takes.
+			if maxi(absi(target.x - _state.ball.x), absi(target.y - _state.ball.y)) <= 1:
+				can_reach.append(cell)
+				break
+	if can_reach.is_empty():
 		return
 	_fx.clear()
-	for cell in hint:
-		_fx.add_tile(_cell_world(cell.x, cell.y), color_chain, -1.0, true)
+	for cell in movers:
+		var reaches := cell in can_reach
+		_fx.add_tile(_cell_world(cell.x, cell.y), color_tap, -1.0, reaches)
 	# Clearing the board took the tiles away but left every own figure's glow
 	# suppressed, because the draw before this one had reported those cells as
 	# covered. The result was a team standing on nothing until the next redraw —
-	# the blink answered the question and blanked the rest of the answer. Hand
-	# the markers back to everyone the hint isn't already sitting on.
-	_update_own_team_markers(hint)
+	# the answer blanked the rest of the answer. Hand the markers back to
+	# everyone this draw isn't already sitting on.
+	_update_own_team_markers(movers)
 	_play_sfx(SELECT_SOUND, select_sfx_volume_db)
 
 
