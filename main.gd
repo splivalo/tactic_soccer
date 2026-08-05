@@ -332,7 +332,7 @@ const FIGURE_HEIGHT := 1.6 # a bit over the model's real height (~1.45 @ scale 1
 @export_group("Board FX Colors")
 @export var color_move := Color(0.28, 1.0, 0.45, 0.9) # move target cell
 @export var color_shoot := Color(0.30, 1.0, 0.5, 0.9) # shoot target cell
-@export var color_tap := Color(0.30, 0.65, 1.0, 0.95) # tappable figure
+@export var color_tap := Color(0.30, 0.65, 1.0, 0.95) # blue: a man you can WALK — never one the ball can go through
 ## The ONE figure currently selected/held (see _draw_move) — the original
 ## cyan-blue "selected mover" colour from before color_tap_selected existed
 ## as a separate variable, so it stands out from the plain-blue tappable
@@ -3082,9 +3082,25 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 	_fx.set_trail(pts, color_trail)
 	for c in _state.chain:
 		_fx.add_tile(_cell_world(c.x, c.y), color_chain) # orange = chosen chain (active receiver)
+	# Orange, not blue. It means one thing everywhere now — the ball can go
+	# through this man — and a pass target is exactly that. Blue was left over
+	# from when it meant "tappable", and mid-chain that was a lie twice over: you
+	# cannot walk anyone here, the turn is already committed to the ball.
+	#
+	# What separates a man the ball has ALREADY gone through from one it still
+	# could is the trail, not the colour — the ribbon is drawn along the chain
+	# just above. If that reads too faintly on a phone, this is where to look.
 	var pass_targets := _state.combo_pass_targets()
 	for c in pass_targets:
-		_fx.add_tile(_cell_world(c.x, c.y), color_tap) # blue = next pass
+		_fx.add_tile(_cell_world(c.x, c.y), color_chain)
+	# The ball-adjacent men you did NOT pick. Tapping one of them restarts the
+	# chain there (see _combo_tap), so the ball can go through them too — they
+	# were simply never drawn at all, which made switching a hidden move.
+	var restarts: Array[Vector2i] = []
+	for c in _state.combo_starters():
+		if not (c in _state.chain):
+			restarts.append(c)
+			_fx.add_tile(_cell_world(c.x, c.y), color_chain)
 	# No target can be flagged as "this one books you" any more: the only
 	# bookable offence left is time-wasting (see MatchState.forfeit), which is
 	# about the clock, not about where the ball goes — so every shoot target
@@ -3095,8 +3111,6 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 		var col := color_chain
 		if preview in _state.combo_shoot_targets():
 			col = color_shoot
-		elif preview in _state.combo_pass_targets():
-			col = color_tap
 		_fx.add_tile(_cell_world(preview.x, preview.y), col.lightened(0.35), fx_tile_size * 1.1)
 	# Chain figures + pass targets are own cells wearing an FX tile right
 	# now (shoot targets are always empty cells — see combo_shoot_targets,
@@ -3105,6 +3119,7 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 	var covered: Array[Vector2i] = []
 	covered.append_array(_state.chain)
 	covered.append_array(pass_targets)
+	covered.append_array(restarts)
 	_update_own_team_markers(covered)
 
 
