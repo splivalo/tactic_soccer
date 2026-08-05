@@ -3048,9 +3048,25 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 		# opens the hold-move target pick) — see combo_shoot_targets/
 		# _draw_move below for where the actual risky targets get flagged,
 		# right at the point an actual card-triggering action is on offer.
+		# The two taps available here do COMPLETELY different things — tap a man
+		# beside the ball and you take it and open a chain; tap any other and you
+		# decline the ball and simply walk him. They used to look identical, so a
+		# player tapping around got possession sometimes and a stroll other
+		# times, with nothing on the board to say which was which. That is why
+		# people came out of the tutorial still not knowing how to take the ball.
+		#
+		# No new colour to learn: orange ALREADY means "the ball goes through
+		# this one" — it is what a chosen chain figure turns, and what tapping
+		# the ball blinks under whoever can play it (see _hint_ball_carriers).
+		# This just shows it before you have to guess. The rest stay blue and go
+		# steady rather than pulsing, which is this layer's existing way of
+		# saying "still yours, but not the thing you're acting on".
 		var own := _state.own_cells()
+		var carriers := _state.combo_starters()
 		for cell in own:
-			_fx.add_tile(_cell_world(cell.x, cell.y), color_tap)
+			var on_the_ball := cell in carriers
+			_fx.add_tile(_cell_world(cell.x, cell.y),
+				color_chain if on_the_ball else color_tap, -1.0, on_the_ball)
 		_update_own_team_markers(own)
 		return
 	# Energy trail: figure -> figure -> (live) drag preview. Deliberately skips
