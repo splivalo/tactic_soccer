@@ -391,7 +391,13 @@ func tackle_candidates() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	if not (experiment_tackle and experiment_underfoot):
 		return out
-	if _move_used or phase == Phase.REMOVE or not pieces.has(ball):
+	# Whichever half of the turn is still owed pays for it. Tying it to the MOVE
+	# half alone meant that walking over to the man with the ball — the obvious
+	# way to reach him — spent the only thing that could take it, so you stood
+	# beside him with an unused half of your turn and no way to use it.
+	if experiment_two_actions and _move_used and _ball_used:
+		return out
+	if phase == Phase.REMOVE or not pieces.has(ball):
 		return out
 	if pieces[ball]["team"] == current:
 		return out # it is already ours; nothing to win
@@ -414,15 +420,22 @@ func tackle() -> bool:
 		if _advance(c) > _advance(best):
 			best = c
 	ball = best
-	_move_used = true
 	chain.clear()
+	# Spend the move if it is still owed — that leaves the ball half free, so you
+	# can clear what you just won and there is nothing to take straight back.
+	# Otherwise spend the ball half: you walked over to him, and winning it IS
+	# what you did with your turn.
+	if not _move_used:
+		_move_used = true
+	else:
+		_ball_used = true
 	if not experiment_two_actions:
 		# One action a turn: winning the ball IS the action, so the turn ends and
 		# you play it next time round. Worth watching — the man you took it from
 		# is still beside you and can take it straight back, which is exactly the
 		# deadlock the two-action version avoided by letting you clear it first.
 		next_turn()
-	elif _ball_used:
+	elif _move_used and _ball_used:
 		next_turn()
 	else:
 		phase = Phase.COMBO
@@ -794,6 +807,11 @@ func _apply_card(team: String) -> String:
 ## (_bonus_move_shooter) may move — see its doc comment for why. True if the
 ## move was legal.
 func do_move(from: Vector2i, to: Vector2i) -> bool:
+	# The MOVE phase can now outlive the move itself: after walking up to the man
+	# with the ball you are still in it, owing only the tackle. Without this the
+	# same figure could be walked a second time.
+	if not can_move():
+		return false
 	if phase != Phase.MOVE or not is_own(from) or not (to in move_targets(from)):
 		return false
 	# EXPERIMENT (2026-07-27): the "only the shooter may take the bonus move"
@@ -812,15 +830,20 @@ func do_move(from: Vector2i, to: Vector2i) -> bool:
 	if _move_is_reactive and moves_left > 0:
 		return true # same team, another move still owed
 	if experiment_two_actions:
-		# The move half is spent. If the ball half is too — or there is no ball
-		# to play — the turn ends; otherwise it stays yours. A move that lands a
-		# man ON a loose ball therefore hands him the ball play in the SAME turn,
-		# instead of leaving him standing over it for a full round.
+		# The move half is spent. The turn only ends if the ball half has nothing
+		# left to do — and it has two things it might do: play a ball we now
+		# hold, or take one off a man we have just walked up to. Ending the turn
+		# on the second of those was the bug: you crossed the pitch to reach him
+		# and the game closed your turn while half of it was still owed.
 		_move_used = true
-		if not _ball_used and team_has_ball(current):
-			phase = Phase.COMBO
-			chain.clear()
-			return true
+		if not _ball_used:
+			if team_has_ball(current):
+				phase = Phase.COMBO
+				chain.clear()
+				return true
+			if not tackle_candidates().is_empty():
+				chain.clear()
+				return true # stays Phase.MOVE; the tackle is the ball half
 		next_turn()
 		return true
 	next_turn()
@@ -837,6 +860,8 @@ func move_from_cells() -> Array[Vector2i]:
 	# RANGE rather than by identity, so every own figure is selectable again.
 	#if phase == Phase.MOVE and not _move_is_reactive:
 	#	return [_bonus_move_shooter]
+	if not can_move():
+		return [] as Array[Vector2i] # the move is spent; only the tackle is left
 	return own_cells()
 
 
