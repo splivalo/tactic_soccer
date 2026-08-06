@@ -61,7 +61,7 @@ static var experiment_no_self_collect := false
 ## down to 60, and turns per goal 45 down to 27. Both move AWAY from the stated
 ## complaint, which was that goals come too easily and matches end too soon.
 ## Possession runs collapse from 4.97 to 1.78 with it.
-static var experiment_no_move_after_kick := false
+static var experiment_no_move_after_kick := true
 
 ## ON for playtesting (2026-08-06). A turn is TWO things and the order is the
 ## player's: move one figure, and play the ball if you have it. Reaching a loose
@@ -77,7 +77,7 @@ static var experiment_no_move_after_kick := false
 ## turn: choices per turn 53 -> 55, so it is NOT the flood that was feared —
 ## the old version had no underfoot rule and a fuller pitch. Recovery 37.6% ->
 ## 50.3%, possession runs 1.78 -> 2.75, match length 60 -> 71 turns.
-static var experiment_two_actions := true
+static var experiment_two_actions := false
 
 ## Both consumed per turn under experiment_two_actions. Meaningless otherwise.
 var _ball_used := false
@@ -389,7 +389,7 @@ func _adjacent_count(team: String) -> int:
 ## half of your turn is already spent.
 func tackle_candidates() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
-	if not (experiment_tackle and experiment_underfoot and experiment_two_actions):
+	if not (experiment_tackle and experiment_underfoot):
 		return out
 	if _move_used or phase == Phase.REMOVE or not pieces.has(ball):
 		return out
@@ -416,7 +416,13 @@ func tackle() -> bool:
 	ball = best
 	_move_used = true
 	chain.clear()
-	if _ball_used:
+	if not experiment_two_actions:
+		# One action a turn: winning the ball IS the action, so the turn ends and
+		# you play it next time round. Worth watching — the man you took it from
+		# is still beside you and can take it straight back, which is exactly the
+		# deadlock the two-action version avoided by letting you clear it first.
+		next_turn()
+	elif _ball_used:
 		next_turn()
 	else:
 		phase = Phase.COMBO
