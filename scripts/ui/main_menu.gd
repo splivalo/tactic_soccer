@@ -26,11 +26,22 @@ extends Control
 ## have cost a row on a screen that already carries six buttons and Legal.
 const LOCK_MESSAGE := "Play How to Play first"
 const LOCK_MESSAGE_SECONDS := 2.0
-const LOCK_DIM := 0.45
+
+## Greyed, not faded. This was alpha, which lets the dark background bleed
+## through a yellow button and turns it muddy — so the locked pair read as a
+## DIFFERENT yellow rather than as the same button turned down, and the row
+## stopped looking like a set. A multiply keeps the hue and only takes the
+## brightness.
+const LOCK_DIM := Color(0.5, 0.5, 0.5, 1.0)
 
 var _locked := false
 var _refusing: Button = null
 var _refusing_text := ""
+
+## True once a press has started loading another screen. The match scene takes a
+## visible moment to build, and with nothing acknowledging the tap people press
+## again — which used to queue a second navigation behind the first.
+var _navigating := false
 
 
 func _ready() -> void:
@@ -40,7 +51,7 @@ func _ready() -> void:
 	_locked = not Settings.tutorial_seen
 
 	_one_player_button.pressed.connect(func():
-		if _refuse(_one_player_button):
+		if _refuse(_one_player_button) or _leaving():
 			return
 		GameFlow.single_player = true
 		GameFlow.goto(GameFlow.Screen.DIFFICULTY_SELECT))
@@ -53,7 +64,7 @@ func _ready() -> void:
 	# a button on the online screen) keeps the two modes consistent and keeps
 	# the online screen from growing yet another button.
 	_online_button.pressed.connect(func():
-		if _refuse(_online_button):
+		if _refuse(_online_button) or _leaving():
 			return
 		GameFlow.single_player = false
 		GameFlow.reset_online()
@@ -71,13 +82,18 @@ func _ready() -> void:
 	# rather than in the scene so main_menu.tscn stays as authored.
 	_instructions_button.text = "How to Play"
 	_instructions_button.pressed.connect(func():
+		if _leaving():
+			return
 		GameFlow.reset_online()
 		GameFlow.single_player = false
 		GameFlow.tutorial_mode = true
 		GameFlow.player_formation = []
 		GameFlow.player_side = "HomeTeam"
 		GameFlow.goto(GameFlow.Screen.MATCH))
-	_credits_button.pressed.connect(func(): GameFlow.goto(GameFlow.Screen.LEGAL))
+	_credits_button.pressed.connect(func():
+		if _leaving():
+			return
+		GameFlow.goto(GameFlow.Screen.LEGAL))
 	_quit_button.pressed.connect(func(): get_tree().quit())
 
 	_music_slider.value_changed.connect(Settings.set_music_volume)
@@ -87,6 +103,22 @@ func _ready() -> void:
 
 	if _locked:
 		_apply_lock()
+
+
+## True when a screen change is already under way, so the caller should do
+## nothing. The match scene takes a moment to build and the menu gave no sign a
+## tap had landed, so people pressed again — and each press queued another
+## navigation. The whole row goes dim and stops responding the instant the first
+## one lands, which both acknowledges it and makes the repeats harmless.
+func _leaving() -> bool:
+	if _navigating:
+		return true
+	_navigating = true
+	for b in [_one_player_button, _online_button, _instructions_button,
+			_options_button, _credits_button, _quit_button]:
+		b.disabled = true
+		b.modulate = LOCK_DIM
+	return false
 
 
 ## Dims the two closed modes. Nothing is done to How to Play at all: the two
@@ -102,7 +134,7 @@ func _ready() -> void:
 ## pressed, and a lock that can't be tapped can't explain itself.
 func _apply_lock() -> void:
 	for b in [_one_player_button, _online_button]:
-		b.modulate.a = LOCK_DIM
+		b.modulate = LOCK_DIM
 
 
 ## True when the press was a locked one and has been answered — the caller must
