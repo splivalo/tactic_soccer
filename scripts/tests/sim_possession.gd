@@ -52,11 +52,14 @@ func _branching(ms: MatchState) -> int:
 
 
 func _initialize() -> void:
-	# Rules untouched — only how many men are on the pitch. Downwards this time:
-	# every previous run added players and none of it moved possession, so the
-	# question is whether taking them away does.
-	for outfield in [4]:
-		_run("%d outfield + GK  (%d a side)" % [outfield, outfield + 1], outfield)
+	# Kickoff has to put the ball ON a man under the underfoot rule, or the match
+	# opens with a scramble for a ball nobody owns — one of the faults that made
+	# the first attempt at this feel broken.
+	_run("current rules (baseline)", false, false, false)
+	_run("underfoot", true, false, false)
+	_run("underfoot + no self-collect", true, true, false)
+	_run("underfoot + dribble", true, false, true)
+	_run("underfoot + no self-collect + dribble", true, true, true)
 	quit(0)
 
 
@@ -76,7 +79,15 @@ func _side(cell: Vector2i, home: bool) -> Vector2i:
 	return cell if home else Vector2i(6 - cell.x, 9 - cell.y)
 
 
-func _run(label: String, outfield: int) -> void:
+func _run(label: String, underfoot: bool, no_collect: bool, dribble: bool) -> void:
+	MatchState.experiment_underfoot = underfoot
+	MatchState.experiment_no_self_collect = no_collect
+	MatchState.experiment_dribble = dribble
+	var outfield := 4
+	# Underfoot starts the ball at the kicking side's midfielder; otherwise on
+	# the empty square beside their keeper, as the real game does.
+	var home_ball := HOME_OUTFIELD[2] if underfoot else Vector2i(3, 8)
+	var away_ball := _side(HOME_OUTFIELD[2], false) if underfoot else Vector2i(3, 1)
 	var total_turns := 0
 	var finished := 0
 	var goals := 0
@@ -94,7 +105,7 @@ func _run(label: String, outfield: int) -> void:
 		var home := _squad(outfield, true)
 		var away := _squad(outfield, false)
 		var ms := MatchState.new()
-		ms.setup(home, away, Vector2i(3, 8), "HomeTeam", 2)
+		ms.setup(home, away, home_ball, "HomeTeam", 2)
 		var turns := 0
 		var holder := ""
 		var streak := 0
@@ -140,7 +151,7 @@ func _run(label: String, outfield: int) -> void:
 						streak = 0
 						if res["win"]:
 							continue
-						ms.reset(home, away, Vector2i(3, 8), res["kickoff"])
+						ms.reset(home, away, home_ball if res["kickoff"] == "HomeTeam" else away_ball, res["kickoff"])
 				MatchState.Phase.MOVE:
 					var mv := AIPlayer.decide_move(ms, DIFFICULTY)
 					if not mv.has("from"):

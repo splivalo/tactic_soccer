@@ -28,6 +28,22 @@ var _next_id: int = 0
 # moves; see _move_is_reactive for which one is which).
 var moves_left: int = 1
 
+## MEASUREMENT ONLY, all off by default (2026-08-05). The ball sits at a man's
+## FEET rather than on an empty square beside him, so possession is something you
+## do — walk onto it — rather than something that happens to whoever is nearby
+## when their turn starts.
+##
+##   underfoot     the ball occupies the holder's square; a loose ball on an
+##                 empty square belongs to nobody until someone steps on it
+##   no_self_collect   the bonus move after a kick may not land on the ball, so
+##                 the kicker cannot simply collect his own clearance
+##   dribble       a held ball travels with its carrier when he moves, which
+##                 falls out of the existing hold-and-move for free and is the
+##                 only dial that makes possession STICKIER rather than looser
+static var experiment_underfoot := false
+static var experiment_no_self_collect := false
+static var experiment_dribble := false
+
 ## See start_turn. Off by default; measurement only.
 static var experiment_defender_two_moves := false
 
@@ -295,6 +311,8 @@ func _cheby(a: Vector2i, b: Vector2i) -> int:
 ## is the note worth leaving: the two-part turn is not clutter, it is the only
 ## thing that lets you keep the ball AND get somewhere with it.
 func team_has_ball(team: String) -> bool:
+	if experiment_underfoot:
+		return pieces.has(ball) and pieces[ball]["team"] == team
 	return _adjacent_count(team) >= 1
 
 
@@ -309,6 +327,11 @@ func _adjacent_count(team: String) -> int:
 
 func combo_starters() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
+	if experiment_underfoot:
+		# Exactly one man can ever open a chain: the one it is under.
+		if pieces.has(ball) and pieces[ball]["team"] == current:
+			out.append(ball)
+		return out
 	for cell in pieces:
 		if pieces[cell]["team"] == current and _cheby(cell, ball) == 1:
 			out.append(cell)
@@ -424,7 +447,10 @@ func combo_shoot_targets() -> Array[Vector2i]:
 # --- combo (pass chain -> shoot) --------------------------------------------
 ## Start (or restart) the chain on your figure next to the ball. True if valid.
 func begin(cell: Vector2i) -> bool:
-	if phase == Phase.COMBO and is_own(cell) and _cheby(cell, ball) == 1:
+	if phase != Phase.COMBO or not is_own(cell):
+		return false
+	var holds := cell == ball if experiment_underfoot else _cheby(cell, ball) == 1
+	if holds:
 		chain = [cell]
 		return true
 	return false
@@ -596,15 +622,26 @@ func move_targets(from: Vector2i) -> Array[Vector2i]:
 	var role: String = pieces[from]["role"]
 	var team: String = pieces[from]["team"]
 	var reach := current_move_range()
+	# Underfoot: a loose ball is what you are walking TO, so it stops being a
+	# wall and becomes a destination — but you stop on it, you don't run over it.
+	# And the man who just kicked may be barred from collecting his own
+	# clearance, which is the only rule the whole system needs to work.
+	var ball_is_wall := not experiment_underfoot
+	var ball_barred := experiment_no_self_collect and phase == Phase.MOVE and not _move_is_reactive
 	for dir in Board.DIRS:
 		var c: Vector2i = from + dir
 		var dist := 1
-		while Board.in_bounds(c) and not pieces.has(c) and c != ball and dist <= reach:
+		while Board.in_bounds(c) and not pieces.has(c) and dist <= reach:
+			var is_ball := c == ball
+			if is_ball and (ball_is_wall or ball_barred):
+				break
 			if role == "gk":
 				if is_own_goal_cell(c, team):
 					out.append(c)
 			elif not is_goal_cell(c):
 				out.append(c)
+			if is_ball:
+				break
 			c += dir
 			dist += 1
 	return out
@@ -646,6 +683,7 @@ func do_move(from: Vector2i, to: Vector2i) -> bool:
 	var info: Dictionary = pieces[from]
 	pieces.erase(from)
 	pieces[to] = info
+	_carry_ball(from, to)
 	# moves_left was dead weight until now — every MOVE phase was a single move
 	# and this called next_turn() unconditionally. It is what the defender's
 	# second move rides on, so it is actually counted.
@@ -687,8 +725,18 @@ func hold_and_move(from: Vector2i, to: Vector2i) -> bool:
 	var info: Dictionary = pieces[from]
 	pieces.erase(from)
 	pieces[to] = info
+	_carry_ball(from, to)
 	next_turn()
 	return true
+
+
+## Underfoot + dribble: a ball at a man's feet travels with him. This needs no
+## new action — "hold the ball and move a player" already exists, and applying it
+## to the man who HAS the ball is what dribbling is. Without it, walking off the
+## ball simply abandons it where it lay.
+func _carry_ball(from: Vector2i, to: Vector2i) -> void:
+	if experiment_underfoot and experiment_dribble and ball == from:
+		ball = to
 
 
 # --- goals -------------------------------------------------------------------
