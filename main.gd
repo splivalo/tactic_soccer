@@ -299,7 +299,7 @@ var _busy := false # true while the ball animates (ignore input)
 var _fx: BoardFx = null
 
 # --- Pre-match placement (formation setup, see _start_placement) -------------
-const PLACEMENT_ROLE_ORDER: Array[String] = ["gk", "field", "field", "field", "field"]
+const PLACEMENT_ROLE_ORDER: Array[String] = ["gk", "field", "field", "field", "field", "field"]
 var _placement_active := false
 var _placement_root: Node3D = null # holds figures placed so far, freed once _build_match spawns the real teams
 var _placement_index := 0 # which slot in PLACEMENT_ROLE_ORDER is being placed next
@@ -1856,7 +1856,21 @@ func _combo_tap(screen_pos: Vector2) -> void:
 		# before it). Tapping an EARLIER chain figure instead (below) still
 		# jumps straight back to that point (MatchState.rewind), unchanged.
 		if _resolve_target(screen_pos, [_state.chain[-1]], TAP_HIT_RADIUS) != NO_CELL:
+			var was: Vector2i = _state.chain[-1]
 			_state.step_back()
+			# Underfoot: the man with the ball at his feet is the ONLY figure who
+			# can open a chain, so a tap on him always started one and there was
+			# no gesture left that reached "walk with it". Dribbling existed in
+			# the rules and could not be performed. Tapping him a second time now
+			# switches from playing the ball to carrying it: pass and shoot on
+			# the first tap, his own move squares on the second.
+			if MatchState.experiment_underfoot and _state.chain.is_empty() \
+					and was == _state.ball and _state.is_own(was):
+				_holding = true
+				_move_from = was
+				_draw_move(was)
+				_play_sfx(SELECT_SOUND, select_sfx_volume_db)
+				return
 			_draw_combo()
 			return
 		var rewind_cell := _resolve_target(screen_pos, _state.chain, TAP_HIT_RADIUS)

@@ -7,7 +7,7 @@ extends RefCounted
 ## Rule: a team may only stand on its OWN half at kick-off.
 ##   HOME = near-camera half, rows 5-9 (defends the +Z goal), attacks toward -Z.
 ##   AWAY = far half,        rows 0-4 (defends the -Z goal), attacks toward +Z.
-## GK wears 1, outfield players 2-5.
+## GK wears 1, outfield players 2-6.
 ##
 ## FOUR outfield since 2026-08-05, down from six, and the reason is not balance.
 ## Squad size was measured from four to ten a side and possession does not care:
@@ -29,7 +29,8 @@ static func home() -> Array[Dictionary]:
 		{"cell": Vector2i(1, 8), "number": 2, "role": "field"},
 		{"cell": Vector2i(5, 8), "number": 3, "role": "field"},
 		{"cell": Vector2i(3, 7), "number": 4, "role": "field"},
-		{"cell": Vector2i(3, 5), "number": 5, "role": "field"},
+		{"cell": Vector2i(2, 5), "number": 5, "role": "field"},
+		{"cell": Vector2i(4, 5), "number": 6, "role": "field"},
 	]
 
 
@@ -40,5 +41,6 @@ static func away() -> Array[Dictionary]:
 		{"cell": Vector2i(5, 1), "number": 2, "role": "field"},
 		{"cell": Vector2i(1, 1), "number": 3, "role": "field"},
 		{"cell": Vector2i(3, 2), "number": 4, "role": "field"},
-		{"cell": Vector2i(3, 4), "number": 5, "role": "field"},
+		{"cell": Vector2i(4, 4), "number": 5, "role": "field"},
+		{"cell": Vector2i(2, 4), "number": 6, "role": "field"},
 	]
