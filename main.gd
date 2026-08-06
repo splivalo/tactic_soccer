@@ -71,7 +71,18 @@ extends Node3D
 @export var ball_scene: PackedScene = load("res://assets/models/ball.glb")
 @export var ball_start_cell := Vector2i(3, 8) # empty cell by the home GK (ball never sits on a figure)
 @export var ball_scale := 1.0
-@export var goals_to_win := 2 # match ends when a team reaches this
+## Match ends when a team reaches this.
+##
+## Was 2, and 2 was right when a match ran 400 turns and a goal was a rare
+## event. Under the underfoot rule a match runs about 95 turns for the same two
+## goals, so each one is roughly four times cheaper — and a target set for the
+## old economy makes the new one end almost as soon as it starts. Four keeps a
+## match around the length it used to be without making a single goal precious
+## again, which is the part that could not be restored by rules anyway.
+##
+## The cheapest dial in the game: no rule changes, nothing new to learn, and one
+## number to put back.
+@export var goals_to_win := 4
 ## Seconds a team has for its WHOLE turn — COMBO (build+shoot) and the MOVE or
 ## REMOVE that follows it share this one pool, however the player splits their
 ## thinking between the two, instead of each phase getting its own separate
