@@ -743,17 +743,18 @@ func _kickoff_cell(team: String, formation: Array = []) -> Vector2i:
 	# is exactly how the first attempt at this rule opened, and read as a bug
 	# rather than as a rule. Whoever of the kicking side stands nearest the usual
 	# spot takes it, so a hand-placed formation works as well as the default one.
-	# Outfield only. The keeper is usually AS close to the kickoff spot as the
-	# midfielder is — both one square away in the default line-up — and he came
-	# first in the list, so every single match opened with the goalkeeper holding
-	# the ball on his own goal line. He is the one man who should never start
-	# with it.
+	# The KEEPER takes it, which is what was asked for and is how a football
+	# match restarts anyway — he distributes. I briefly excluded him on my own
+	# reasoning that he should never start with the ball; that was wrong and it
+	# put kickoff on whichever midfield man happened to be nearest, which reads
+	# as arbitrary. Falls back to the nearest man of that side if a line-up
+	# somehow has no keeper.
 	var best := cell
 	var best_dist := 9999
 	for p in formation:
-		if String(p.get("role", "field")) == "gk":
-			continue
 		var c: Vector2i = p["cell"]
+		if String(p.get("role", "field")) == "gk":
+			return c
 		var d: int = maxi(absi(c.x - cell.x), absi(c.y - cell.y))
 		if d < best_dist:
 			best_dist = d
@@ -786,28 +787,29 @@ func _ball_world(cell: Vector2i) -> Vector3:
 	# Underfoot: a figure can be standing ON the ball's square, and both centred
 	# on the same point puts the ball inside him.
 	#
-	# Pushed into the TOP-RIGHT CORNER of the man's square, not merely in front of
-	# him. Straight offsets kept failing for the same reason: a figure stands in
-	# the middle of its tile and the view is near top-down, so anything on the
-	# tile's centre line is under him. A corner is the only place on a square that
-	# a figure standing in the middle cannot cover.
+	# Pushed into the corner of the man's square NEAREST THE CAMERA, and to one
+	# side. Which corner is not a taste call, it is decided by the geometry: the
+	# figure is an upright model seen at a tilt, so its body is drawn extending
+	# AWAY from the viewer up the screen. Everything on that side of its base is
+	# behind it; the side toward the viewer is always clear.
 	#
-	# Both directions come from the camera, not from the team or the world. The
-	# first attempt offset toward the goal that figure's side attacks — a
-	# world-space direction — so one of the two teams always had the ball behind
-	# its man, which is what "the ball isn't visible for all players" was.
-	# Screen-relative, it lands in the same corner for everybody, on both devices,
-	# whichever way the board is spun.
+	# The evidence is the first attempt at this, which offset along world Z by
+	# whichever goal that man's side attacks. One team got the toward-camera
+	# direction and its ball was visible, the other got away-from-camera and its
+	# ball was behind the man — reported at the time as "it shows for some
+	# players and not others", which is exactly what a team-decided direction
+	# produces. Taking both axes from the camera makes it the same corner for
+	# everybody, on both devices, whichever way the board is spun.
 	if _state != null and _state.pieces.has(cell):
 		var cam := get_node_or_null("Camera3D") as Camera3D
 		if cam != null:
-			var screen_right := cam.global_transform.basis.x
-			var screen_up := -cam.global_transform.basis.z # cameras look down -Z
-			screen_right.y = 0.0
-			screen_up.y = 0.0
-			if screen_right.length() > 0.001 and screen_up.length() > 0.001:
-				pos += screen_right.normalized() * ball_hold_offset
-				pos += screen_up.normalized() * ball_hold_offset
+			var toward_viewer := cam.global_transform.basis.z # cameras look down -Z
+			var to_the_side := cam.global_transform.basis.x
+			toward_viewer.y = 0.0
+			to_the_side.y = 0.0
+			if toward_viewer.length() > 0.001 and to_the_side.length() > 0.001:
+				pos += toward_viewer.normalized() * ball_hold_offset
+				pos += to_the_side.normalized() * ball_hold_offset
 	return pos
 
 
