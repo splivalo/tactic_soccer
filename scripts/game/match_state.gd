@@ -37,10 +37,12 @@ var moves_left: int = 1
 ##                 empty square belongs to nobody until someone steps on it
 ##   no_self_collect   the bonus move after a kick may not land on the ball, so
 ##                 the kicker cannot simply collect his own clearance
-##   dribble       a held ball travels with its carrier when he moves, which
-##                 falls out of the existing hold-and-move for free and is the
-##                 only dial that makes possession STICKIER rather than looser
-## ON for playtesting (2026-08-06). Measured against the current rule over 25
+## Dribbling — a held ball travelling with its carrier — was built and taken out
+## again on 2026-08-06. It was never what was asked for: "dribbling" here meant
+## TAKING the ball off a man you are standing beside, which is a tackle and a
+## different rule. Carrying it was my own reading of the word.
+##
+## ON for playtesting (2026-08-06). Measured against the shipped rule over 25
 ## matches: possession runs 23.6 -> 3.3, recovery 19.4% -> 33.6%, and the number
 ## the whole investigation was about — match length — 402 turns down to 95.
 ##
@@ -48,17 +50,18 @@ var moves_left: int = 1
 ## square and stepping back onto it costs the entire bonus move and gains no
 ## ground, so it limits itself without a rule.
 ##
-## dribble stays ON, and not as a balance choice. Without it, moving the man who
-## is standing on the ball leaves the ball behind — a player walks away and
-## abandons it where it lay, which reads as a bug. With it the ball simply
-## travels with whoever is carrying it, which is what everyone already expects a
-## footballer to do. It needs no new action: "hold the ball and move a player"
-## already exists, and applying it to the man WITH the ball is dribbling.
-##
 ## Set experiment_underfoot false to get the shipped rule back.
 static var experiment_underfoot := true
 static var experiment_no_self_collect := false
-static var experiment_dribble := true
+
+## Nothing follows a kick — the turn ends with it. ON at a human's request, to
+## be played rather than argued about.
+##
+## What it measured, so the numbers are on the record: match length 115 turns
+## down to 60, and turns per goal 45 down to 27. Both move AWAY from the stated
+## complaint, which was that goals come too easily and matches end too soon.
+## Possession runs collapse from 4.97 to 1.78 with it.
+static var experiment_no_move_after_kick := true
 
 ## See start_turn. Off by default; measurement only.
 static var experiment_defender_two_moves := false
@@ -566,6 +569,8 @@ func execute_combo(shoot_cell: Vector2i) -> Dictionary:
 		res["scorer"] = scorer
 		res["win"] = score[scorer] >= goals_to_win
 		res["kickoff"] = opponent(scorer)  # the team scored against restarts
+	elif experiment_no_move_after_kick:
+		next_turn()
 	else:
 		# Didn't score (including offside) — the shooting team stays
 		# `current` and gets ONE bonus move (do_move, same MAX_MOVE_RANGE)
@@ -699,7 +704,6 @@ func do_move(from: Vector2i, to: Vector2i) -> bool:
 	var info: Dictionary = pieces[from]
 	pieces.erase(from)
 	pieces[to] = info
-	_carry_ball(from, to)
 	# moves_left was dead weight until now — every MOVE phase was a single move
 	# and this called next_turn() unconditionally. It is what the defender's
 	# second move rides on, so it is actually counted.
@@ -741,18 +745,8 @@ func hold_and_move(from: Vector2i, to: Vector2i) -> bool:
 	var info: Dictionary = pieces[from]
 	pieces.erase(from)
 	pieces[to] = info
-	_carry_ball(from, to)
 	next_turn()
 	return true
-
-
-## Underfoot + dribble: a ball at a man's feet travels with him. This needs no
-## new action — "hold the ball and move a player" already exists, and applying it
-## to the man who HAS the ball is what dribbling is. Without it, walking off the
-## ball simply abandons it where it lay.
-func _carry_ball(from: Vector2i, to: Vector2i) -> void:
-	if experiment_underfoot and experiment_dribble and ball == from:
-		ball = to
 
 
 # --- goals -------------------------------------------------------------------

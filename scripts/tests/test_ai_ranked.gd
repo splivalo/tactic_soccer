@@ -18,7 +18,7 @@ func _initialize() -> void:
 	# This suite is the net for the SHIPPED rule — ball beside a man, not under
 	# him. The underfoot experiment is a different game and would fail all of it.
 	MatchState.experiment_underfoot = false
-	MatchState.experiment_dribble = false
+	MatchState.experiment_no_move_after_kick = false
 	_test_rank_pick_determinism()
 	_test_rank_pick_statistics()
 	_test_ai_defends_open_lane()

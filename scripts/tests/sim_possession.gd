@@ -22,10 +22,9 @@ const DIFFICULTY := "Medium"
 ## Four is five-a-side, which is a real format, not an invention. Away is the
 ## mirror the rest of Formations already uses (x -> 6-x, y -> 9-y).
 const HOME_OUTFIELD := [
-	Vector2i(1, 8), Vector2i(5, 8),   # 2 — a wide pair at the back
-	Vector2i(3, 7),                   # 3 — the man beside the kickoff ball
-	Vector2i(3, 5),                   # 4 — one ahead: the 2-1-1 that ships
-	Vector2i(2, 6), Vector2i(4, 6),   # 5, 6 — the shape it replaced
+	Vector2i(1, 8), Vector2i(5, 8),   # a wide pair at the back
+	Vector2i(3, 7),                   # the man beside the kickoff spot
+	Vector2i(2, 5), Vector2i(4, 5),   # two ahead: the 2-1-2 that ships
 ]
 const HOME_GK := Vector2i(3, 9)
 
@@ -52,14 +51,13 @@ func _branching(ms: MatchState) -> int:
 
 
 func _initialize() -> void:
-	# Kickoff has to put the ball ON a man under the underfoot rule, or the match
-	# opens with a scramble for a ball nobody owns — one of the faults that made
-	# the first attempt at this feel broken.
-	_run("current rules (baseline)", false, false, false)
-	_run("underfoot", true, false, false)
-	_run("underfoot + no self-collect", true, true, false)
-	_run("underfoot + dribble", true, false, true)
-	_run("underfoot + no self-collect + dribble", true, true, true)
+	# Underfoot is the live rule now; the question is what to do about goals
+	# coming too easily. Five outfield a side throughout, matching the game.
+	MatchState.experiment_underfoot = true
+	_run("underfoot, move after kick (live)", false)
+	MatchState.experiment_no_move_after_kick = true
+	_run("underfoot, NO move after kick", true)
+	MatchState.experiment_no_move_after_kick = false
 	quit(0)
 
 
@@ -79,15 +77,13 @@ func _side(cell: Vector2i, home: bool) -> Vector2i:
 	return cell if home else Vector2i(6 - cell.x, 9 - cell.y)
 
 
-func _run(label: String, underfoot: bool, no_collect: bool, dribble: bool) -> void:
-	MatchState.experiment_underfoot = underfoot
-	MatchState.experiment_no_self_collect = no_collect
-	MatchState.experiment_dribble = dribble
-	var outfield := 4
+func _run(label: String, _variant: bool) -> void:
+	var underfoot := MatchState.experiment_underfoot
+	var outfield := 5
 	# Underfoot starts the ball at the kicking side's midfielder; otherwise on
 	# the empty square beside their keeper, as the real game does.
-	var home_ball := HOME_OUTFIELD[2] if underfoot else Vector2i(3, 8)
-	var away_ball := _side(HOME_OUTFIELD[2], false) if underfoot else Vector2i(3, 1)
+	var home_ball := HOME_GK if underfoot else Vector2i(3, 8) # the keeper kicks off
+	var away_ball := _side(HOME_GK, false) if underfoot else Vector2i(3, 1)
 	var total_turns := 0
 	var finished := 0
 	var goals := 0
