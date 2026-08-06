@@ -129,8 +129,6 @@ func lesson() -> String:
 				return "The ball belongs to whoever is standing on it."
 			return "You hold the ball if a player stands beside it."
 		Step.CONNECT:
-			if MatchState.experiment_single_pass:
-				return "Pass in a straight line — the ball stays with him."
 			return "The ball only moves in straight lines."
 		Step.CHAIN:
 			return "A pass can carry on through more players."
@@ -253,12 +251,7 @@ func on_action(kind: String, cell: Vector2i) -> bool:
 				step = Step.CONNECT
 		Step.CONNECT:
 			if kind == "extend" and cell == SECOND:
-				# With a pass ENDING at the teammate there is no chain to teach
-				# and no shot left this turn, so the lesson goes straight to the
-				# move. The whole tutorial wants rewriting around the new rule if
-				# it sticks; this is only enough to stop it dead-ending on a step
-				# the rules can no longer reach.
-				step = Step.MOVE if MatchState.experiment_single_pass else Step.CHAIN
+				step = Step.CHAIN
 		Step.CHAIN:
 			if kind == "extend" and cell == THIRD:
 				step = Step.SHOOT

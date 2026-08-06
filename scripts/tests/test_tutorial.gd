@@ -80,22 +80,7 @@ func _initialize() -> void:
 		_check(not t.is_mine(early_shot[0]), "...because one of them is an empty square")
 
 	_check(ms.extend(Tutorial.SECOND), "connect to him")
-	_check(t.on_action("extend", Tutorial.SECOND), "lesson advances")
-
-	# Under experiment_single_pass a pass ENDS at the teammate, so there is no
-	# chain to walk and no shot left this turn — the lesson goes straight to the
-	# move. Everything below teaches chaining and shooting, which that rule no
-	# longer has, so the suite stops here rather than asserting a game that isn't
-	# being played. The tutorial needs rewriting around the new rule if it sticks;
-	# this keeps the test honest about which one it is checking.
-	if MatchState.experiment_single_pass:
-		_check(t.step == Tutorial.Step.MOVE, "a pass that ends at a teammate spends the turn's ball")
-		if _fail == 0:
-			print("--- test_tutorial: ALL PASSED (single-pass rule; chain steps skipped) ---")
-		else:
-			printerr("--- test_tutorial: %d FAILED ---" % _fail)
-		quit(_fail)
-		return
+	_check(t.on_action("extend", Tutorial.SECOND), "lesson advances to chaining")
 
 	# Step 3 — keep going. The third player must NOT have been reachable from the
 	# first, or the player could have skipped straight to him and this step would
