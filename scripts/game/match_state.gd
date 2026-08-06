@@ -40,9 +40,25 @@ var moves_left: int = 1
 ##   dribble       a held ball travels with its carrier when he moves, which
 ##                 falls out of the existing hold-and-move for free and is the
 ##                 only dial that makes possession STICKIER rather than looser
-static var experiment_underfoot := false
+## ON for playtesting (2026-08-06). Measured against the current rule over 25
+## matches: possession runs 23.6 -> 3.3, recovery 19.4% -> 33.6%, and the number
+## the whole investigation was about — match length — 402 turns down to 95.
+##
+## no_self_collect stays OFF: measured, it makes both worse. Nudging the ball a
+## square and stepping back onto it costs the entire bonus move and gains no
+## ground, so it limits itself without a rule.
+##
+## dribble stays ON, and not as a balance choice. Without it, moving the man who
+## is standing on the ball leaves the ball behind — a player walks away and
+## abandons it where it lay, which reads as a bug. With it the ball simply
+## travels with whoever is carrying it, which is what everyone already expects a
+## footballer to do. It needs no new action: "hold the ball and move a player"
+## already exists, and applying it to the man WITH the ball is dribbling.
+##
+## Set experiment_underfoot false to get the shipped rule back.
+static var experiment_underfoot := true
 static var experiment_no_self_collect := false
-static var experiment_dribble := false
+static var experiment_dribble := true
 
 ## See start_turn. Off by default; measurement only.
 static var experiment_defender_two_moves := false

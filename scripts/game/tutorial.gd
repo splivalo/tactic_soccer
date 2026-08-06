@@ -58,6 +58,12 @@ const THEIRS := [
 	{"cell": Vector2i(4, 2), "number": 1, "role": "gk"},
 ]
 
+## Beside A under the original rule, UNDER him once the ball belongs to whoever
+## stands on it — otherwise step one asks for something the rules don't allow.
+static func ball_start() -> Vector2i:
+	return FIRST if MatchState.experiment_underfoot else BALL
+
+
 const FIRST := Vector2i(3, 6)   # A
 const SECOND := Vector2i(5, 6)  # B
 const THIRD := Vector2i(5, 3)   # C
@@ -119,6 +125,8 @@ func title() -> String:
 func lesson() -> String:
 	match step:
 		Step.PICK:
+			if MatchState.experiment_underfoot:
+				return "The ball belongs to whoever is standing on it."
 			return "You hold the ball if a player stands beside it."
 		Step.CONNECT:
 			return "The ball only moves in straight lines."
@@ -204,6 +212,8 @@ func refusal(cell: Vector2i) -> String:
 func nudge(cell: Vector2i) -> String:
 	match step:
 		Step.PICK:
+			if MatchState.experiment_underfoot:
+				return "Only the player standing on the ball can play it"
 			return "Only a player beside the ball can play it"
 		Step.CONNECT, Step.CHAIN:
 			if is_mine(cell):

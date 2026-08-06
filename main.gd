@@ -619,7 +619,8 @@ func _build_match(kickoff_team: String) -> void:
 	# Home defends the bottom goal (faces -Z); away defends the top (faces +Z).
 	_build_team("HomeTeam", home_formation, kits["home"], 180.0)
 	_build_team("AwayTeam", away_formation, kits["away"], 0.0)
-	var ball_cell := _kickoff_cell(kickoff_team)
+	var ball_cell := _kickoff_cell(kickoff_team,
+		home_formation if kickoff_team == "HomeTeam" else away_formation)
 	_place_ball(ball_cell)
 	if _state.pieces.is_empty():
 		_state.setup(home_formation, away_formation, ball_cell, kickoff_team, goals_to_win)
@@ -721,10 +722,29 @@ func _update_own_team_markers(covered: Array[Vector2i] = []) -> void:
 
 # --- Ball helpers ------------------------------------------------------------
 # Ball starts on an empty cell by the kicking team's goalkeeper.
-func _kickoff_cell(team: String) -> Vector2i:
-	if team == "HomeTeam":
-		return ball_start_cell
-	return Vector2i(ball_start_cell.x, Board.ROWS - 1 - ball_start_cell.y) # mirror to away side
+## `formation` is the kicking side's line-up, needed only for the underfoot rule
+## and read from the array rather than from _state, because the board is built
+## before MatchState is told about it.
+func _kickoff_cell(team: String, formation: Array = []) -> Vector2i:
+	var cell := ball_start_cell
+	if team != "HomeTeam":
+		cell = Vector2i(ball_start_cell.x, Board.ROWS - 1 - ball_start_cell.y) # mirror
+	if not MatchState.experiment_underfoot or formation.is_empty():
+		return cell
+	# Underfoot: the ball has to start AT somebody's feet, or the match opens
+	# with nobody owning it and both sides scrambling for a loose ball — which
+	# is exactly how the first attempt at this rule opened, and read as a bug
+	# rather than as a rule. Whoever of the kicking side stands nearest the usual
+	# spot takes it, so a hand-placed formation works as well as the default one.
+	var best := cell
+	var best_dist := 9999
+	for p in formation:
+		var c: Vector2i = p["cell"]
+		var d: int = maxi(absi(c.x - cell.x), absi(c.y - cell.y))
+		if d < best_dist:
+			best_dist = d
+			best = c
+	return best
 
 
 func _place_ball(cell: Vector2i) -> void:
@@ -738,8 +758,33 @@ func _place_ball(cell: Vector2i) -> void:
 	_ball_last_pos = _ball.position
 
 
+## How far in front of a holder's feet the ball sits when he is standing on its
+## square. A tile is 1.0 across and the ball 0.3, so this stays clearly inside
+## the square.
+@export var ball_hold_offset := 0.34
+
+
 func _ball_world(cell: Vector2i) -> Vector3:
-	return _cell_world(cell.x, cell.y) + Vector3(0, BALL_RADIUS * ball_scale, 0)
+	var pos := _cell_world(cell.x, cell.y) + Vector3(0, BALL_RADIUS * ball_scale, 0)
+	# Underfoot: a figure can be standing ON the ball's square, and both centred
+	# on the same point puts the ball inside him.
+	#
+	# Nudged TOWARD THE CAMERA, taken from the camera's own basis. The first
+	# attempt offset it toward the goal that figure's team attacks, which is a
+	# world-space direction — so for one of the two teams the ball sat on the far
+	# side of the man and was hidden behind him, and worse for figures near the
+	# camera. That is why "the ball isn't visible for all players", and it is why
+	# the rule was judged on a fault rather than on itself. Derived from the view
+	# instead of the team, it is in front for everyone, on both devices, whichever
+	# way the board is spun.
+	if _state != null and _state.pieces.has(cell):
+		var cam := get_node_or_null("Camera3D") as Camera3D
+		if cam != null:
+			var toward_viewer := cam.global_transform.basis.z # Godot cams look down -Z
+			toward_viewer.y = 0.0
+			if toward_viewer.length() > 0.001:
+				pos += toward_viewer.normalized() * ball_hold_offset
+	return pos
 
 
 # --- Match SFX -----------------------------------------------------------------
@@ -1055,7 +1100,7 @@ func _start_tutorial() -> void:
 	# whose one live button is the thing they just walked away from.
 	Settings.mark_tutorial_seen()
 	_tutorial = Tutorial.new()
-	ball_start_cell = Tutorial.BALL
+	ball_start_cell = Tutorial.ball_start()
 	if _hud != null:
 		_hud.show_match_chrome(false)
 	_build_tutorial_banner()
@@ -1868,8 +1913,11 @@ func _hint_ball_carriers(screen_pos: Vector2) -> void:
 	var can_reach: Array[Vector2i] = []
 	for cell in movers:
 		for target in _state.move_targets(cell):
-			# Landing beside the ball is what possession takes.
-			if maxi(absi(target.x - _state.ball.x), absi(target.y - _state.ball.y)) <= 1:
+			# What "getting there" means depends on what possession is: standing
+			# ON the ball underfoot, standing next to it under the old rule.
+			var got := target == _state.ball if MatchState.experiment_underfoot \
+				else maxi(absi(target.x - _state.ball.x), absi(target.y - _state.ball.y)) <= 1
+			if got:
 				can_reach.append(cell)
 				break
 	if can_reach.is_empty():
@@ -2863,6 +2911,15 @@ func _apply_move(from: Vector2i, to: Vector2i, as_hold: bool = false) -> void:
 		(fig as PlayerRig).jog(lerpf(jog_speed_scale_min, jog_speed_scale_max, jog_t))
 	var tween := create_tween()
 	tween.tween_property(fig, "position", _cell_world(to.x, to.y), move_duration).set_trans(Tween.TRANS_SINE)
+	# The ball travels alongside him whenever this move touched it — he dribbled
+	# it there, or he walked onto a loose one and it settled at his feet. Without
+	# this it stays put through the whole slide and then teleports on arrival,
+	# which reads as the ball being kicked by nobody.
+	if _ball != null:
+		var ball_rest := _ball_world(_state.ball)
+		if not _ball.position.is_equal_approx(ball_rest):
+			tween.parallel().tween_property(_ball, "position", ball_rest, move_duration) \
+				.set_trans(Tween.TRANS_SINE)
 	if fig is PlayerRig:
 		tween.tween_callback((fig as PlayerRig).idle.bind(false))
 	await tween.finished
