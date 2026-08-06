@@ -20,6 +20,7 @@ func _initialize() -> void:
 	MatchState.experiment_underfoot = false
 	MatchState.experiment_no_move_after_kick = false
 	MatchState.experiment_two_actions = false
+	MatchState.experiment_move_then_kick = false
 	_test_rank_pick_determinism()
 	_test_rank_pick_statistics()
 	_test_ai_defends_open_lane()

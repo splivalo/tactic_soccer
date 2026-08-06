@@ -52,14 +52,26 @@ func _branching(ms: MatchState) -> int:
 
 func _initialize() -> void:
 	# Underfoot throughout, five outfield a side, matching the game.
+	#
+	# EVERY flag is set on EVERY run, never left to its default. Three variants
+	# once reported identical numbers to the decimal because the flag under test
+	# was already true before the first of them started — so all three measured
+	# the same rule and the comparison was worthless while looking convincing.
 	MatchState.experiment_underfoot = true
-	MatchState.experiment_no_move_after_kick = true
-	_run("one action per turn (live)", false)
-	MatchState.experiment_no_move_after_kick = false
-	MatchState.experiment_two_actions = true
+	_variant(false, true, false)
+	_run("one action per turn", false)
+	_variant(true, false, false)
 	_run("two actions, order free", false)
-	MatchState.experiment_two_actions = false
+	_variant(true, false, true)
+	_run("move then kick (ball must be played)", false)
+	_variant(true, false, false)
 	quit(0)
+
+
+func _variant(two_actions: bool, no_move_after_kick: bool, move_then_kick: bool) -> void:
+	MatchState.experiment_two_actions = two_actions
+	MatchState.experiment_no_move_after_kick = no_move_after_kick
+	MatchState.experiment_move_then_kick = move_then_kick
 
 
 func _squad(outfield: int, home: bool) -> Array[Dictionary]:

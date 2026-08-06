@@ -81,6 +81,29 @@ static var experiment_no_move_after_kick := false
 ## 50.3%, possession runs 1.78 -> 2.75, match length 60 -> 71 turns.
 static var experiment_two_actions := true
 
+## ON for playtesting (2026-08-06). The two halves of the turn get a FIXED
+## order — move a figure, then play the ball — and playing it stops being
+## optional: stand on the ball and you must kick it before your turn ends.
+##
+## Standing on the ball and simply stopping was the hole underneath the whole
+## balance investigation. Possession could not be contested at all (nobody can
+## step onto an occupied square), and nothing obliged the holder to ever risk a
+## kick, so he kept it until he chose not to — which is the 27-possession run.
+##
+## Fixing the order is what does the work, and it does three things at once:
+##
+##   * Your turn always ENDS with the ball loose in space, so the opponent's
+##     move is always a live race for it. Possession is contested every single
+##     turn instead of whenever the holder feels like it.
+##   * The kicker cannot chase his own kick — his move is already behind him.
+##     That is experiment_no_self_collect for free, with no extra rule.
+##   * "Declining the ball" disappears, and so does hold_and_move. A turn is
+##     one sentence: move a man, then play the ball if you are on it.
+##
+## The chain is untouched. You still stand on the ball, still string as many
+## teammates together as you like, and it still ends with a kick into space.
+static var experiment_move_then_kick := true
+
 ## Both consumed per turn under experiment_two_actions. Meaningless otherwise.
 var _ball_used := false
 var _move_used := false
@@ -226,7 +249,14 @@ func start_turn() -> void:
 	last_card_team = ""
 	_ball_used = false
 	_move_used = false
-	if team_has_ball(current):
+	if experiment_move_then_kick:
+		# The move comes first, always — even holding the ball (which only
+		# happens at kick-off, or when a kick had nowhere legal to go). do_move
+		# opens the COMBO afterwards if you are standing on it.
+		phase = Phase.MOVE
+		moves_left = 1
+		_move_is_reactive = true
+	elif team_has_ball(current):
 		phase = Phase.COMBO
 	else:
 		phase = Phase.MOVE
@@ -771,7 +801,7 @@ func do_move(from: Vector2i, to: Vector2i) -> bool:
 		# into its other half — walking onto a loose ball and playing it is one
 		# turn, which is the whole point of two actions.
 		_move_used = true
-		if not _ball_used and team_has_ball(current):
+		if not _ball_used and team_has_ball(current) and _ball_is_playable():
 			phase = Phase.COMBO
 			chain.clear()
 			return true
@@ -779,6 +809,19 @@ func do_move(from: Vector2i, to: Vector2i) -> bool:
 		return true
 	next_turn()
 	return true
+
+
+## Is there anything at all the man on the ball could do with it — a teammate to
+## reach, or a square to kick into?
+##
+## Boxed in on every one of the eight rays there is not, and under
+## experiment_move_then_kick that would leave the turn parked in a COMBO with no
+## legal action, waiting on a clock. Nowhere to go is not a foul; the turn just
+## ends and the ball stays where it is.
+func _ball_is_playable() -> bool:
+	if not pieces.has(ball):
+		return false
+	return not (_pass_from(ball).is_empty() and _shoot_from(ball).is_empty())
 
 
 ## Which of your own figures may currently take a Phase.MOVE action: every
@@ -815,6 +858,10 @@ func can_move() -> bool:
 
 
 func hold_and_move(from: Vector2i, to: Vector2i) -> bool:
+	if experiment_move_then_kick:
+		# There is no move to take from COMBO any more: the move is the FIRST
+		# half of the turn and is always already spent by the time a COMBO opens.
+		return false
 	# This is the SECOND way to move a figure — the one taken from Phase.COMBO —
 	# and it never checked whether the turn's move had already been spent. Under
 	# a two-action turn that let a player move a man, come back to COMBO, move

@@ -1932,8 +1932,10 @@ func _combo_tap(screen_pos: Vector2) -> void:
 	# Nothing to pick up once the turn's move is spent — see MatchState.can_move.
 	# Skipped rather than refused so the figure is never lit as tappable and then
 	# silently does nothing.
+	# And nothing to pick up at all under move-then-kick: the move is the FIRST
+	# half of the turn, so by the time a COMBO is open it is always spent.
 	var hold_fig := _resolve_target(screen_pos, _state.own_cells(), TAP_HIT_RADIUS) \
-		if _state.can_move() else NO_CELL
+		if _state.can_move() and not MatchState.experiment_move_then_kick else NO_CELL
 	if hold_fig != NO_CELL:
 		# The tutorial has to gate this branch too. It was the one way into a real
 		# action that wasn't checked, so "tap that player" could be answered by
@@ -3008,6 +3010,16 @@ func _apply_move(from: Vector2i, to: Vector2i, as_hold: bool = false) -> void:
 func _refresh_turn_view() -> void:
 	_move_from = NO_CELL
 	if _state.phase == MatchState.Phase.COMBO:
+		# Under move-then-kick a COMBO only ever opens AFTER the move, and only
+		# one man can open a chain — the one the ball is under. Asking for a tap
+		# to pick him is asking a question with one answer, and the view where
+		# every own figure lights up has already had its turn, before the move.
+		# (Auto-opening was wrong while the COMBO came FIRST: it swallowed that
+		# view entirely and the whole bottom of the board went dark.)
+		if MatchState.experiment_move_then_kick and _tutorial == null and _state.chain.is_empty():
+			var starters := _state.combo_starters()
+			if starters.size() == 1:
+				_state.begin(starters[0])
 		_draw_combo()
 	elif _state.phase == MatchState.Phase.REMOVE:
 		_draw_remove()
@@ -3117,8 +3129,10 @@ func _maybe_ai_turn() -> void:
 				acted = true
 				# Shooting is no longer mandatory (see MatchState.hold_and_move) —
 				# should_hold checks whether THIS shot looks bad enough to decline
-				# in favour of just repositioning instead.
-				if AIPlayer.should_hold(_state, shoot):
+				# in favour of just repositioning instead. Under move-then-kick
+				# there is nothing to decline — the move is already behind it and
+				# the ball must be played before the turn can end.
+				if not MatchState.experiment_move_then_kick and AIPlayer.should_hold(_state, shoot):
 					var hold := AIPlayer.decide_move(_state, GameFlow.ai_difficulty)
 					if hold.has("from"):
 						_apply_move(hold["from"], hold["to"], true)
