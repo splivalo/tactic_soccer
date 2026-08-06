@@ -747,6 +747,23 @@ func _kickoff_cell(team: String, formation: Array = []) -> Vector2i:
 	return best
 
 
+## A pool of colour under the ball, following it everywhere.
+##
+## The ball is a small white sphere; the pitch has white LINES and two white
+## penalty spots the same size as it; and underfoot it is tucked against a
+## figure's feet. A human sent a screenshot asking where it was, and I could not
+## find it in that screenshot either — which is the whole argument for this.
+##
+## Gold because every other meaning on this board is already spoken for: orange
+## says the ball can go through this man, blue says you can walk him, green says
+## he can move here, white says he is yours. Gold is nobody's, which is exactly
+## right for the one thing on the pitch that belongs to nobody.
+@export var ball_marker_color := Color(1.0, 0.82, 0.10, 0.85)
+@export var ball_marker_size := 0.5
+
+var _ball_marker: MeshInstance3D = null
+
+
 func _place_ball(cell: Vector2i) -> void:
 	if ball_scene == null:
 		return
@@ -756,12 +773,36 @@ func _place_ball(cell: Vector2i) -> void:
 	_ball.scale = Vector3.ONE * ball_scale
 	_ball.position = _ball_world(cell)
 	_ball_last_pos = _ball.position
+	_build_ball_marker()
 
 
-## How far in front of a holder's feet the ball sits when he is standing on its
-## square. A tile is 1.0 across and the ball 0.3, so this stays clearly inside
-## the square.
-@export var ball_hold_offset := 0.34
+## Deliberately NOT a child of the ball: the ball spins as it rolls (see
+## _spin_ball), and a marker parented to it would tumble with it. Followed in
+## _process instead, which is already where the ball is animated from.
+func _build_ball_marker() -> void:
+	if _ball_marker != null:
+		return
+	var mesh := PlaneMesh.new()
+	mesh.size = Vector2(ball_marker_size, ball_marker_size)
+	_ball_marker = MeshInstance3D.new()
+	_ball_marker.name = "BallMarker"
+	_ball_marker.mesh = mesh
+	_ball_marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.albedo_color = ball_marker_color
+	mat.albedo_texture = BoardFx.make_tile_texture() # same rounded square as every other marker
+	_ball_marker.material_override = mat
+	add_child(_ball_marker)
+
+
+## How far toward the corner the ball sits when a man is standing on its square.
+## Applied on BOTH screen axes, so the real distance from the tile's centre is
+## this times root two. A tile is 1.0 across and the ball 0.3 — 0.26 each way
+## puts it in the corner and still clear of the edge.
+@export var ball_hold_offset := 0.26
 
 
 func _ball_world(cell: Vector2i) -> Vector3:
@@ -769,21 +810,28 @@ func _ball_world(cell: Vector2i) -> Vector3:
 	# Underfoot: a figure can be standing ON the ball's square, and both centred
 	# on the same point puts the ball inside him.
 	#
-	# Nudged TOWARD THE CAMERA, taken from the camera's own basis. The first
-	# attempt offset it toward the goal that figure's team attacks, which is a
-	# world-space direction — so for one of the two teams the ball sat on the far
-	# side of the man and was hidden behind him, and worse for figures near the
-	# camera. That is why "the ball isn't visible for all players", and it is why
-	# the rule was judged on a fault rather than on itself. Derived from the view
-	# instead of the team, it is in front for everyone, on both devices, whichever
-	# way the board is spun.
+	# Pushed into the TOP-RIGHT CORNER of the man's square, not merely in front of
+	# him. Straight offsets kept failing for the same reason: a figure stands in
+	# the middle of its tile and the view is near top-down, so anything on the
+	# tile's centre line is under him. A corner is the only place on a square that
+	# a figure standing in the middle cannot cover.
+	#
+	# Both directions come from the camera, not from the team or the world. The
+	# first attempt offset toward the goal that figure's side attacks — a
+	# world-space direction — so one of the two teams always had the ball behind
+	# its man, which is what "the ball isn't visible for all players" was.
+	# Screen-relative, it lands in the same corner for everybody, on both devices,
+	# whichever way the board is spun.
 	if _state != null and _state.pieces.has(cell):
 		var cam := get_node_or_null("Camera3D") as Camera3D
 		if cam != null:
-			var toward_viewer := cam.global_transform.basis.z # Godot cams look down -Z
-			toward_viewer.y = 0.0
-			if toward_viewer.length() > 0.001:
-				pos += toward_viewer.normalized() * ball_hold_offset
+			var screen_right := cam.global_transform.basis.x
+			var screen_up := -cam.global_transform.basis.z # cameras look down -Z
+			screen_right.y = 0.0
+			screen_up.y = 0.0
+			if screen_right.length() > 0.001 and screen_up.length() > 0.001:
+				pos += screen_right.normalized() * ball_hold_offset
+				pos += screen_up.normalized() * ball_hold_offset
 	return pos
 
 
@@ -2201,6 +2249,11 @@ func _spin_ball() -> void:
 		var axis := Vector3.UP.cross(d / dist)
 		_ball.transform.basis = Basis(axis, dist / (BALL_RADIUS * ball_scale)) * _ball.transform.basis
 	_ball_last_pos = _ball.position
+	if _ball_marker != null:
+		# Flat on the grass under wherever the ball is, a hair above the surface
+		# so it isn't fighting the pitch texture for the same pixels.
+		_ball_marker.position = Vector3(
+			_ball.position.x, _cell_world(0, 0).y + 0.012, _ball.position.z)
 
 
 # Snaps a figure to face a target cell, so a kick swings toward the ball's
