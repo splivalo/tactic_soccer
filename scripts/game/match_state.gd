@@ -83,6 +83,24 @@ static var experiment_two_actions := true
 var _ball_used := false
 var _move_used := false
 
+## ON for playtesting (2026-08-06). Standing beside the man who has the ball,
+## you may take it off him.
+##
+## It spends the MOVE half of the turn, not the ball half, and that choice is
+## what makes it work rather than deadlock. Spending the ball half would leave
+## the ball sitting at the tackler's feet with the man he took it from still
+## beside him — so he takes it straight back next turn, and it back again, for
+## ever. Spending the move instead leaves the ball half free, so whoever wins it
+## plays it away immediately and there is nothing left to take back.
+##
+## The cost is real: if you are not beside him yet, getting there IS your move,
+## and the tackle waits for the turn after.
+##
+## What it answers: kicking the ball a square and walking onto it is dribbling,
+## it is the most natural thing in the game, and it was completely free because
+## nobody could ever challenge for the ball. This is the challenge.
+static var experiment_tackle := true
+
 ## See start_turn. Off by default; measurement only.
 static var experiment_defender_two_moves := false
 
@@ -364,6 +382,51 @@ func _adjacent_count(team: String) -> int:
 		if pieces[cell]["team"] == team and _cheby(cell, ball) == 1:
 			count += 1
 	return count
+
+
+## Your men standing next to the opponent's ball carrier — whoever could take it
+## off him right now. Empty when there is nobody to challenge, or when the move
+## half of your turn is already spent.
+func tackle_candidates() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if not (experiment_tackle and experiment_underfoot and experiment_two_actions):
+		return out
+	if _move_used or phase == Phase.REMOVE or not pieces.has(ball):
+		return out
+	if pieces[ball]["team"] == current:
+		return out # it is already ours; nothing to win
+	for cell in pieces:
+		if pieces[cell]["team"] == current and _cheby(cell, ball) == 1:
+			out.append(cell)
+	return out
+
+
+## Take the ball off the man standing on it. True if it happened.
+func tackle() -> bool:
+	var takers := tackle_candidates()
+	if takers.is_empty():
+		return false
+	# The ball ends up at the winner's feet, so of the men who could take it the
+	# useful default is the one furthest up the pitch. Deterministic, which
+	# matters online — both clients must land on the same figure.
+	var best: Vector2i = takers[0]
+	for c in takers:
+		if _advance(c) > _advance(best):
+			best = c
+	ball = best
+	_move_used = true
+	chain.clear()
+	if _ball_used:
+		next_turn()
+	else:
+		phase = Phase.COMBO
+	return true
+
+
+## How far up the pitch a cell is for the side to move — bigger is nearer the
+## goal they attack.
+func _advance(cell: Vector2i) -> int:
+	return (Board.ROWS - 1 - cell.y) if current == "HomeTeam" else cell.y
 
 
 func combo_starters() -> Array[Vector2i]:

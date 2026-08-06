@@ -1607,6 +1607,14 @@ func _play_remote_action(action: Dictionary) -> bool:
 			# class of overlap the queue exists to prevent.
 			await _apply_move(from, to, String(action["t"]) == "hold")
 			return true
+		"tackle":
+			if not _state.tackle():
+				return false
+			if _ball != null:
+				create_tween().tween_property(_ball, "position", _ball_world(_state.ball), 0.22) \
+					.set_trans(Tween.TRANS_SINE)
+			_refresh_turn_view()
+			return true
 		"remove":
 			var cell := NetAction.cell_from_json(action.get("cell", null))
 			if not _state.is_own(cell):
@@ -2763,6 +2771,13 @@ func _show_offside(shooter: Vector2i, line_row: int) -> void:
 # the already-selected figure again can get misread as tapping a nearby
 # target tile its tall body visually overlaps under the tilted camera.
 func _move_click(screen_pos: Vector2) -> void:
+	# Tapping the opponent who has the ball takes it off him. Checked first: he
+	# stands on the ball, so his cell would otherwise be resolved against move
+	# targets and lose to whatever is near it.
+	if not _state.tackle_candidates().is_empty() \
+			and _resolve_target(screen_pos, [_state.ball], TAP_HIT_RADIUS) != NO_CELL:
+		_do_tackle()
+		return
 	var pickable := _state.own_cells() if _holding else _state.move_from_cells()
 	if _move_from == NO_CELL:
 		var fig_cell := _resolve_target(screen_pos, pickable, TAP_HIT_RADIUS)
@@ -2832,6 +2847,21 @@ func _move_click(screen_pos: Vector2) -> void:
 	# suppressed while it wore an FX tile, and clearing the tile has to hand it
 	# back or cancelling leaves that one player standing on bare grass.
 	_update_own_team_markers()
+
+
+## Wins the ball off the man standing on it, and slides it across to whoever
+## took it so the change of hands is something you watch rather than a jump.
+func _do_tackle() -> void:
+	if not _state.tackle():
+		return
+	_play_sfx(SELECT_SOUND, select_sfx_volume_db)
+	Settings.vibrate(30)
+	_net_send(NetAction.tackle())
+	if _ball != null:
+		create_tween().tween_property(_ball, "position", _ball_world(_state.ball), 0.22) \
+			.set_trans(Tween.TRANS_SINE)
+	print("TACKLE: %s wins the ball at %s" % [_state.current, _state.ball])
+	_refresh_turn_view()
 
 
 ## Shared by every action that can end a turn (execute_combo/do_move/
@@ -3094,10 +3124,20 @@ func _maybe_ai_turn() -> void:
 				else:
 					_do_combo(shoot)
 		MatchState.Phase.MOVE:
-			var decision := AIPlayer.decide_move(_state, GameFlow.ai_difficulty)
-			if decision.has("from"):
+			# Take the ball if it is there to take. AIPlayer knows nothing about
+			# tackling — its scoring predates the rule — and without this the
+			# human would be the only side ever challenging for the ball, which
+			# would make a playtest against it worthless. Unconditional on
+			# purpose: winning the ball is close to always right, and a real
+			# judgement about when NOT to belongs in AIPlayer, not here.
+			if not _state.tackle_candidates().is_empty():
 				acted = true
-				_apply_move(decision["from"], decision["to"])
+				_do_tackle()
+			else:
+				var decision := AIPlayer.decide_move(_state, GameFlow.ai_difficulty)
+				if decision.has("from"):
+					acted = true
+					_apply_move(decision["from"], decision["to"])
 		MatchState.Phase.REMOVE:
 			var cell := AIPlayer.decide_removal(_state, GameFlow.ai_difficulty)
 			if cell != NO_CELL:
@@ -3169,6 +3209,12 @@ func _draw_movable() -> void:
 	var own := _state.move_from_cells()
 	for c in own:
 		_fx.add_tile(_cell_world(c.x, c.y), color_tap)
+	# The man you can take the ball off. Orange because orange already means "the
+	# ball is in play through this one", which he is — and he is the only figure
+	# on the board that is NOT yours ever to get a highlight, so there is no
+	# confusing him with one of your own.
+	if not _state.tackle_candidates().is_empty():
+		_fx.add_tile(_cell_world(_state.ball.x, _state.ball.y), color_chain)
 	_update_own_team_markers(own)
 
 

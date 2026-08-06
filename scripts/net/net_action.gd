@@ -83,6 +83,13 @@ static func remove(cell: Vector2i) -> Dictionary:
 	return {"t": "remove", "cell": cell_to_json(cell)}
 
 
+## Won the ball off the man standing on it. Carries no cell: which of your men
+## takes it is decided by MatchState.tackle() the same way on both clients, so
+## sending it would only create something for them to disagree about.
+static func tackle() -> Dictionary:
+	return {"t": "tackle"}
+
+
 static func resign() -> Dictionary:
 	return {"t": "resign"}
 
