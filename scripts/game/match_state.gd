@@ -61,7 +61,7 @@ static var experiment_no_self_collect := false
 ## down to 60, and turns per goal 45 down to 27. Both move AWAY from the stated
 ## complaint, which was that goals come too easily and matches end too soon.
 ## Possession runs collapse from 4.97 to 1.78 with it.
-static var experiment_no_move_after_kick := true
+static var experiment_no_move_after_kick := false
 
 ## ON for playtesting (2026-08-06). A turn is TWO things and the order is the
 ## player's: move one figure, and play the ball if you have it. Reaching a loose
@@ -77,7 +77,7 @@ static var experiment_no_move_after_kick := true
 ## turn: choices per turn 53 -> 55, so it is NOT the flood that was feared —
 ## the old version had no underfoot rule and a fuller pitch. Recovery 37.6% ->
 ## 50.3%, possession runs 1.78 -> 2.75, match length 60 -> 71 turns.
-static var experiment_two_actions := false
+static var experiment_two_actions := true
 
 ## Both consumed per turn under experiment_two_actions. Meaningless otherwise.
 var _ball_used := false
