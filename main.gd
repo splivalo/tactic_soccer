@@ -743,9 +743,16 @@ func _kickoff_cell(team: String, formation: Array = []) -> Vector2i:
 	# is exactly how the first attempt at this rule opened, and read as a bug
 	# rather than as a rule. Whoever of the kicking side stands nearest the usual
 	# spot takes it, so a hand-placed formation works as well as the default one.
+	# Outfield only. The keeper is usually AS close to the kickoff spot as the
+	# midfielder is — both one square away in the default line-up — and he came
+	# first in the list, so every single match opened with the goalkeeper holding
+	# the ball on his own goal line. He is the one man who should never start
+	# with it.
 	var best := cell
 	var best_dist := 9999
 	for p in formation:
+		if String(p.get("role", "field")) == "gk":
+			continue
 		var c: Vector2i = p["cell"]
 		var d: int = maxi(absi(c.x - cell.x), absi(c.y - cell.y))
 		if d < best_dist:
@@ -766,10 +773,12 @@ func _place_ball(cell: Vector2i) -> void:
 
 
 ## How far toward the corner the ball sits when a man is standing on its square.
-## Applied on BOTH screen axes, so the real distance from the tile's centre is
-## this times root two. A tile is 1.0 across and the ball 0.3 — 0.26 each way
-## puts it in the corner and still clear of the edge.
-@export var ball_hold_offset := 0.26
+## Applied on BOTH screen axes, so the true distance from the tile's centre is
+## this times root two — 0.34 each way is 0.48, which is the corner of a 1.0
+## tile. It was 0.26 first, giving 0.37, and that left the ball still touching a
+## figure whose silhouette from above is most of its square: applied but not
+## visibly applied, which is worse than not applied at all.
+@export var ball_hold_offset := 0.34
 
 
 func _ball_world(cell: Vector2i) -> Vector3:
