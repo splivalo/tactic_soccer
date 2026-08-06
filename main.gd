@@ -621,11 +621,18 @@ func _build_match(kickoff_team: String) -> void:
 	_build_team("AwayTeam", away_formation, kits["away"], 0.0)
 	var ball_cell := _kickoff_cell(kickoff_team,
 		home_formation if kickoff_team == "HomeTeam" else away_formation)
-	_place_ball(ball_cell)
+	# MatchState first, ball second. _ball_world asks _state.pieces whether a man
+	# is standing on that square, to decide whether to tuck the ball into the
+	# corner of it — and at this moment _state still holds the PREVIOUS match's
+	# board, or nothing at all on the first build. So the kickoff ball was placed
+	# against a board that didn't exist yet and always came out dead centre,
+	# under whoever was standing there. That is why the corner offset looked like
+	# it wasn't happening: during play it was, at kickoff it never could.
 	if _state.pieces.is_empty():
 		_state.setup(home_formation, away_formation, ball_cell, kickoff_team, goals_to_win)
 	else:
 		_state.reset(home_formation, away_formation, ball_cell, kickoff_team)
+	_place_ball(ball_cell)
 	# HUD names (used by the footer's team-code text) must be set before the
 	# turn view reads them, or kickoff briefly shows the previous match's code.
 	_refresh_hud()
@@ -747,23 +754,6 @@ func _kickoff_cell(team: String, formation: Array = []) -> Vector2i:
 	return best
 
 
-## A pool of colour under the ball, following it everywhere.
-##
-## The ball is a small white sphere; the pitch has white LINES and two white
-## penalty spots the same size as it; and underfoot it is tucked against a
-## figure's feet. A human sent a screenshot asking where it was, and I could not
-## find it in that screenshot either — which is the whole argument for this.
-##
-## Gold because every other meaning on this board is already spoken for: orange
-## says the ball can go through this man, blue says you can walk him, green says
-## he can move here, white says he is yours. Gold is nobody's, which is exactly
-## right for the one thing on the pitch that belongs to nobody.
-@export var ball_marker_color := Color(1.0, 0.82, 0.10, 0.85)
-@export var ball_marker_size := 0.5
-
-var _ball_marker: MeshInstance3D = null
-
-
 func _place_ball(cell: Vector2i) -> void:
 	if ball_scene == null:
 		return
@@ -773,29 +763,6 @@ func _place_ball(cell: Vector2i) -> void:
 	_ball.scale = Vector3.ONE * ball_scale
 	_ball.position = _ball_world(cell)
 	_ball_last_pos = _ball.position
-	_build_ball_marker()
-
-
-## Deliberately NOT a child of the ball: the ball spins as it rolls (see
-## _spin_ball), and a marker parented to it would tumble with it. Followed in
-## _process instead, which is already where the ball is animated from.
-func _build_ball_marker() -> void:
-	if _ball_marker != null:
-		return
-	var mesh := PlaneMesh.new()
-	mesh.size = Vector2(ball_marker_size, ball_marker_size)
-	_ball_marker = MeshInstance3D.new()
-	_ball_marker.name = "BallMarker"
-	_ball_marker.mesh = mesh
-	_ball_marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mat.albedo_color = ball_marker_color
-	mat.albedo_texture = BoardFx.make_tile_texture() # same rounded square as every other marker
-	_ball_marker.material_override = mat
-	add_child(_ball_marker)
 
 
 ## How far toward the corner the ball sits when a man is standing on its square.
@@ -2249,11 +2216,6 @@ func _spin_ball() -> void:
 		var axis := Vector3.UP.cross(d / dist)
 		_ball.transform.basis = Basis(axis, dist / (BALL_RADIUS * ball_scale)) * _ball.transform.basis
 	_ball_last_pos = _ball.position
-	if _ball_marker != null:
-		# Flat on the grass under wherever the ball is, a hair above the surface
-		# so it isn't fighting the pitch texture for the same pixels.
-		_ball_marker.position = Vector3(
-			_ball.position.x, _cell_world(0, 0).y + 0.012, _ball.position.z)
 
 
 # Snaps a figure to face a target cell, so a kick swings toward the ball's
