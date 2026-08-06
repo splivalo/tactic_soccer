@@ -101,6 +101,20 @@ var _move_used := false
 ## nobody could ever challenge for the ball. This is the challenge.
 static var experiment_tackle := true
 
+## ON for playtesting (2026-08-06). A pass ends AT the teammate — the ball is his
+## — and that pass is the whole ball half of your turn. No chain through several
+## men in one go.
+##
+## What it answers: every kick abandoned the ball, so there was no way to keep
+## it and every single turn was a scramble. The game had no quiet part. Now an
+## attack is built over several turns with the opponent answering between them,
+## and the ball only goes loose when you choose to clear it or you lose it.
+##
+## The cost is the chain, which was the game's signature: three men connected in
+## one turn carried the ball half the pitch. That is also why nothing had any
+## weight — the whole field could be crossed in an instant.
+static var experiment_single_pass := true
+
 ## See start_turn. Off by default; measurement only.
 static var experiment_defender_two_moves := false
 
@@ -444,8 +458,12 @@ func tackle() -> bool:
 
 ## How far up the pitch a cell is for the side to move — bigger is nearer the
 ## goal they attack.
-func _advance(cell: Vector2i) -> int:
+func advance_of(cell: Vector2i) -> int:
 	return (Board.ROWS - 1 - cell.y) if current == "HomeTeam" else cell.y
+
+
+func _advance(cell: Vector2i) -> int:
+	return advance_of(cell)
 
 
 func combo_starters() -> Array[Vector2i]:
@@ -585,6 +603,27 @@ func extend(cell: Vector2i) -> bool:
 		chain.append(cell)
 		return true
 	return false
+
+
+## A pass that ENDS at the teammate: the ball is now his, and the ball half of
+## the turn is spent. Replaces chaining under experiment_single_pass.
+func pass_ball(to_cell: Vector2i) -> bool:
+	if not experiment_single_pass or phase != Phase.COMBO or chain.is_empty():
+		return false
+	if not (to_cell in combo_pass_targets()):
+		return false
+	ball = to_cell
+	chain.clear()
+	last_move_card = ""
+	last_card_team = ""
+	_ball_used = true
+	if not experiment_two_actions or _move_used:
+		next_turn()
+	else:
+		phase = Phase.MOVE
+		moves_left = 1
+		_move_is_reactive = true
+	return true
 
 
 ## If `cell` is already part of the chain, truncate back to it — lets the

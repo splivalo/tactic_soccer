@@ -90,6 +90,11 @@ static func tackle() -> Dictionary:
 	return {"t": "tackle"}
 
 
+## A pass that ends at a teammate rather than in space.
+static func pass_to(cell: Vector2i) -> Dictionary:
+	return {"t": "pass", "cell": cell_to_json(cell)}
+
+
 static func resign() -> Dictionary:
 	return {"t": "resign"}
 

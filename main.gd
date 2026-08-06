@@ -1627,6 +1627,18 @@ func _play_remote_action(action: Dictionary) -> bool:
 			# class of overlap the queue exists to prevent.
 			await _apply_move(from, to, String(action["t"]) == "hold")
 			return true
+		"pass":
+			var to := NetAction.cell_from_json(action.get("cell", null))
+			if not (to in _state.combo_pass_targets()):
+				# The chain is opened for us by _refresh_turn_view, but a remote
+				# action can land before that has run — open it here so the
+				# targets exist to validate against.
+				if _state.chain.is_empty() and not _state.combo_starters().is_empty():
+					_state.begin(_state.combo_starters()[0])
+				if not (to in _state.combo_pass_targets()):
+					return false
+			await _do_pass(to)
+			return true
 		"tackle":
 			if not _state.tackle():
 				return false
@@ -1901,6 +1913,10 @@ func _combo_tap(screen_pos: Vector2) -> void:
 		var pass_cell := _resolve_target(screen_pos, _state.combo_pass_targets(), TAP_HIT_RADIUS)
 		if pass_cell != NO_CELL:
 			if _tutorial_blocks(pass_cell):
+				return
+			if MatchState.experiment_single_pass:
+				_do_pass(pass_cell)
+				_tutorial_did("extend", pass_cell)
 				return
 			_state.extend(pass_cell) # tap-to-pass — connects the chain, same as a drag
 			_draw_combo()
@@ -2881,6 +2897,26 @@ func _move_click(screen_pos: Vector2) -> void:
 	_update_own_team_markers()
 
 
+## A pass that ends at the teammate. Reuses the combo choreography with a path of
+## [holder, holder, receiver] — the same shape execute_combo builds, so the kick,
+## the windup and the roll are the ones the game already has, rather than a
+## second animation that would drift out of step with them.
+func _do_pass(cell: Vector2i) -> void:
+	var from := _state.ball
+	if not _state.pass_ball(cell):
+		return
+	_net_send(NetAction.pass_to(cell))
+	_pool_seconds_left = _turn_timer.time_left
+	_turn_timer.stop()
+	_busy = true
+	_fx.clear()
+	print("PASS: %s -> %s" % [from, cell])
+	var tween := _play_combo_choreography([from, from, cell], {"goal": false}, false)
+	await tween.finished
+	_busy = false
+	_refresh_turn_view()
+
+
 ## Wins the ball off the man standing on it, and slides it across to whoever
 ## took it so the change of hands is something you watch rather than a jump.
 func _do_tackle() -> void:
@@ -3153,6 +3189,32 @@ func _maybe_ai_turn() -> void:
 	_busy = false
 	var acted := false
 	match _state.phase:
+		MatchState.Phase.COMBO when MatchState.experiment_single_pass:
+			# AIPlayer has no idea passing can END anywhere — its whole combo
+			# search is built around chaining and then clearing. Without this it
+			# would only ever hoof the ball into space and never keep it, which
+			# would make the rule look worse than it is for the reason that it is
+			# playing a different one.
+			#
+			# Crude on purpose: pass to whichever teammate is furthest up the
+			# pitch, if that is further than the ball is now; otherwise fall back
+			# to the real search and clear it. A judgement about when to hold and
+			# when to release belongs in AIPlayer, not here.
+			if _state.chain.is_empty() and not _state.combo_starters().is_empty():
+				_state.begin(_state.combo_starters()[0])
+			var forward := NO_CELL
+			for c in _state.combo_pass_targets():
+				if _state.advance_of(c) > _state.advance_of(_state.ball) \
+						and (forward == NO_CELL or _state.advance_of(c) > _state.advance_of(forward)):
+					forward = c
+			if forward != NO_CELL:
+				acted = true
+				_do_pass(forward)
+			else:
+				var clear_to := AIPlayer.decide_combo(_state, GameFlow.ai_difficulty)
+				if clear_to != NO_CELL:
+					acted = true
+					_do_combo(clear_to)
 		MatchState.Phase.COMBO:
 			var shoot := AIPlayer.decide_combo(_state, GameFlow.ai_difficulty)
 			if shoot != NO_CELL:
