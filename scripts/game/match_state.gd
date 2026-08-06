@@ -846,7 +846,21 @@ func move_from_cells() -> Array[Vector2i]:
 ## up top) — repeatedly holding is just one way a position can end up
 ## repeating, caught the same way any other stalling loop is. True if the
 ## move was legal.
+## True while the move half of this turn is still owed. Always true outside the
+## two-action turn, where a move is the only thing a MOVE phase is for.
+func can_move() -> bool:
+	return not (experiment_two_actions and _move_used)
+
+
 func hold_and_move(from: Vector2i, to: Vector2i) -> bool:
+	# This is the SECOND way to move a figure — the one taken from Phase.COMBO —
+	# and it never checked whether the turn's move had already been spent. Under
+	# a two-action turn that let a player move a man, come back to COMBO, move
+	# another, come back to COMBO, without limit: a whole match's worth of
+	# repositioning inside one turn. Seen in a real log as several MOVE lines
+	# between two identical "TURN: HomeTeam phase=COMBO".
+	if not can_move():
+		return false
 	if phase != Phase.COMBO or not is_own(from) or not (to in move_targets(from)):
 		return false
 	var info: Dictionary = pieces[from]

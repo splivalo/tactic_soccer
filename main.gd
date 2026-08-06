@@ -1930,7 +1930,11 @@ func _combo_tap(screen_pos: Vector2) -> void:
 			_draw_combo()
 			_tutorial_did("begin", starter)
 			return
-	var hold_fig := _resolve_target(screen_pos, _state.own_cells(), TAP_HIT_RADIUS)
+	# Nothing to pick up once the turn's move is spent — see MatchState.can_move.
+	# Skipped rather than refused so the figure is never lit as tappable and then
+	# silently does nothing.
+	var hold_fig := _resolve_target(screen_pos, _state.own_cells(), TAP_HIT_RADIUS) \
+		if _state.can_move() else NO_CELL
 	if hold_fig != NO_CELL:
 		# The tutorial has to gate this branch too. It was the one way into a real
 		# action that wasn't checked, so "tap that player" could be answered by
@@ -3278,8 +3282,14 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 		# saying "still yours, but not the thing you're acting on".
 		var own := _state.own_cells()
 		var carriers := _state.combo_starters()
+		# Once the turn's move is spent, the only thing left to do is play the
+		# ball — so only the man who can play it stays lit. Lighting the rest
+		# blue would promise a walk that is no longer on offer.
+		var can_walk := _state.can_move()
 		for cell in own:
 			var on_the_ball := cell in carriers
+			if not on_the_ball and not can_walk:
+				continue
 			_fx.add_tile(_cell_world(cell.x, cell.y),
 				color_chain if on_the_ball else color_tap, -1.0, on_the_ball)
 		_update_own_team_markers(own)
