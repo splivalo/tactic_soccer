@@ -1913,7 +1913,13 @@ func _combo_tap(screen_pos: Vector2) -> void:
 			_tutorial_did("shoot", shoot_cell)
 			_do_combo(shoot_cell) # direct tap-to-shoot still works, no ambiguity
 			return
-		return
+		# Falls through to the pick-a-figure-to-move branch below rather than
+		# returning. The chain is opened for you now (see _refresh_turn_view), so
+		# returning here would mean the ball had to be played before anyone could
+		# be moved — an order nobody chose and the exact thing that was objected
+		# to when a fixed order was proposed.
+		if not _state.can_move():
+			return
 	# Nothing engaged yet: tap the ball-adjacent figure to begin a combo, OR
 	# tap ANY other own figure to move IT instead — declining the ball this
 	# turn (see MatchState.hold_and_move). Every own figure is highlighted
@@ -3032,6 +3038,18 @@ func _apply_move(from: Vector2i, to: Vector2i, as_hold: bool = false) -> void:
 func _refresh_turn_view() -> void:
 	_move_from = NO_CELL
 	if _state.phase == MatchState.Phase.COMBO:
+		# Underfoot leaves exactly ONE man who can open a chain — the one the
+		# ball is under — so asking for a tap to pick him is asking a question
+		# with one answer. He lit up orange and then nothing happened until you
+		# tapped him, which reads as the highlight being decorative. Opened for
+		# you, so the passes and shots are simply there.
+		#
+		# Not during the tutorial: its first lesson IS that tap, and doing it for
+		# the player would teach nothing.
+		if _tutorial == null and _state.chain.is_empty():
+			var starters := _state.combo_starters()
+			if starters.size() == 1:
+				_state.begin(starters[0])
 		_draw_combo()
 	elif _state.phase == MatchState.Phase.REMOVE:
 		_draw_remove()
@@ -3327,6 +3345,17 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 		if not (c in _state.chain):
 			restarts.append(c)
 			_fx.add_tile(_cell_world(c.x, c.y), color_chain)
+	# Your other men, blue and steady: the turn's move is still on offer beside
+	# the ball. The chain is opened for you now, so without these the only thing
+	# lit would be the ball — and moving somebody would be a legal action nothing
+	# on the board admitted to.
+	var walkers: Array[Vector2i] = []
+	if _state.can_move():
+		for c in _state.own_cells():
+			if c in _state.chain or c in pass_targets or c in restarts:
+				continue
+			walkers.append(c)
+			_fx.add_tile(_cell_world(c.x, c.y), color_tap, -1.0, false)
 	# No target can be flagged as "this one books you" any more: the only
 	# bookable offence left is time-wasting (see MatchState.forfeit), which is
 	# about the clock, not about where the ball goes — so every shoot target
@@ -3346,6 +3375,7 @@ func _draw_combo(preview: Vector2i = NO_CELL) -> void:
 	covered.append_array(_state.chain)
 	covered.append_array(pass_targets)
 	covered.append_array(restarts)
+	covered.append_array(walkers)
 	_update_own_team_markers(covered)
 
 
