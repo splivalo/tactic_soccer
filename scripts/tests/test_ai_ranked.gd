@@ -19,6 +19,7 @@ func _initialize() -> void:
 	# him. The underfoot experiment is a different game and would fail all of it.
 	MatchState.experiment_underfoot = false
 	MatchState.experiment_no_move_after_kick = false
+	MatchState.experiment_two_actions = false
 	_test_rank_pick_determinism()
 	_test_rank_pick_statistics()
 	_test_ai_defends_open_lane()

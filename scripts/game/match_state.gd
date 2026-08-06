@@ -61,7 +61,27 @@ static var experiment_no_self_collect := false
 ## down to 60, and turns per goal 45 down to 27. Both move AWAY from the stated
 ## complaint, which was that goals come too easily and matches end too soon.
 ## Possession runs collapse from 4.97 to 1.78 with it.
-static var experiment_no_move_after_kick := true
+static var experiment_no_move_after_kick := false
+
+## ON for playtesting (2026-08-06). A turn is TWO things and the order is the
+## player's: move one figure, and play the ball if you have it. Reaching a loose
+## ball with your move therefore lets you play it in the SAME turn instead of
+## standing over it for a full round, which is the dead feeling this answers.
+##
+## It also removes a rule rather than adding one: "declining the ball" is gone,
+## because a move is now just a move and whether you also play the ball is a
+## separate half of the same turn.
+##
+## This is close to a shape abandoned long ago for being hard to keep track of,
+## and that fear now has a number against it. Measured against the one-action
+## turn: choices per turn 53 -> 55, so it is NOT the flood that was feared —
+## the old version had no underfoot rule and a fuller pitch. Recovery 37.6% ->
+## 50.3%, possession runs 1.78 -> 2.75, match length 60 -> 71 turns.
+static var experiment_two_actions := true
+
+## Both consumed per turn under experiment_two_actions. Meaningless otherwise.
+var _ball_used := false
+var _move_used := false
 
 ## See start_turn. Off by default; measurement only.
 static var experiment_defender_two_moves := false
@@ -194,6 +214,8 @@ func start_turn() -> void:
 	chain.clear()
 	last_move_card = ""
 	last_card_team = ""
+	_ball_used = false
+	_move_used = false
 	if team_has_ball(current):
 		phase = Phase.COMBO
 	else:
@@ -569,6 +591,16 @@ func execute_combo(shoot_cell: Vector2i) -> Dictionary:
 		res["scorer"] = scorer
 		res["win"] = score[scorer] >= goals_to_win
 		res["kickoff"] = opponent(scorer)  # the team scored against restarts
+	elif experiment_two_actions:
+		# The ball half of the turn is spent. If the move half already went, the
+		# turn is over; otherwise it stays yours and you still owe a move.
+		_ball_used = true
+		if _move_used:
+			next_turn()
+		else:
+			phase = Phase.MOVE
+			moves_left = 1
+			_move_is_reactive = true # any figure, full range — it is a normal move
 	elif experiment_no_move_after_kick:
 		next_turn()
 	else:
@@ -710,6 +742,18 @@ func do_move(from: Vector2i, to: Vector2i) -> bool:
 	moves_left -= 1
 	if _move_is_reactive and moves_left > 0:
 		return true # same team, another move still owed
+	if experiment_two_actions:
+		# The move half is spent. If the ball half is too — or there is no ball
+		# to play — the turn ends; otherwise it stays yours. A move that lands a
+		# man ON a loose ball therefore hands him the ball play in the SAME turn,
+		# instead of leaving him standing over it for a full round.
+		_move_used = true
+		if not _ball_used and team_has_ball(current):
+			phase = Phase.COMBO
+			chain.clear()
+			return true
+		next_turn()
+		return true
 	next_turn()
 	return true
 
@@ -745,6 +789,14 @@ func hold_and_move(from: Vector2i, to: Vector2i) -> bool:
 	var info: Dictionary = pieces[from]
 	pieces.erase(from)
 	pieces[to] = info
+	if experiment_two_actions:
+		# There is no "declining the ball" any more — a move is just a move, and
+		# whether you also play the ball is a separate half of the same turn.
+		_move_used = true
+		if not _ball_used and team_has_ball(current):
+			phase = Phase.COMBO
+			chain.clear()
+			return true
 	next_turn()
 	return true
 

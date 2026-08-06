@@ -51,13 +51,14 @@ func _branching(ms: MatchState) -> int:
 
 
 func _initialize() -> void:
-	# Underfoot is the live rule now; the question is what to do about goals
-	# coming too easily. Five outfield a side throughout, matching the game.
+	# Underfoot throughout, five outfield a side, matching the game.
 	MatchState.experiment_underfoot = true
-	_run("underfoot, move after kick (live)", false)
 	MatchState.experiment_no_move_after_kick = true
-	_run("underfoot, NO move after kick", true)
+	_run("one action per turn (live)", false)
 	MatchState.experiment_no_move_after_kick = false
+	MatchState.experiment_two_actions = true
+	_run("two actions, order free", false)
+	MatchState.experiment_two_actions = false
 	quit(0)
 
 
