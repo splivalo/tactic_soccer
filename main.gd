@@ -800,16 +800,33 @@ func _ball_world(cell: Vector2i) -> Vector3:
 	# players and not others", which is exactly what a team-decided direction
 	# produces. Taking both axes from the camera makes it the same corner for
 	# everybody, on both devices, whichever way the board is spun.
+	# Screen up and screen right, both taken from the camera's UP and RIGHT axes —
+	# NOT from the direction it looks.
+	#
+	# main.tscn's camera is Transform3D(1,0,0, 0,-4.4e-08,1, 0,-1,-4.4e-08, ...):
+	# a dead vertical top-down view. Its forward axis is therefore straight down,
+	# and flattening that onto the pitch gives 0.0000000437 — under the guard
+	# that follows. Earlier versions took the forward axis, so the guard failed
+	# and NEITHER offset was applied. The ball sat dead centre under the man, and
+	# raising the distance could not help, because the distance was being
+	# multiplied by nothing. The camera's up axis has the opposite property: it
+	# lies flat exactly when the camera points down.
+	#
+	# Top-right, as asked. An earlier note here argued for the bottom corner on
+	# the grounds that an upright figure hides what is behind it — true of a
+	# tilted camera and irrelevant to this one, which is vertical and so has no
+	# hidden side at all.
 	if _state != null and _state.pieces.has(cell):
 		var cam := get_node_or_null("Camera3D") as Camera3D
 		if cam != null:
-			var toward_viewer := cam.global_transform.basis.z # cameras look down -Z
-			var to_the_side := cam.global_transform.basis.x
-			toward_viewer.y = 0.0
-			to_the_side.y = 0.0
-			if toward_viewer.length() > 0.001 and to_the_side.length() > 0.001:
-				pos += toward_viewer.normalized() * ball_hold_offset
-				pos += to_the_side.normalized() * ball_hold_offset
+			var screen_up := cam.global_transform.basis.y
+			var screen_right := cam.global_transform.basis.x
+			screen_up.y = 0.0
+			screen_right.y = 0.0
+			if screen_up.length() > 0.001:
+				pos += screen_up.normalized() * ball_hold_offset
+			if screen_right.length() > 0.001:
+				pos += screen_right.normalized() * ball_hold_offset
 	return pos
 
 
