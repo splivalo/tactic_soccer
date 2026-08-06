@@ -37,10 +37,12 @@ var moves_left: int = 1
 ##                 empty square belongs to nobody until someone steps on it
 ##   no_self_collect   the bonus move after a kick may not land on the ball, so
 ##                 the kicker cannot simply collect his own clearance
-## Dribbling — a held ball travelling with its carrier — was built and taken out
-## again on 2026-08-06. It was never what was asked for: "dribbling" here meant
-## TAKING the ball off a man you are standing beside, which is a tackle and a
-## different rule. Carrying it was my own reading of the word.
+## TRIED AND REMOVED TWICE, both on 2026-08-06. First a held ball travelling
+## with its carrier; then, once "dribbling" turned out to mean taking the ball
+## off a man you stand beside, a tackle. The tackle worked and was still wrong to
+## play: nothing on the board says a figure beside the carrier is about to do
+## anything, so the ball changed hands with no warning you could read in advance.
+## A rule you cannot see coming is not tactics, it is noise.
 ##
 ## ON for playtesting (2026-08-06). Measured against the shipped rule over 25
 ## matches: possession runs 23.6 -> 3.3, recovery 19.4% -> 33.6%, and the number
@@ -82,24 +84,6 @@ static var experiment_two_actions := true
 ## Both consumed per turn under experiment_two_actions. Meaningless otherwise.
 var _ball_used := false
 var _move_used := false
-
-## ON for playtesting (2026-08-06). Standing beside the man who has the ball,
-## you may take it off him.
-##
-## It spends the MOVE half of the turn, not the ball half, and that choice is
-## what makes it work rather than deadlock. Spending the ball half would leave
-## the ball sitting at the tackler's feet with the man he took it from still
-## beside him — so he takes it straight back next turn, and it back again, for
-## ever. Spending the move instead leaves the ball half free, so whoever wins it
-## plays it away immediately and there is nothing left to take back.
-##
-## The cost is real: if you are not beside him yet, getting there IS your move,
-## and the tackle waits for the turn after.
-##
-## What it answers: kicking the ball a square and walking onto it is dribbling,
-## it is the most natural thing in the game, and it was completely free because
-## nobody could ever challenge for the ball. This is the challenge.
-static var experiment_tackle := true
 
 ## TRIED AND REMOVED, 2026-08-06: a pass that ENDS at the teammate, one per
 ## turn, instead of a chain. It was aimed at the real complaint — two actions
@@ -390,64 +374,6 @@ func _adjacent_count(team: String) -> int:
 		if pieces[cell]["team"] == team and _cheby(cell, ball) == 1:
 			count += 1
 	return count
-
-
-## Your men standing next to the opponent's ball carrier — whoever could take it
-## off him right now. Empty when there is nobody to challenge, or when the move
-## half of your turn is already spent.
-func tackle_candidates() -> Array[Vector2i]:
-	var out: Array[Vector2i] = []
-	if not (experiment_tackle and experiment_underfoot):
-		return out
-	# Whichever half of the turn is still owed pays for it. Tying it to the MOVE
-	# half alone meant that walking over to the man with the ball — the obvious
-	# way to reach him — spent the only thing that could take it, so you stood
-	# beside him with an unused half of your turn and no way to use it.
-	if experiment_two_actions and _move_used and _ball_used:
-		return out
-	if phase == Phase.REMOVE or not pieces.has(ball):
-		return out
-	if pieces[ball]["team"] == current:
-		return out # it is already ours; nothing to win
-	for cell in pieces:
-		if pieces[cell]["team"] == current and _cheby(cell, ball) == 1:
-			out.append(cell)
-	return out
-
-
-## Take the ball off the man standing on it. True if it happened.
-func tackle() -> bool:
-	var takers := tackle_candidates()
-	if takers.is_empty():
-		return false
-	# The ball ends up at the winner's feet, so of the men who could take it the
-	# useful default is the one furthest up the pitch. Deterministic, which
-	# matters online — both clients must land on the same figure.
-	var best: Vector2i = takers[0]
-	for c in takers:
-		if _advance(c) > _advance(best):
-			best = c
-	ball = best
-	chain.clear()
-	# Spend the move if it is still owed — that leaves the ball half free, so you
-	# can clear what you just won and there is nothing to take straight back.
-	# Otherwise spend the ball half: you walked over to him, and winning it IS
-	# what you did with your turn.
-	if not _move_used:
-		_move_used = true
-	else:
-		_ball_used = true
-	if not experiment_two_actions:
-		# One action a turn: winning the ball IS the action, so the turn ends and
-		# you play it next time round. Worth watching — the man you took it from
-		# is still beside you and can take it straight back, which is exactly the
-		# deadlock the two-action version avoided by letting you clear it first.
-		next_turn()
-	elif _move_used and _ball_used:
-		next_turn()
-	else:
-		phase = Phase.COMBO
-	return true
 
 
 ## How far up the pitch a cell is for the side to move — bigger is nearer the
@@ -819,9 +745,8 @@ func _apply_card(team: String) -> String:
 ## (_bonus_move_shooter) may move — see its doc comment for why. True if the
 ## move was legal.
 func do_move(from: Vector2i, to: Vector2i) -> bool:
-	# The MOVE phase can now outlive the move itself: after walking up to the man
-	# with the ball you are still in it, owing only the tackle. Without this the
-	# same figure could be walked a second time.
+	# One move a turn: without this the same figure could be walked twice, which
+	# is what an unguarded hold_and_move was quietly allowing.
 	if not can_move():
 		return false
 	if phase != Phase.MOVE or not is_own(from) or not (to in move_targets(from)):
@@ -842,20 +767,14 @@ func do_move(from: Vector2i, to: Vector2i) -> bool:
 	if _move_is_reactive and moves_left > 0:
 		return true # same team, another move still owed
 	if experiment_two_actions:
-		# The move half is spent. The turn only ends if the ball half has nothing
-		# left to do — and it has two things it might do: play a ball we now
-		# hold, or take one off a man we have just walked up to. Ending the turn
-		# on the second of those was the bug: you crossed the pitch to reach him
-		# and the game closed your turn while half of it was still owed.
+		# The move half is spent. If we now stand on the ball the turn carries on
+		# into its other half — walking onto a loose ball and playing it is one
+		# turn, which is the whole point of two actions.
 		_move_used = true
-		if not _ball_used:
-			if team_has_ball(current):
-				phase = Phase.COMBO
-				chain.clear()
-				return true
-			if not tackle_candidates().is_empty():
-				chain.clear()
-				return true # stays Phase.MOVE; the tackle is the ball half
+		if not _ball_used and team_has_ball(current):
+			phase = Phase.COMBO
+			chain.clear()
+			return true
 		next_turn()
 		return true
 	next_turn()
@@ -873,7 +792,7 @@ func move_from_cells() -> Array[Vector2i]:
 	#if phase == Phase.MOVE and not _move_is_reactive:
 	#	return [_bonus_move_shooter]
 	if not can_move():
-		return [] as Array[Vector2i] # the move is spent; only the tackle is left
+		return [] as Array[Vector2i] # the move half of the turn is spent
 	return own_cells()
 
 
