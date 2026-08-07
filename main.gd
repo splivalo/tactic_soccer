@@ -2995,7 +2995,11 @@ func _refresh_turn_view() -> void:
 		# every own figure lights up has already had its turn, before the move.
 		# (Auto-opening was wrong while the COMBO came FIRST: it swallowed that
 		# view entirely and the whole bottom of the board went dark.)
-		if MatchState.experiment_move_then_kick and _tutorial == null and _state.chain.is_empty():
+		#
+		# The tutorial gets it too. Its first lesson is the MOVE now, not the tap
+		# that opens the chain, and the standing rule is that the tutorial board is
+		# drawn exactly as a real match draws it.
+		if MatchState.experiment_move_then_kick and _state.chain.is_empty():
 			var starters := _state.combo_starters()
 			if starters.size() == 1:
 				_state.begin(starters[0])
