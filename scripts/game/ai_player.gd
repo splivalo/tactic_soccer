@@ -533,7 +533,22 @@ static func decide_move(state: MatchState, difficulty: String) -> Dictionary:
 ## before the expensive defense lookahead (see MAX_DEFENSE_CHECKS).
 static func _move_base_score(state: MatchState, m: Dictionary) -> float:
 	var to: Vector2i = m["to"]
-	return -maxi(absi(to.x - state.ball.x), absi(to.y - state.ball.y))
+	var dist := maxi(absi(to.x - state.ball.x), absi(to.y - state.ball.y))
+	# Landing ON the ball is not "one square better" than landing beside it, it
+	# is a different kind of move: under move-then-kick it buys the whole ball
+	# half of the turn, and under underfoot it is the only way possession ever
+	# changes hands at all. Scored as plain distance it was worth ONE point
+	# against a 400-point defensive term, so the AI would step off its own ball
+	# to tidy up a shape — which is exactly what it did with its first move of a
+	# real match, abandoning the kickoff in its own goalmouth.
+	var collects: bool = MatchState.experiment_underfoot and to == state.ball \
+		and not state.pieces.has(state.ball)
+	return (COLLECT_BONUS if collects else 0.0) - dist
+
+
+## Worth more than _defense_score's 400, because a defensive shape you hold
+## while the opponent has the ball is worth less than simply having the ball.
+const COLLECT_BONUS := 900.0
 
 
 ## _move_base_score plus a (usually dominant) bonus for a move that keeps the
@@ -572,6 +587,30 @@ static func _defense_score(state: MatchState, m: Dictionary) -> float:
 ## next turn, full stop. An EXISTENCE check over a small graph (<=6
 ## pieces/side) — cheap — not a search for the opponent's best move.
 static func team_can_score_next(state: MatchState, team: String) -> bool:
+	if MatchState.experiment_underfoot:
+		# Possession is standing ON the ball, not beside it. Asking for
+		# adjacency here asked the question backwards on both sides: it read a
+		# man merely NEXT to the ball as a live threat, and the man actually
+		# holding it as none at all.
+		if state.pieces.has(state.ball) and state.pieces[state.ball]["team"] == team:
+			if _chain_can_score(state, team, state.ball):
+				return true
+		# And under move-then-kick a loose ball is a threat to whoever can walk
+		# onto it, because collecting it opens the ball half of the SAME turn.
+		# Treating that as safe is what let the AI leave a loose ball sitting in
+		# a scoring position, one step from an opponent.
+		if MatchState.experiment_move_then_kick and not state.pieces.has(state.ball):
+			for start in state.pieces:
+				if state.pieces[start]["team"] != team:
+					continue
+				if not (state.ball in state.move_targets(start)):
+					continue
+				var after: MatchState = state.clone_for_query()
+				after.pieces[state.ball] = after.pieces[start]
+				after.pieces.erase(start)
+				if _chain_can_score(after, team, state.ball):
+					return true
+		return false
 	for start in state.pieces:
 		if state.pieces[start]["team"] == team and maxi(absi(start.x - state.ball.x), absi(start.y - state.ball.y)) == 1:
 			if _chain_can_score(state, team, start):
