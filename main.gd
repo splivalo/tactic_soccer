@@ -783,25 +783,6 @@ func _place_ball(cell: Vector2i) -> void:
 @export var ball_hold_offset := 0.34
 
 
-## Temporary, for a reported "I kick the ball and it reappears where it was".
-## Prints where the RULES think the ball is against where the NODE actually sits,
-## because those two disagreeing is the only shape that bug can have, and I could
-## not find the code path that does it by reading.
-func _trace_ball(when: String) -> void:
-	if _ball == null or _state == null:
-		return
-	var nearest := Vector2i(-1, -1)
-	var best := INF
-	for row in Board.ROWS:
-		for col in Board.COLS:
-			var d := _cell_world(col, row).distance_to(_ball.position)
-			if d < best:
-				best = d
-				nearest = Vector2i(col, row)
-	var flag := "  <-- MISMATCH" if nearest != _state.ball else ""
-	print("BALL %s: rules say %s, node sits on %s%s" % [when, _state.ball, nearest, flag])
-
-
 func _ball_world(cell: Vector2i) -> Vector3:
 	var pos := _cell_world(cell.x, cell.y) + Vector3(0, BALL_RADIUS * ball_scale, 0)
 	# Underfoot: a figure can be standing ON the ball's square, and both centred
@@ -2039,9 +2020,7 @@ func _do_combo(shoot_cell: Vector2i) -> void:
 		_goal_replay_scorer = res["scorer"]
 	var tween := _play_combo_choreography(path, res, true)
 	await tween.finished
-	_trace_ball("after the kick animation")
 	await _after_combo(res)
-	_trace_ball("after the turn view refreshed")
 
 
 # Drives the shared kick+ball choreography for a combo's full path: one
@@ -3032,7 +3011,9 @@ func _refresh_turn_view() -> void:
 		# player can time out never realizing a figure — or a second reactive
 		# move — was still theirs to take.
 		_draw_movable()
-	print("TURN: %s  phase=%s" % [_state.current, MatchState.Phase.keys()[_state.phase]])
+	print("%s: %s  phase=%s" % [
+		"SAME TURN" if _state.current == _pool_team else "TURN",
+		_state.current, MatchState.Phase.keys()[_state.phase]])
 	_shown_time_left = -1
 	if _tutorial != null:
 		# No clock while you are being taught. A countdown here books you for

@@ -311,7 +311,13 @@ func update_turn_hint(side: String, phase: int, intro: String = "", _moves_left:
 	var verb := "plays"
 	match phase:
 		MatchState.Phase.COMBO:
-			verb = "pass, shoot, or move a player"
+			# Under move-then-kick a COMBO is the SECOND half of a turn whose
+			# move is already spent, and playing the ball is compulsory. Offering
+			# "or move a player" there named an action the rules refuse, and read
+			# as a brand new turn arriving right after the player had taken one —
+			# reported as the game handing the turn back.
+			verb = "must pass or shoot" if MatchState.experiment_move_then_kick \
+				else "pass, shoot, or move a player"
 		MatchState.Phase.MOVE:
 			verb = "move a player"
 		MatchState.Phase.REMOVE:
