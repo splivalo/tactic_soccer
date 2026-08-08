@@ -86,6 +86,21 @@ func _initialize() -> void:
 		"the man on the ball is the only one who can open a chain")
 	_check(ms.begin(Tutorial.FIRST), "open the chain on him")
 
+	# Closing the chain and reopening it is one gesture, tapping the carrier, and
+	# it must be allowed at EVERY passing step. Closing goes through step_back and
+	# asks the tutorial nothing; if reopening is gated, the lesson strands itself
+	# in a position it will not let the player out of — the ball at his feet, a
+	# kick owed, and every tap refused.
+	for s in [Tutorial.Step.CONNECT, Tutorial.Step.CHAIN, Tutorial.Step.SHOOT]:
+		t.step = s
+		_check(t.allows(Tutorial.FIRST),
+			"the carrier stays tappable at %s, so a closed chain can be reopened" \
+				% Tutorial.Step.keys()[s])
+	t.step = Tutorial.Step.CONNECT
+	_check(ms.step_back() and ms.chain.is_empty(), "tapping him closes the chain")
+	_check(ms.begin(Tutorial.FIRST), "...and tapping him again opens it back up")
+	_check(ms.chain.size() == 1 and ms.chain[0] == Tutorial.FIRST, "...on him, where it was")
+
 	# Step 2 — the straight line. One blue option, or the prompt lies.
 	var first_targets := ms.combo_pass_targets()
 	_check(Tutorial.SECOND in first_targets,

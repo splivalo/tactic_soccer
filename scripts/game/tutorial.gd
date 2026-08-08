@@ -187,6 +187,19 @@ func allowed_cells() -> Array[Vector2i]:
 
 
 func allows(cell: Vector2i) -> bool:
+	# The man holding the ball is ALWAYS tappable, whatever step we are on.
+	#
+	# Tapping him closes the chain, and that gesture is never gated — it goes
+	# through step_back, which asks no permission. Gating the tap that REOPENS it
+	# therefore strands the lesson in a state it will not let you leave: the ball
+	# at his feet, the turn owing a kick, every square dark, and every further tap
+	# refused. Reported exactly that way, and the log showed the tap landing on
+	# him with the rules agreeing he was the carrier.
+	#
+	# Costs the lesson nothing: opening the chain is not a step any more (COLLECT
+	# advances on the move), so this can never skip anything ahead.
+	if cell == FIRST:
+		return true
 	var cells := allowed_cells()
 	return cells.is_empty() or cell in cells
 
