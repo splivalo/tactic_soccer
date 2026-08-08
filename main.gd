@@ -1894,13 +1894,17 @@ func _combo_tap(screen_pos: Vector2) -> void:
 			_tutorial_did("shoot", shoot_cell)
 			_do_combo(shoot_cell) # direct tap-to-shoot still works, no ambiguity
 			return
-		# Falls through to the pick-a-figure-to-move branch below rather than
-		# returning. The chain is opened for you now (see _refresh_turn_view), so
-		# returning here would mean the ball had to be played before anyone could
-		# be moved — an order nobody chose and the exact thing that was objected
-		# to when a fixed order was proposed.
-		if not _state.can_move():
-			return
+		# Falls through to the branches below rather than returning, and they
+		# gate themselves.
+		#
+		# There used to be a `if not _state.can_move(): return` here, on the
+		# grounds that with no move left there was nothing else a tap could mean.
+		# Under move-then-kick the move is ALWAYS spent by the time a COMBO opens,
+		# so that return fired on every single tap that reached it — and the one
+		# thing it blocked was re-opening the chain. Closing the chain by tapping
+		# your own man worked; tapping him again to open it back up hit the return
+		# and did nothing, leaving the turn with the ball at his feet and no way
+		# to play it.
 	# Nothing engaged yet: tap the ball-adjacent figure to begin a combo, OR
 	# tap ANY other own figure to move IT instead — declining the ball this
 	# turn (see MatchState.hold_and_move). Every own figure is highlighted
