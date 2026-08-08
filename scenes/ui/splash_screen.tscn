@@ -6,23 +6,17 @@
 [ext_resource type="Texture2D" uid="uid://c2423qsn78kr5" path="res://assets/textures/ui/game_logo.png" id="3_wh6tg"]
 [ext_resource type="Theme" uid="uid://3sfso1by5eio" path="res://my_theme.tres" id="4_usb1j"]
 
-[sub_resource type="Environment" id="Environment_lhnum"]
-background_mode = 3
-glow_enabled = true
-glow_normalized = true
-glow_blend_mode = 0
-
 [sub_resource type="LabelSettings" id="LabelSettings_it15u"]
 font = ExtResource("3_eina6")
 font_size = 100
 outline_size = 1
-outline_color = Color(0, 5.0982127, 4.052945, 1)
+outline_color = Color(0, 1, 0.7952941, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_clcbi"]
 font = ExtResource("3_eina6")
 font_size = 100
 outline_size = 1
-outline_color = Color(0, 5.0982127, 4.052945, 1)
+outline_color = Color(0, 1, 0.7952941, 1)
 
 [node name="SplashScreen" type="Control" unique_id=1229859338]
 layout_mode = 3
@@ -32,9 +26,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_splash")
-
-[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1323762266]
-environment = SubResource("Environment_lhnum")
 
 [node name="Background" type="TextureRect" parent="." unique_id=27906394]
 layout_mode = 1
