@@ -739,6 +739,14 @@ func _kickoff_cell(team: String, formation: Array = []) -> Vector2i:
 		cell = Vector2i(ball_start_cell.x, Board.ROWS - 1 - ball_start_cell.y) # mirror
 	if not MatchState.experiment_underfoot or formation.is_empty():
 		return cell
+	# The tutorial's ball placement is authored, not a restart. Handing it to the
+	# keeper overwrote the one thing the first lesson is about — a LOOSE ball you
+	# walk onto — and left the tutorial in a state it has no step for: the ball
+	# under the keeper, the restart rule opening the chain on him, his passes lit
+	# up, and every tap on them refused because the lesson is still waiting for a
+	# move. Lit squares that do nothing, which is exactly how it was reported.
+	if GameFlow.tutorial_mode:
+		return cell
 	# Underfoot: the ball has to start AT somebody's feet, or the match opens
 	# with nobody owning it and both sides scrambling for a loose ball — which
 	# is exactly how the first attempt at this rule opened, and read as a bug
