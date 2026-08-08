@@ -250,12 +250,26 @@ func start_turn() -> void:
 	_ball_used = false
 	_move_used = false
 	if experiment_move_then_kick:
-		# The move comes first, always — even holding the ball (which only
-		# happens at kick-off, or when a kick had nowhere legal to go). do_move
-		# opens the COMBO afterwards if you are standing on it.
-		phase = Phase.MOVE
-		moves_left = 1
-		_move_is_reactive = true
+		if team_has_ball(current) and _ball_is_playable():
+			# Already at your feet when the turn BEGINS — which only happens at
+			# a restart, since every other turn ends with the ball kicked into
+			# space. Then there is nothing to walk to and nothing to decide: you
+			# just put it back in play, and that is the whole turn.
+			#
+			# Demanding a move first made the kick-off a trap. The obvious tap is
+			# the man holding the ball, and moving HIM steps off it — his only
+			# squares are the other two goal cells — so the ball was abandoned
+			# loose in your own goalmouth and the turn ended with no kick at all.
+			# Spending the move here is what stops that: there is no move to take
+			# and none is offered.
+			phase = Phase.COMBO
+			_move_used = true
+		else:
+			# The ordinary turn: the move comes first, and do_move opens the
+			# COMBO afterwards if it left you standing on the ball.
+			phase = Phase.MOVE
+			moves_left = 1
+			_move_is_reactive = true
 	elif team_has_ball(current):
 		phase = Phase.COMBO
 	else:
